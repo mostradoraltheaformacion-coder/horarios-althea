@@ -1425,22 +1425,31 @@ function vMisNominas(){nmEscuchar();if(!NM.ok)return `<div class="empty">Cargand
 function hxEstadoDe(a,e){const c=e.cobro;if(c&&c.no)return "no";
   if(c&&c.recibo){const r=(a.recibos||[]).find(x=>x&&x.numero===c.recibo);return r&&r.estado==="pagado"?"cob":"pend"}
   if(c)return "cob";if(typeof exCobradaArgos==="function"&&exCobradaArgos(a,e))return "cob";return "pend"}
-function hxProduccion(desde,hasta){const hoy=todayISO(),o={n:0,imp:0,cob:0,pend:0,no:0,sin:0,su:0,prof:{}};
+function hxProduccion(desde,hasta){const hoy=todayISO(),o={n:0,imp:0,cob:0,pend:0,no:0,sin:0,su:0,arg:0,prof:{}};
   for(const [,a] of S.alumnos){for(const e of a.extras||[]){if(!e||e.anulada||!e.fecha)continue;const m=String(e.fecha).slice(0,7);if(m<desde||m>hasta||e.fecha>hoy)continue;
     try{if(asistDe(a,e.fecha,e.hora||keyDeMin(extraIni(e)),e.profe)==="no")continue}catch(_){}
     const v=tarifaDe(a,e),st=hxEstadoDe(a,e);if(v==null){o.sin++;continue}
     if(st==="no"){o.no+=v;continue}o.n++;if(a.sueltas)o.su++;o.imp+=v;o[st]+=v;const p=e.profe||"—";(o.prof[p]=o.prof[p]||{n:0,imp:0}).n++;o.prof[p].imp+=v}}
+  /* recibos de Argos que son horas extra (antes de que se apuntaran en la app): se suman si no tienen ya su hora extra apuntada con el mismo importe ese mes */
+  o.arg=0;const RX=/EXTRA|SUELTA|HORA ADICIONAL|CLASE ADICIONAL/i;
+  for(const [,a] of S.alumnos){const usados=new Set();
+    for(const r of a.recibos||[]){if(!r||r.serie==="HX"||r.origen==="app"||r.anulado||r.estado==="anulado")continue;const m=String(r.emitido||"").slice(0,7);if(!m||m<desde||m>hasta)continue;
+      if(!(RX.test(String(r.concepto||"")+" "+String(r.curso||""))||(typeof esReciboExtra==="function"&&esReciboExtra(a,r))))continue;
+      const imp=+r.importe||0;if(imp<=0)continue;
+      const e=(a.extras||[]).find(x=>x&&!x.anulada&&!usados.has(x)&&String(x.fecha||"").startsWith(m)&&tarifaDe(a,x)!=null&&Math.abs(tarifaDe(a,x)-imp)<0.005);if(e){usados.add(e);continue}
+      const pag=r.estado==="pagado"||!!r.pagado;o.n++;o.arg++;o.imp+=imp;o[pag?"cob":"pend"]+=imp;const p="Argos (sin profesora)";(o.prof[p]=o.prof[p]||{n:0,imp:0}).n++;o.prof[p].imp+=imp}}
   for(const k of ["imp","cob","pend","no"])o[k]=r2(o[k]);return o}
 function vHorasExtraRes(mes){if(!mes)return "";const y=+mes.slice(0,4),cur=+mes.slice(5,7)>=9?`${y}-09`:`${y-1}-09`;
   const M=hxProduccion(mes,mes),C=hxProduccion(cur,mes),A=hxProduccion(`${y}-01`,mes);
   const lin=(t,X)=>`<tr><td>${t}</td><td style="text-align:right">${X.n}</td><td style="text-align:right;font-variant-numeric:tabular-nums"><b>${eur(X.imp)}</b></td><td style="text-align:right;color:var(--ok)">${eur(X.cob)}</td><td style="text-align:right;color:${X.pend?"var(--warn)":"inherit"}">${eur(X.pend)}</td></tr>`;
   const pr=Object.entries(C.prof).sort((x,y)=>y[1].imp-x[1].imp);
   return `<details class="panel" style="padding:10px 14px;margin:10px 0" ${GB.hxRes?"open":""} data-gb-tog="hxRes"><summary><b>Horas extra</b> · ${esc(mesTxt(mes))}: <b>${M.n}</b> clase${M.n===1?"":"s"} · <b>${eur(M.imp)}</b> <span class="note">(cobrado ${eur(M.cob)} · pendiente ${eur(M.pend)}) · curso: ${eur(C.imp)}</span></summary>
-    <p class="note" style="margin:6px 0">Horas extra y clases sueltas que se dieron (las que la profesora marcó «No vino» no cuentan), valoradas con su tarifa. Es producción que antes no se controlaba.</p>
+    <p class="note" style="margin:6px 0">Horas extra y clases sueltas que se dieron (las que la profesora marcó «No vino» no cuentan), valoradas con su tarifa, más los recibos de Argos de horas extra que no están apuntadas en la app. Es producción que antes no se controlaba.</p>
     <div class="tbl"><table class="ft" style="min-width:0;width:100%"><thead><tr><th></th><th style="text-align:right">Clases</th><th style="text-align:right">Importe</th><th style="text-align:right">Cobrado</th><th style="text-align:right">Pendiente</th></tr></thead><tbody>
       ${lin(esc(mesTxt(mes)),M)}${lin(`Curso ${cur.slice(0,4)}-${+cur.slice(0,4)+1-2000} (desde septiembre)`,C)}${lin(`Año ${y}`,A)}</tbody></table></div>
     ${pr.length?`<p class="note" style="margin:8px 0 2px"><b>Por profesora, en el curso:</b> ${pr.map(([p,v])=>`${esc(p)} ${v.n} (${eur(r2(v.imp))})`).join(" · ")}</p>`:""}
     ${C.su?`<p class="note" style="margin:2px 0">De ellas, ${C.su} son clases sueltas en el curso.</p>`:""}
+    ${C.arg?`<p class="note" style="margin:2px 0">${C.arg} vienen de recibos de Argos (hora extra o importe pequeño junto a la mensualidad) sin hora extra apuntada en la app.</p>`:""}
     ${C.no?`<p class="note" style="margin:2px 0">Marcadas «no se cobra» en el curso: ${eur(C.no)} (no se suman).</p>`:""}
     ${C.sin?`<p class="note" style="margin:2px 0;color:var(--warn)">${C.sin} sin tarifa de hora extra: no se pueden valorar.</p>`:""}</details>`}
 try{document.addEventListener("toggle",ev=>{const t=ev.target;if(t&&t.dataset&&t.dataset.gbTog)GB[t.dataset.gbTog]=t.open},true)}catch(_){}

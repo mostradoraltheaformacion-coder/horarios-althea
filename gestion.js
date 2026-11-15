@@ -50,14 +50,14 @@ const tfMapa=()=>new Map(tfCursos().map(c=>[c.nombre,c]));
 /* Matriz del alumno: la guardada o, si no hay, la propuesta según Argos. */
 function matrizDe(a){
   if(a&&a.matriz&&Array.isArray(a.matriz.l))return {l:a.matriz.l.filter(l=>l&&l.curso),guardada:true,t:a.matriz.t||"",por:a.matriz.por||""};
-  const rs=((a&&a.recibos)||[]).filter(r=>r&&r.curso&&r.emitido),ms=[...new Set(rs.map(r=>String(r.emitido).slice(0,7)))].sort(),mes=ms.pop();
+  const rs=((a&&a.recibos)||[]).filter(r=>r&&r.curso&&r.emitido&&!(typeof esReciboExtra==="function"&&esReciboExtra(a,r))),ms=[...new Set(rs.map(r=>String(r.emitido).slice(0,7)))].sort(),mes=ms.pop();
   if(mes)return {l:rs.filter(r=>String(r.emitido).startsWith(mes)).map(r=>({curso:nzC(r.curso)})),guardada:false,mes};
   if(a&&a.argos==="activo"&&(a.matriculas||[]).length)return {l:a.matriculas.filter(m=>m&&m.curso&&(!m.cobro||m.cobro==="MENSUAL")).map(m=>({curso:nzC(m.curso)})),guardada:false,mes:"",deMat:true};
   return {l:[],guardada:false,mes:""};
 }
 const precioLinea=(l,TC)=>{if(l.aj!=null&&l.aj!=="")return +l.aj;const c=TC.get(nzC(l.curso))||{};return l.ant&&c.ant!=null?c.ant:(c.precio??null)};
 /* Lo que pagó en Argos el último mes con recibos (o el mes indicado). */
-function argosMes(a,mes){const rs=((a&&a.recibos)||[]).filter(r=>r&&r.emitido&&r.importe!=null);if(!mes){const ms=[...new Set(rs.map(r=>String(r.emitido).slice(0,7)))].sort();mes=ms.pop()}
+function argosMes(a,mes){const rs=((a&&a.recibos)||[]).filter(r=>r&&r.emitido&&r.importe!=null&&!(typeof esReciboExtra==="function"&&esReciboExtra(a,r)));if(!mes){const ms=[...new Set(rs.map(r=>String(r.emitido).slice(0,7)))].sort();mes=ms.pop()}
   if(!mes)return null;const l=rs.filter(r=>String(r.emitido).startsWith(mes));return l.length?{mes,total:Math.round(l.reduce((x,r)=>x+(+r.importe||0),0)*100)/100,n:l.length}:null}
 /* ¿Se arregla marcándolo como antiguo alumno? (una sola línea, el curso tiene precio de antiguos y es justo lo que paga en Argos) */
 const antiguoEncaja=(M,arg,TC)=>{if(M.l.length!==1||arg==null)return null;const y=M.l[0];if(y.ant||(y.aj!=null&&y.aj!==""))return null;const c=TC.get(nzC(y.curso));return c&&c.ant!=null&&Math.abs(c.ant-arg)<0.5&&Math.abs((c.precio??-1)-arg)>=0.5?c:null};
@@ -85,7 +85,8 @@ function vTarifas(){
   if(!gtVer())return `<div class="empty">Solo dirección puede ver las tarifas.</div>`;if(GT.gen)return vGenerar();if(GT.fac)return vFacturacion();
   const TC=tfCursos(),TM=new Map(TC.map(c=>[c.nombre,c]));
   const pc=c=>!c.conf;
-  const vis=TC.filter(c=>GT.filtro==="todos"?true:GT.filtro==="conf"?pc(c):(c.alumnos>0||c.nRec>0||c.origen==="guardada"));
+  const gtQ=v=>nzC(String(v||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")).replace(/[^A-Z0-9 ]/g," ").replace(/\s+/g," ").trim(),qq=gtQ(GT.q).split(" ").filter(Boolean);
+  const vis=TC.filter(c=>GT.filtro==="todos"?true:GT.filtro==="conf"?pc(c):(c.alumnos>0||c.nRec>0||c.origen==="guardada"));const gtVe=c=>{const n=gtQ(c.nombre).replace(/ /g,"");return qq.every(w=>n.includes(w))};
   const nPc=TC.filter(c=>(c.alumnos>0||c.nRec>0)&&pc(c)).length;
   const fila=c=>{const ed=GT.fila===c.nombre;
     if(ed)return `<tr><td colspan="7" style="background:var(--sunk)"><b>${esc(c.nombre)}</b>
@@ -99,7 +100,7 @@ function vTarifas(){
         ${c.manual&&!c.alumnos?`<button class="btn small" data-tf="cborrar" data-c="${esc(c.nombre)}">Quitar curso</button>`:""}</div>
       <p class="note" style="margin:6px 0 0">«Antiguos alumnos»: el precio que mantienen los que ya venían antes de la última subida; en su ficha se marcan como «Antiguo alumno». El nuevo precio solo se aplica a los recibos que se generen a partir de la fecha «Desde». Los recibos ya hechos no cambian.</p>
       ${c.hist.length?`<p class="note" style="margin:4px 0 0">Precios anteriores: ${c.hist.slice(-4).map(h=>`${eur(+h.precio)} (desde ${fmtFecha(h.desde)})`).join(" · ")}</p>`:""}</td></tr>`;
-    return `<tr><td><b>${esc(c.nombre)}</b>${c.manual?` <span class="note">(no está en Argos)</span>`:""}${c.nota?`<br><span class="note">${esc(c.nota)}</span>`:""}${c.avisos.length?`<br><span class="note" style="color:var(--warn)">${c.avisos.map(esc).join(" ")}</span>`:""}</td>
+    return `<tr data-gtn="${esc(gtQ(c.nombre).replace(/ /g,""))}"${gtVe(c)?"":' style="display:none"'}><td><b>${esc(c.nombre)}</b>${c.manual?` <span class="note">(no está en Argos)</span>`:""}${c.nota?`<br><span class="note">${esc(c.nota)}</span>`:""}${c.avisos.length?`<br><span class="note" style="color:var(--warn)">${c.avisos.map(esc).join(" ")}</span>`:""}</td>
       <td style="text-align:right">${c.horas==null?"—":fmtNum(c.horas)}</td>
       <td style="text-align:right;font-variant-numeric:tabular-nums"><b>${c.precio==null?"—":eur(c.precio)}</b>${c.ant!=null?`<br><span class="note">antiguos ${eur(c.ant)}</span>`:""}${c.desde?`<br><span class="note">desde ${fmtFecha(c.desde)}</span>`:""}</td>
       <td>${estadoCurso(c)}</td><td style="text-align:right">${c.alumnos||"—"}</td><td style="text-align:right">${c.nRec||"—"}</td>
@@ -116,6 +117,7 @@ function vTarifas(){
     <div class="stat"><b>${TC.filter(c=>c.conf).length}</b><span>Confirmados</span></div>
   </div>
   <div class="bar" style="margin-bottom:6px"><label class="f" style="flex:0 1 260px">Ver<select id="gt-filtro"><option value="act" ${GT.filtro==="act"?"selected":""}>Cursos con alumnos o recibos</option><option value="conf" ${GT.filtro==="conf"?"selected":""}>Por confirmar</option><option value="todos" ${GT.filtro==="todos"?"selected":""}>Todos (también sin alumnos)</option></select></label>
+    <label class="f" style="flex:1 1 240px">Buscar curso<input type="search" id="gt-q" value="${esc(GT.q||"")}" placeholder="Ej.: primaria 2h, logopedia, bachillerato…" autocomplete="off"></label>
     <button class="btn small" data-tf="nuevo" style="margin-left:auto">Añadir curso</button><button class="btn small primary" data-tf="gen">Recibos del mes (ensayo)</button><button class="btn small primary" data-tf="fac">Facturación semanal (ensayo)</button></div>${nuevo}
   <div class="panel tbl"><table class="ft"><thead><tr><th>Curso</th><th style="text-align:right">h/sem</th><th style="text-align:right">Precio/mes</th><th>Estado</th><th style="text-align:right" title="Alumnos que lo pagan según su tarifa">Alumnos</th><th style="text-align:right" title="Recibos de Argos de los últimos 3 meses">Recibos</th><th></th></tr></thead>
   <tbody>${vis.map(fila).join("")||`<tr><td colspan="7" class="note">No hay cursos en esta vista.</td></tr>`}</tbody></table></div>
@@ -126,9 +128,9 @@ function vTarifas(){
 function mesesConRecibos(){const s=new Set();for(const [,a] of S.alumnos)for(const r of a.recibos||[])if(r&&r.emitido)s.add(String(r.emitido).slice(0,7));return [...s].filter(m=>/^\d{4}-\d{2}$/.test(m)).sort().reverse().slice(0,6)}
 function previaLista(mes,TM){const out=[];let nEx=0;
   for(const [id,a] of sortedAlumnos()){if(a.baja||a.bloqueado)continue;
-    const rs=(a.recibos||[]).filter(r=>r&&String(r.emitido||"").startsWith(mes));
+    const rs=(a.recibos||[]).filter(r=>r&&String(r.emitido||"").startsWith(mes)&&!(typeof esReciboExtra==="function"&&esReciboExtra(a,r)));
     if(!a.clases.length&&!rs.length&&a.argos!=="activo"&&!(a.matriz&&a.matriz.l&&a.matriz.l.length))continue;
-    if(a.exento){nEx++;continue}
+    if(a.exento||a.sueltas){nEx++;continue}
     const M=calcMatriz(a,TM),arg=Math.round(rs.reduce((s,r)=>s+(+r.importe||0),0)*100)/100,p=[];
     if(!M.l.length)p.push({t:"sin",txt:"Sin cursos: no se le generaría recibo"});
     else if(M.falta)p.push({t:"precio",txt:"Algún curso no tiene precio en la tarifa"});
@@ -185,11 +187,11 @@ function vTarifaAl(id,a){
     const ini=inicioLinea(a,y),sub2=ini&&ini>=sumaDias(todayISO(),-62)?`Empieza el ${fmtFecha(ini)}${y.ini?"":" (alta en Argos)"}: el primer mes paga la parte proporcional`:"";
     return `<div class="row"><span class="grow">${esc(y.curso)}${sub?`<br><span class="note">${sub}</span>`:""}${sub2?`<br><span class="note">${sub2}</span>`:""}</span><b style="font-variant-numeric:tabular-nums">${pl!=null?eur(pl):`<span style="color:var(--bad)">sin precio</span>`}</b></div>`}).join("");
   const ar=argosMes(a,M.guardada?null:M.mes),difA=ar&&M.l.length&&!M.falta&&Math.abs(ar.total-M.total)>0.5,cA=difA?antiguoEncaja(M,ar.total,TM):null,ajF=GT.aj&&GT.aj.id===id;
-  const avA=difA&&!a.baja&&!a.exento?`<div class="aviso pend" style="display:block;margin-top:6px"><b>En Argos paga ${eur(ar.total)}</b> (${mesTxt(ar.mes)}) y con esta tarifa saldría ${eur(M.total)}.
+  const avA=difA&&!a.baja&&!a.exento&&!a.sueltas?`<div class="aviso pend" style="display:block;margin-top:6px"><b>En Argos paga ${eur(ar.total)}</b> (${mesTxt(ar.mes)}) y con esta tarifa saldría ${eur(M.total)}.
       ${cA?` Coincide con el precio de antiguos alumnos de ${esc(cA.nombre)}. <button class="btn small primary" data-tf="antok" data-id="${esc(id)}">Antiguo alumno (${eur(cA.ant)})</button>`:M.l.length===1&&ar.n===1&&!ajF?` <button class="btn small" data-tf="ajabrir" data-id="${esc(id)}">Mantener ${eur(ar.total)} (precio especial)</button>`:" Ajústalo con «Cambiar»."}
       ${ajF?`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:6px"><label class="f" style="flex:1 1 220px">Motivo del precio especial de ${eur(ar.total)}<input type="text" id="gt-ajm" maxlength="120" placeholder="Ej.: hermanos, acuerdo con la familia"></label><button class="btn small primary" data-tf="ajok" data-id="${esc(id)}" data-v="${ar.total}">Guardar</button><button class="btn small" data-tf="ajno">Cancelar</button></div>`:""}</div>`:"";
   const est=M.guardada?`<span class="badge b-si">Guardada</span>`:`<span class="badge b-off">Propuesta según Argos${M.mes?" ("+MESES[+M.mes.slice(5)-1]+")":""}</span>`;
-  const hh=a.clases.length,av=M.horas!=null&&M.horas!==hh&&!a.baja?`<p class="note" style="color:var(--warn)">Se cobran ${fmtNum(M.horas)} h/semana y en el horario ${hh===1?"hay 1 clase":`hay ${hh} clases`}.</p>`:"";
+  const hh=a.clases.length,av=M.horas!=null&&M.horas!==hh&&!a.baja&&!a.sueltas?`<p class="note" style="color:var(--warn)">Se cobran ${fmtNum(M.horas)} h/semana y en el horario ${hh===1?"hay 1 clase":`hay ${hh} clases`}.</p>`:"";
   return `<div><div class="bar" style="margin-bottom:4px"><b style="font-size:14px;margin-right:auto">Tarifa del alumno</b>${est}</div>
     ${a.exento?`<p class="note">No paga (familiar, beca…): no se le generarán recibos.</p>`:""}
     ${filas||`<p class="note">Sin cursos: no se le generarían recibos.</p>`}
@@ -311,7 +313,7 @@ const leerQuien=id=>{const v=(($("#"+id)||{}).value)||"";if(!v){toast("Elige qui
 const r2=n=>Math.round(n*100)/100;
 function cajaEscuchar(){
   const desde=sumaDias(todayISO(),esMos()?-7:-62);if(GC.sub&&GC.desde===desde)return;if(GC.sub)try{GC.sub()}catch(_){}
-  GC.desde=desde;GC.sub=S.db.collection("caja").where("dia",">=",desde).onSnapshot(s=>{GC.docs=s.docs.map(d=>({id:d.id,...d.data()}));GC.ok=true;GC.err="";cajaAGastos();if(S.view==="caja")cajaRefrescar()},
+  GC.desde=desde;GC.sub=S.db.collection("caja").where("dia",">=",desde).onSnapshot(s=>{GC.docs=s.docs.map(d=>({id:d.id,...d.data()}));GC.ok=true;GC.err="";cajaAGastos();if(S.view==="descuadres")gbRefrescar();if(S.view==="caja")cajaRefrescar()},
     e=>{GC.ok=true;GC.err="No se puede leer la caja: faltan permisos en la base de datos (hay que publicar las reglas nuevas en Firebase).";if(S.view==="caja")cajaRefrescar()});
   if(!GC.subCon)GC.subCon=S.db.doc("config/cajaConceptos").onSnapshot(d=>{GC.con=d.exists?d.data():null;if(S.view==="caja")cajaRefrescar()},()=>{GC.con=null});
 }
@@ -407,12 +409,18 @@ function vConceptosEdit(){const L=GC.edCon,cats=CATS.filter(([k,,t])=>t!=="p");
     ${L.map((x,i)=>`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px"><input type="text" data-gccon="${i}|n" value="${esc(x.n)}" maxlength="60" style="flex:1 1 180px"><select data-gccon="${i}|s">${Object.entries(SIG_TXT).map(([k,l])=>`<option value="${k}" ${k===x.s?"selected":""}>${l}</option>`).join("")}</select>${sel(i,x.cat)}<button class="btn small" data-gc="conquitar" data-i="${i}" aria-label="Quitar">×</button></div>`).join("")}
     <div class="row" style="gap:8px;margin-top:8px;border:0;padding:0"><button class="btn small" data-gc="conadd">+ Añadir concepto</button><button class="btn small primary" data-gc="conok">Guardar conceptos</button><button class="btn small" data-gc="conno">Cancelar</button></div></div>`}
 function vCajaEstado(dia){
-  const hoy=dia===todayISO(),E=estadoCaja(dia),uc=ultimoCierre(),an=anulados(),prop=uc&&uc.dia<todayISO()?uc.contado:null;
-  const linea=d=>`<div class="row" style="flex-wrap:wrap"><span class="note" style="font-variant-numeric:tabular-nums">${horaC(d)}</span><span class="grow">${d.tipo==="apertura"?`Apertura con <b>${eur(+d.fondo)}</b>`:d.tipo==="retirada"?`Retirada de <b>${eur(+d.importe)}</b> · «${esc(d.nota||"")}»`:d.tipo==="apunte"?`${+d.signo>0?"Entrada":"Salida"} <b style="color:var(${+d.signo>0?"--ok":"--bad"})">${+d.signo>0?"+":"−"}${eur(+d.importe)}</b> · ${esc(d.concepto||"")}${d.nota?` · «${esc(d.nota)}»`:""}${an.has(d.id)?` <span class="badge b-no">anulado</span>`:!esMos()?` <button class="btn small" data-gc="anuapu" data-id="${esc(d.id)}" title="Por ejemplo, si era de prueba o está mal">Anular</button>`:""}`:`Cierre: esperado ${eur(+d.esperado)}, contado <b>${eur(+d.contado)}</b>${Math.abs(+d.descuadre)>0.009?` · <b style="color:var(--bad)">descuadre ${eur(+d.descuadre)}</b>`:" · cuadra"}${d.nota?` · «${esc(d.nota)}»`:""}`}</span><span class="note">${esc(d.quien||d.por||"")}</span></div>`;
+  /* 10/11/2026: el saldo pasa solo de un día a otro. Se propone lo contado en el último cierre; y si el último día con caja
+     abierta no se llegó a cerrar, lo que debería haber quedado ese día (con aviso de que conviene contarlo). */
+  const hoy=dia===todayISO(),E=estadoCaja(dia),uc=ultimoCierre(),an=anulados();
+  const sinCerrar=[...new Set(GC.docs.filter(d=>d.tipo==="apertura"&&d.dia<todayISO()).map(d=>d.dia))].sort().reverse().map(d=>estadoCaja(d)).find(x=>x.abierta);
+  const pend=sinCerrar&&(!uc||sinCerrar.dia>=uc.dia)?sinCerrar:null,prop=pend?pend.esperado:uc&&uc.dia<todayISO()?uc.contado:null;
+  const linea=d=>`<div class="row" style="flex-wrap:wrap${d.tipo==="apunte"&&an.has(d.id)?";opacity:.55;text-decoration:line-through":""}"><span class="note" style="font-variant-numeric:tabular-nums">${horaC(d)}</span><span class="grow" title="${esc([d.concepto,d.nota].filter(Boolean).join(" · "))}">${d.tipo==="apertura"?`Apertura con <b>${eur(+d.fondo)}</b>`:d.tipo==="retirada"?`Retirada de <b>${eur(+d.importe)}</b> · «${esc(d.nota||"")}»`:d.tipo==="apunte"?`${+d.signo>0?"Entrada":"Salida"} <b style="color:var(${+d.signo>0?"--ok":"--bad"})">${+d.signo>0?"+":"−"}${eur(+d.importe)}</b> · ${esc(d.concepto||"")}${d.nota?` · «${esc(d.nota)}»`:""}`:`Cierre: esperado ${eur(+d.esperado)}, contado <b>${eur(+d.contado)}</b>${Math.abs(+d.descuadre)>0.009?` · <b style="color:var(--bad)">descuadre ${eur(+d.descuadre)}</b>`:" · cuadra"}${d.nota?` · «${esc(d.nota)}»`:""}`}</span>${d.tipo==="apunte"&&an.has(d.id)?`<span class="badge b-no">anulado</span>`:""}${d.tipo==="apunte"&&!an.has(d.id)&&!esMos()?`<button class="btn small" data-gc="anuapu" data-id="${esc(d.id)}" title="Por ejemplo, si era de prueba o está mal">Anular</button>`:""}<span class="note">${esc(d.quien||d.por||"")}</span></div>`;
   const movs=deDia(dia).filter(d=>["apertura","retirada","apunte","cierre"].includes(d.tipo));
   let form="";
   if(hoy&&GC.ok&&!E.abierta){
-    form=`<p style="margin:8px 0 4px">${E.cierre?"La caja está cerrada. Si hay que seguir cobrando hoy, vuelve a abrirla.":uc?`Último cierre: ${fmtFecha(uc.dia)}, contado ${eur(+uc.contado)}.`:"Es la primera vez: escribe el efectivo con el que empieza la caja."}</p>
+    form=`<p style="margin:8px 0 4px">${E.cierre?"La caja está cerrada. Si hay que seguir cobrando hoy, vuelve a abrirla."
+      :pend?`<span style="color:var(--warn)">La caja del <b>${fmtFecha(pend.dia)}</b> no se cerró.</span> Debería haber quedado <b>${eur(pend.esperado)}</b>: está puesto abajo. Cuenta el efectivo y, si no coincide, escribe lo que hay (la diferencia queda apuntada).`
+      :uc?`Último cierre: ${fmtFecha(uc.dia)}, contado ${eur(+uc.contado)}. Está puesto abajo: si al contar hay otra cantidad, cámbiala.`:"Es la primera vez: escribe el efectivo con el que empieza la caja."}</p>
       <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap"><label class="f" style="flex:0 1 150px">Efectivo inicial (€)<input type="text" inputmode="decimal" id="gc-fondo" value="${E.cierre?esc(fmtNum(E.cierre.contado)):prop!=null?esc(fmtNum(prop)):""}"></label>${selQuien("gc-qap")}<button class="btn small primary" data-gc="abrir" style="margin-bottom:2px">${E.cierre?"Volver a abrir":"Abrir caja"}</button></div>`;
   }else if(hoy&&E.abierta){
     form=`<p style="margin:8px 0 2px">Efectivo que debería haber en la caja: <b style="font-size:17px">${eur(E.esperado)}</b></p>
@@ -573,10 +581,14 @@ document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.c
     await enviarTicketWA(c,tel);
     if(($("#gc-guardatel")||{}).checked){const a=S.alumnos.get(c.alumno);if(a){const l=(a.telefonos||[]).map(digitos);if(!l.some(x=>x.slice(-9)===tel)){const telefonos=[tel,...(a.telefonos||[])];if(await save(c.alumno,{telefonos})){a.telefonos=telefonos;toast("Número guardado en la ficha")}}}}}
   else if(act==="abrir"){const v=gtNum(($("#gc-fondo")||{}).value);if(v==null||isNaN(v)||v<0){toast("Escribe el efectivo inicial (0 si no hay)");return}const quien=leerQuien("gc-qap");if(!quien)return;
-    t.disabled=true;if(await guardarCaja({tipo:"apertura",fondo:v,quien,hora:hhmm()},"No se ha podido abrir la caja: faltan permisos en la base de datos.")){toast(`Caja abierta con ${eur(v)}`)}t.disabled=false}
+    /* lo que se arrastraba (cierre anterior o día sin cerrar) frente a lo contado al abrir: si no coincide, queda como descuadre de apertura */
+    const uc=ultimoCierre(),sc=[...new Set(GC.docs.filter(d=>d.tipo==="apertura"&&d.dia<todayISO()).map(d=>d.dia))].sort().reverse().map(d=>estadoCaja(d)).find(x=>x.abierta);
+    const pend=sc&&(!uc||sc.dia>=uc.dia)?sc:null,arr=pend?pend.esperado:uc&&uc.dia<todayISO()?+uc.contado:null,dif=arr!=null?r2(v-arr):0;
+    t.disabled=true;if(await guardarCaja({tipo:"apertura",fondo:v,quien,hora:hhmm(),...(arr!=null?{arrastre:arr,desdeDia:pend?pend.dia:uc.dia,...(pend?{sinCerrar:true}:{}),...(Math.abs(dif)>0.009?{descuadre:dif}:{})}:{})},"No se ha podido abrir la caja: faltan permisos en la base de datos.")){toast(`Caja abierta con ${eur(v)}${Math.abs(dif)>0.009?` · diferencia con lo que debía haber: ${dif>0?"+":"−"}${eur(Math.abs(dif))}`:""}`)}t.disabled=false}
   else if(act==="apunte"){const cc=String(($("#gc-acc")||{}).value||""),c=conceptos().find(x=>x.id===cc);if(!cc){toast("Elige el concepto");return}
     const sg=c&&c.s!=="±"?(c.s==="+"?1:-1):(+(($("#gc-asig")||{}).value||1)<0?-1:1),v=gtNum(($("#gc-aimp")||{}).value),con=c?c.n:String(($("#gc-acon")||{}).value||"").trim(),nota=String(($("#gc-anota")||{}).value||"").trim();
-    if(!con){toast("Escribe el concepto");return}if(v==null||isNaN(v)||v<=0){toast("Escribe el importe del apunte");return}const quien=leerQuien("gc-qapu");if(!quien)return;if(!estadoCaja().abierta){toast("Primero abre la caja");return}
+    if(!con){toast("Escribe el concepto");return}if(v==null||isNaN(v)||v<=0){toast("Escribe el importe del apunte");return}const quien=leerQuien("gc-qapu");if(!quien)return;const E0=estadoCaja();if(!E0.abierta){toast("Primero abre la caja");return}
+    if(sg<0&&v>E0.esperado+0.004&&t.dataset.neg!==String(v)){t.dataset.neg=String(v);t.textContent="La caja quedaría en "+eur(r2(E0.esperado-v))+". ¿Seguro? Pulsa otra vez";setTimeout(()=>{if(t.isConnected){delete t.dataset.neg;t.textContent="Guardar apunte"}},6000);return}
     t.disabled=true;if(await guardarCaja({tipo:"apunte",signo:sg,importe:v,concepto:con.slice(0,140),cc:c?c.id:"",...(nota?{nota:nota.slice(0,140)}:{}),quien,hora:(($("#gc-ahora")||{}).value)||hhmm()},"No se ha podido guardar el apunte: faltan permisos en la base de datos.")){GC.acc="";toast(`Apunte guardado: ${sg>0?"+":"−"}${eur(v)}`)}t.disabled=false}
   else if(act==="anuapu"){if(esMos())return;const d=GC.docs.find(x=>x.id===t.dataset.id);if(!d)return;
     if(!t.dataset.ok){t.dataset.ok="1";t.textContent="¿Seguro? Pulsa otra vez";t.classList.add("primary");setTimeout(()=>{if(t.isConnected){delete t.dataset.ok;t.textContent="Anular";t.classList.remove("primary")}},4000);return}
@@ -615,7 +627,7 @@ document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.c
    - «No es de la actividad» y «Traspaso entre cuentas» no cuentan como gasto ni ingreso; «Depósito de caja en banco» tampoco
      (es efectivo ya cobrado).
    ============================================================================================ */
-const CATS=[["tpv","Cobros con tarjeta (TPV)","i"],["bizum","Cobros por Bizum","i"],["transf","Cobros por transferencia","i"],["otrosing","Otros ingresos","i"],
+const CATS=[["tpv","Cobros con tarjeta (TPV)","i"],["bizum","Cobros por Bizum","i"],["transf","Cobros por transferencia","i"],["otrosing","Otros ingresos","i"],["talleres","Talleres y servicios a entidades (facturas)","i"],
   ["nominas","Nóminas","g"],["ssaut","Seguridad Social autónomo","g"],["ssemp","Seguridad Social empleadas","g"],["comis","Comisiones bancarias","g"],
   ["sumin","Suministros (luz, gas, agua)","g"],["telef","Teléfono e internet","g"],["matofi","Material de oficina","g"],["matdid","Material didáctico","g"],
   ["asesoria","Asesoría","g"],["seguros","Seguros","g"],["cuotas","Cuotas profesionales","g"],["alquiler","Alquiler y renting","g"],["impuestos","Impuestos y tasas","g"],
@@ -692,7 +704,7 @@ const necesitaJust=m=>{const f=faltas(m);return f.j||f.d};
 /* Los dos huecos de un movimiento en la lista de Gastos: justificante del banco y factura/nómina/TC1 */
 function vDocsMov(m,t){const {j,d}=docsMov(m),f=faltas(m),k=`${esc(m.mes)}|${esc(m.id)}`,dt=DOC_TXT[d&&d.tipo||docTipoDe(m)]||"Documento";
   const verJ=j||pideJust(m)&&(t==="g"||t==="i"||m.cat==="deposito"),verD=d||t==="g"&&(pideJust(m)||esCaja(m)&&m.cat!=="comis");if(!verJ&&!verD)return "";
-  const hueco=(slot,x,lb,falta,tit)=>x?`<span class="row" style="gap:4px;padding:0;border:0;min-height:0"><a href="#" class="btn small" data-blob="${esc(x.id)}" title="${esc(x.n||"")}">${slot==="j"?"🏦":"📄"} ${lb}</a><button class="btn small" data-gb="quitarjust" data-k="${k}|${slot}" title="Quitar (por ejemplo, si se colocó en el movimiento equivocado)" aria-label="Quitar ${lb.toLowerCase()}">×</button>${(slot==="j"?verD&&!d:verJ&&!j)?`<button class="btn small" data-gb="swapdoc" data-k="${k}|${slot}" title="${slot==="j"?`No es el justificante del banco: es la ${dt.toLowerCase()}`:"No es la factura: es el justificante del banco"}" aria-label="Cambiar de hueco">⇄</button>`:""}</span>`
+  const hueco=(slot,x,lb,falta,tit)=>x?`<span class="row" style="gap:4px;padding:0;border:0;min-height:0"><a href="#" class="btn small" data-blob="${esc(x.id)}" title="${esc(x.n||"")}">${slot==="j"?"🏦":"📄"} ${lb}</a>${slot==="d"&&x.sinNif?`<span class="badge b-pend" title="Esta factura no lleva tu NIF: no sirve para deducir. Pide al vendedor la factura con tus datos fiscales y súbela en su lugar">sin tu NIF</span>`:""}<button class="btn small" data-gb="quitarjust" data-k="${k}|${slot}" title="Quitar (por ejemplo, si se colocó en el movimiento equivocado)" aria-label="Quitar ${lb.toLowerCase()}">×</button>${(slot==="j"?verD&&!d:verJ&&!j)?`<button class="btn small" data-gb="swapdoc" data-k="${k}|${slot}" title="${slot==="j"?`No es el justificante del banco: es la ${dt.toLowerCase()}`:"No es la factura: es el justificante del banco"}" aria-label="Cambiar de hueco">⇄</button>`:""}</span>`
     :`<label class="btn small" style="cursor:pointer;${falta?"border-color:var(--warn);color:var(--warn)":""}" title="${tit}">${slot==="j"?"🏦":"📄"} ${falta?"Falta ":"+ "}${minus(lb)}<input type="file" data-gbjust="${k}|${slot}" accept="image/*,.pdf" hidden></label>`;
   const sf=verD&&!d&&docReq(m)&&String(m.fv||m.fo||"")>=docDesde();
   const dHueco=!verD?"":sf&&sinFac(m)?`<span class="row" style="gap:4px;padding:0;border:0;min-height:0"><span class="badge b-off" title="Gasto deducible sin factura: no se pide">Sin factura</span><button class="btn small" data-gb="sinfacno" data-k="${k}" title="Volver a pedir la factura" aria-label="Volver a pedir la factura">×</button></span>`
@@ -723,11 +735,11 @@ async function cajaAGastos(){
 const gbVer=()=>S.role==="dir"&&!S.pv&&!S.ro&&!esMos();
 function gbEscuchar(){
   if(GB.sub)return;const desde=sumaDias(todayISO(),-400).slice(0,7);
-  GB.sub=S.db.collection("banco").where("mes",">=",desde).onSnapshot(s=>{GB.docs=s.docs.map(d=>({id:d.id,...d.data()}));GB.ok=true;GB.err="";cajaAGastos();if(S.view==="gastos"||(S.view==="tarifas"&&GT.fac))gbRefrescar()},
+  GB.sub=S.db.collection("banco").where("mes",">=",desde).onSnapshot(s=>{GB.docs=s.docs.map(d=>({id:d.id,...d.data()}));GB.ok=true;GB.err="";cajaAGastos();if(S.view==="gastos"||S.view==="descuadres"||(S.view==="tarifas"&&GT.fac))gbRefrescar()},
     e=>{GB.ok=true;GB.err="No se pueden leer los movimientos del banco: faltan permisos en la base de datos (hay que publicar las reglas nuevas en Firebase).";if(S.view==="gastos")gbRefrescar()});
   S.db.doc("config/banco").onSnapshot(d=>{GB.cfg=d.exists?d.data():{};cajaAGastos();if(S.view==="gastos")gbRefrescar()},()=>{GB.cfg={}});
 }
-function gbRefrescar(){const ae=document.activeElement;if(ae&&(ae.id==="gb-q"||ae.id==="gb-enlq"))return;render()}
+function gbRefrescar(){const ae=document.activeElement;if(ae&&(ae.id==="gb-q"||ae.id==="gb-enlq"||ae.id==="dq-q"||ae.id==="dq-aq"||ae.id==="dq-nota"))return;render()}
 const mesesBanco=()=>[...new Set(GB.docs.map(d=>d.id))].sort().reverse();
 const eurS=n=>(n>0?"+":n<0?"−":"")+eur(Math.abs(r2(n)));
 /* Lo cobrado según Argos: recibos pagados en el mes (por fecha de pago), por forma de pago. El efectivo, también por días. */
@@ -767,7 +779,7 @@ function vEfectivoSem(mes,E){E=E||semanasEfectivo(mes);
     ${E.sem.map(w=>`<tr><td style="white-space:nowrap">${fmtFecha(w.desde).slice(0,5)}${w.hasta!==w.desde?` – ${fmtFecha(w.hasta).slice(0,5)}`:""}</td><td style="text-align:right">${eur(w.cob)}</td><td style="text-align:right">${w.ing?eur(w.ing):"—"}${w.nIng>1?` <span class="note">(${w.nIng})</span>`:""}</td><td style="text-align:right;${Math.abs(w.acum)>0.5?"color:var(--warn);font-weight:600":""}">${eurS(w.acum)}</td></tr>`).join("")}
     <tr style="font-weight:700"><td>Total del mes</td><td style="text-align:right">${eur(E.cob)}</td><td style="text-align:right">${eur(E.ing)}</td><td style="text-align:right">${eurS(E.sinIng)}</td></tr></tbody></table>`}
 function vGastos(){
-  if(!gbVer())return `<div class="empty">Solo dirección.</div>`;gbEscuchar();nmEscuchar();cajaEscuchar();if(NM.ok&&GB.ok&&!NM.enl){NM.enl=true;setTimeout(nmEnlazarPendientes,1500)}if(GB.inf)return vInforme();if(GB.rent)return vRentabilidad();
+  if(!gbVer())return `<div class="empty">Solo dirección.</div>`;gbEscuchar();nmEscuchar();cajaEscuchar();if(typeof preEscuchar==="function")try{preEscuchar()}catch(_){}if(NM.ok&&GB.ok&&!NM.enl){NM.enl=true;setTimeout(nmEnlazarPendientes,1500)}imEscuchar();if(IM.ok&&GB.ok)setTimeout(imEnlazar,2500);if(GB.inf)return vInforme();if(GB.rent)return vRentabilidad();
   const ms=mesesBanco();if(!GB.mes||!ms.includes(GB.mes)){const n=k=>Object.keys((GB.docs.find(d=>d.id===k)||{}).movs||{}).length;GB.mes=ms.find(k=>n(k)>=10)||ms[0]||""}const mes=GB.mes;
   const todos=movsTodos(),delMes=todos.filter(m=>m.mes===mes),cuentas=[...new Set(todos.map(m=>m.cuenta))].sort();
   const q=nzC(GB.q);
@@ -787,9 +799,10 @@ function vGastos(){
   ${GB.err?`<div class="aviso pend" style="display:block">${esc(GB.err)}</div>`:""}
   <div class="bar" style="gap:8px;flex-wrap:wrap"><button class="btn" data-gb="rent" style="order:9;margin-left:auto">Rentabilidad</button><button class="btn" data-gb="inf" style="order:10">Informe del mes</button><label class="btn primary" style="cursor:pointer">Subir extractos del Sabadell (.xls)<input type="file" id="gb-file" accept=".xls,.xlsx" multiple hidden></label>
     <label class="btn" style="cursor:pointer" title="Desde Argos: el PDF con todas las facturas del mes y el listado de facturas. Se pueden subir los dos a la vez.">Subir facturas de venta de Argos (PDF)<input type="file" id="gb-ventas" accept=".pdf,application/pdf" multiple hidden></label>
+    <label class="btn" style="cursor:pointer" title="Argos → Caja → exportar a Excel (un día o varios). Sirve para cuadrar lo cobrado con tarjeta con las liquidaciones del TPV.">Subir caja de Argos (.xls)<input type="file" id="gb-acaja" accept=".xls,.xlsx" multiple hidden></label>
     <label class="btn" style="cursor:pointer" title="Justificantes del banco, facturas de proveedores, nóminas, listado de costes y TC1 de A3: todos juntos. Cada uno va a su movimiento.">Subir documentos (PDF)<input type="file" id="gb-justf" accept=".pdf,application/pdf" multiple hidden></label>
     <span class="note">Banca online → la cuenta → Movimientos → elige las fechas → Exportar a Excel. Puedes subir las dos cuentas a la vez; si un periodo ya estaba, solo se añaden los movimientos nuevos. En «Subir documentos» puedes arrastrar de una vez los justificantes del banco, las facturas y lo que manda A3 (nóminas, listado de costes y TC1): cada uno va a su movimiento.</span></div>
-  ${imp}${vJustRes()}${vVentasRes()}${(()=>{const sj=movsTodos().filter(necesitaJust),ms2=[...new Set(sj.map(m=>m.mes))].sort();return sj.length&&!GB.just?`<div class="aviso pend" style="display:block;margin-bottom:10px"><b>${sj.length} movimiento${sj.length===1?"":"s"} sin todos sus documentos</b> (justificante del banco y factura, nómina o TC1): ${ms2.map(k=>{const n=sj.filter(m=>m.mes===k).length;return `<a href="#" data-gb="versj" data-v="${k}">${mesTxt(k)} (${n})</a>`}).join(" · ")}. Súbelos todos juntos con «Subir documentos» o adjúntalos en cada movimiento.</div>`:""})()}
+  ${imp}${vJustRes()}${vVentasRes()}${vCuadreTarjeta()}${(()=>{const sj=movsTodos().filter(necesitaJust),ms2=[...new Set(sj.map(m=>m.mes))].sort();return sj.length&&!GB.just?`<div class="aviso pend" style="display:block;margin-bottom:10px"><b>${sj.length} movimiento${sj.length===1?"":"s"} sin todos sus documentos</b> (justificante del banco y factura, nómina o TC1): ${ms2.map(k=>{const n=sj.filter(m=>m.mes===k).length;return `<a href="#" data-gb="versj" data-v="${k}">${mesTxt(k)} (${n})</a>`}).join(" · ")}. Súbelos todos juntos con «Subir documentos» o adjúntalos en cada movimiento.</div>`:""})()}
   ${!ms.length?`<div class="empty">${GB.ok?"Todavía no hay movimientos. Sube el primer extracto.":"Cargando…"}</div>`:`
   <div class="bar" style="gap:8px;flex-wrap:wrap;margin-top:6px">
     <label class="f" style="flex:0 1 170px">Mes<select id="gb-mes">${ms.map(m=>`<option value="${m}" ${m===mes?"selected":""}>${mesTxt(m)}</option>`).join("")}</select></label>
@@ -802,7 +815,12 @@ function vGastos(){
   <div class="stats">
     <div class="stat" title="Todos los recibos que Argos da por pagados en el mes (por fecha de pago), con cualquier forma de pago"><b>${eur(IA?IA.cobrado:0)}</b><span>${IA&&IA.banco?"Cobrado a alumnos según el banco · no hay listado de Argos de este mes":"Cobrado a alumnos (Argos)"}</span></div>
     <div class="stat"><b>${eur(gas)}</b><span>Gastos de la actividad</span></div>
-    ${(()=>{const res=r2((IA?IA.total:0)-gas);return `<div class="stat" title="Cobrado a alumnos (Argos) + otros ingresos del banco − gastos. Lo que entra en el banco por TPV, Bizum, transferencias o cajero no se suma: es el mismo dinero cobrado."><b style="color:var(${res>=0?"--ok":"--bad"})">${eurS(res)}</b><span>Resultado de la actividad${pend.length?" · faltan pendientes":""}</span></div>`})()}
+    ${(()=>{const res=r2((IA?IA.total:0)-gas);
+      /* 14/11/2026: el mes en curso todavía no tiene sus nóminas (se pagan a primeros del mes siguiente): el resultado es provisional
+         y se da también una estimación con el coste de las últimas nóminas subidas */
+      const curso=mes>=todayISO().slice(0,7),noms=NM.docs.filter(d=>d.tipo==="nomina"&&+d.coste>0),tieneNom=noms.some(d=>d.mes===mes),um=noms.map(d=>d.mes).sort().pop();
+      const yaN=r2(-base.filter(m=>m.cat==="nominas"||m.cat==="ssemp").reduce((s2,m)=>s2+m.importe,0)),est=curso&&!tieneNom&&um?Math.max(0,r2(noms.filter(d=>d.mes===um).reduce((s2,d)=>s2+(+d.coste||0),0)-yaN)):0,resE=r2(res-est);
+      return `<div class="stat" title="Cobrado a alumnos (Argos) + otros ingresos del banco − gastos. Lo que entra en el banco por TPV, Bizum, transferencias o cajero no se suma: es el mismo dinero cobrado.${curso?" Mes en curso: faltan sus nóminas y otros cargos que aún no han pasado.":""}">${est?`<b style="color:var(${resE>=0?"--ok":"--bad"})">≈ ${eurS(resE)}</b><span>Resultado <b style="display:inline;font-size:inherit">provisional</b> del mes en curso. Ya resta ${eur(est)} de nóminas que aún no se han pagado (calculadas como las de ${esc(mesTxt(um))})</span>`:`<b style="color:var(${res>=0?"--ok":"--bad"})">${eurS(res)}</b><span>Resultado de la actividad${curso?" · <b style=\"display:inline;font-size:inherit\">provisional</b> (mes en curso)":""}${pend.length?" · faltan pendientes":""}</span>`}</div>`})()}
     <div class="stat" title="Ingresos en efectivo en el cajero este mes, frente a lo cobrado en contado"><b>${eur(E?E.ing:0)}</b><span>Ingresado en el cajero · ${eur(E?E.cob:0)} cobrados en contado</span></div>
     <button class="stat" data-gb="vercat" data-v="pend"><b style="${pend.length?"color:var(--warn)":""}">${pend.length}</b><span>Pendientes de clasificar</span></button>
     <button class="stat" data-gb="vercat" data-v="sinjust"><b style="${sinJ.length?"color:var(--warn)":"color:var(--ok)"}">${sinJ.length}</b><span>Les falta la factura o el justificante</span></button>
@@ -834,6 +852,105 @@ function vGastos(){
     ${vDocsMov(m,t)}${esCaja(m)&&t==="g"&&!docsMov(m).d?`<button class="btn small" data-gb="nodeduc" data-k="${esc(m.mes)}|${esc(m.id)}" title="No tiene factura o no es deducible: queda apuntado pero no entra en la cuenta de resultados">No deducible</button>`:""}
     <button class="btn small" data-gb="nota" data-k="${esc(m.mes)}|${esc(m.id)}" title="Añadir una nota">Nota</button></div>`}).join("")||`<div class="empty">No hay movimientos con este filtro.</div>`}</div>`}`;
 }
+/* ============================================================================================
+   Cuadre de tarjeta con la caja de Argos (09/11/2026, titular: «lo importante es detectar los descuadres»).
+   Se sube el Excel de la caja de Argos (F. Cobro, F. Emisión, Centro, Origen, Número, Titular, Concepto, Forma pago, Importe),
+   uno o varios días. Se guarda por día en banco/<AAAA-MM>.argosCaja.<AAAA-MM-DD> = {t, por, f:[{h,o,num,tit,c,fp,imp}]}
+   (si se vuelve a subir un día, se sustituye). Cada día se compara lo cobrado con tarjeta en Argos con el banco:
+   - si hay PDF de la liquidación (operaciones del TPV de ese día): una a una por importe → lo que está en el banco y no en
+     Argos, y lo que está en Argos y no en el banco;
+   - si no: el total de la liquidación (abonos TPV del día siguiente con cobros) frente a la suma de Argos de los días que cubre.
+   Desde 2027 la Caja de la app sustituirá este Excel.
+   ============================================================================================ */
+const ACJ={res:null};
+function argosCajaDias(){const o={};for(const d of GB.docs)for(const [k,v] of Object.entries(d.argosCaja||{}))if(v&&Array.isArray(v.f))o[k]=v;return o}
+const esTarj=fp=>/tarj|tpv|dat[aá]fono/i.test(fp||"");
+function acjFecha(v){if(typeof v==="number"&&window.XLSX){const d=window.XLSX.SSF.parse_date_code(v);if(d)return {f:`${d.y}-${String(d.m).padStart(2,"0")}-${String(d.d).padStart(2,"0")}`,h:`${String(d.H||0).padStart(2,"0")}:${String(d.M||0).padStart(2,"0")}`}}
+  const m=String(v||"").match(/(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);if(!m)return null;return {f:`${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`,h:m[4]?`${m[4].padStart(2,"0")}:${m[5]}`:""}}
+function leerCajaArgos(filas){const i=filas.findIndex(r=>r.some(c=>/^f\.?\s*cobro$/i.test(String(c).trim())));if(i<0)return null;
+  const H=filas[i].map(c=>nzC(String(c).normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim())),col=n=>H.findIndex(h=>h===n||h.startsWith(n));
+  const c={fc:col("F. COBRO"),o:col("ORIGEN"),num:col("NUMERO"),tit:col("TITULAR"),con:col("CONCEPTO"),fp:col("FORMA PAGO"),imp:col("IMPORTE")};if(c.fc<0||c.imp<0)return null;
+  const out=[];for(const r of filas.slice(i+1)){const f=acjFecha(r[c.fc]);const imp=typeof r[c.imp]==="number"?r[c.imp]:gtNum(String(r[c.imp]||""));if(!f||imp==null||isNaN(imp))continue;
+    out.push({dia:f.f,h:f.h,o:String(r[c.o]||"").trim(),num:String(r[c.num]||"").trim(),tit:String(r[c.tit]||"").replace(/\s+/g," ").trim(),c:String(r[c.con]||"").replace(/\s+/g," ").trim().slice(0,80),fp:String(r[c.fp]||"").trim(),imp:r2(imp)})}
+  return out}
+async function subirCajaArgos(files){try{await cargarJs(XLSXJS)}catch(_){toast("No se ha podido cargar el lector de Excel");return}
+  const dias={};let malos=0;
+  for(const f of files){try{const wb=window.XLSX.read(await f.arrayBuffer(),{type:"array"});const filas=window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:""});
+      const l=leerCajaArgos(filas);if(!l||!l.length){malos++;continue}for(const x of l)(dias[x.dia]=dias[x.dia]||[]).push(x)}catch(e){console.error(e);malos++}}
+  const ks=Object.keys(dias).sort();if(!ks.length){toast(malos?"No reconozco el archivo: tiene que ser el Excel de la caja de Argos":"El archivo no tiene cobros");return}
+  try{for(const k of ks){const mes=k.slice(0,7),ref=S.db.doc("banco/"+mes),v={t:nowISO(),por:quienSoy(),f:dias[k].map(({dia,...x})=>x)};
+      const sn=await ref.get();if(sn.exists)await ref.update({["argosCaja."+k]:v});else await ref.set({mes,argosCaja:{[k]:v}})}
+    ACJ.ver=true;toast(`Caja de Argos guardada: ${ks.length} día${ks.length===1?"":"s"} (${ks.map(k=>fmtFecha(k)).join(", ")})${malos?` · ${malos} archivo${malos===1?"":"s"} sin leer`:""}`);render()}
+  catch(e){console.error(e);toast("No se ha podido guardar la caja de Argos")}}
+/* Empareja por importe dos listas (multiconjunto): devuelve lo que sobra en cada una */
+function emparejarImp(a,b){const bb=b.map(x=>({...x,_u:false})),sa=[];
+  for(const x of a){const j=bb.findIndex(y=>!y._u&&Math.abs(y.imp-x.imp)<0.005);if(j>=0)bb[j]._u=true;else sa.push(x)}
+  return {soloA:sa,soloB:bb.filter(y=>!y._u)}}
+/* Un pago con tarjeta puede cubrir varios cobros de Argos (04/11: 320 € = 8 facturas de 40 €; una familia, varias facturas).
+   Después del 1 a 1: a cada operación sobrante se le buscan cobros sobrantes que sumen lo mismo, primero los del mismo titular,
+   después cualquier combinación (los más cercanos en hora primero). Devuelve también los grupos encontrados. */
+function emparejarTpv(op,ar){const e=emparejarImp(op,ar);let ops=[...e.soloA].sort((x,y)=>y.imp-x.imp),rows=e.soloB.map((x,i)=>({...x,_i:i}));const grupos=[],quedan=[];
+  const cts=x=>Math.round(x*100),quitar=l=>{const ids=new Set(l.map(x=>x._i));rows=rows.filter(x=>!ids.has(x._i))};
+  /* 1.º los que cuadran con todos los cobros de un mismo titular */
+  const resto=[];for(const o of ops){const obj=cts(o.imp),porTit={};for(const r of rows)(porTit[r.tit]=porTit[r.tit]||[]).push(r);
+    const l=Object.values(porTit).find(l=>l.length>1&&cts(l.reduce((s,x)=>s+x.imp,0))===obj);if(l){grupos.push({o,rows:l});quitar(l)}else resto.push(o)}
+  /* 2.º cualquier combinación de lo que queda */
+  for(const o of resto){const obj=cts(o.imp);let sel=null;
+    if(rows.length<=24){const R=[...rows].sort((x,y)=>String(x.h).localeCompare(String(y.h))),dp=new Map([[0,[]]]);
+      for(const r of R){const c=cts(r.imp);for(const [k,v] of [...dp]){const n=k+c;if(n<=obj&&!dp.has(n))dp.set(n,[...v,r])}if(dp.has(obj))break}
+      if(dp.has(obj)&&dp.get(obj).length)sel=dp.get(obj)}
+    if(sel){grupos.push({o,rows:sel});quitar(sel)}else quedan.push(o)}
+  return {soloA:quedan,soloB:rows,grupos}}
+function cuadreTarjetaDias(){const AC=argosCajaDias(),dias=Object.keys(AC).sort(),tpvs=movsTodos().filter(m=>m.cat==="tpv"&&m.importe>0&&m.fv);
+  const ops={};for(const m of tpvs)for(const o of (m.tpv||[]))if(o&&o.f)(ops[o.f]=ops[o.f]||[]).push({imp:+o.imp||0,tarj:o.tarj||"",fv:m.fv});
+  const fvs=[...new Set(tpvs.map(m=>m.fv))].sort();
+  return dias.map(d=>{const ar=AC[d].f.filter(x=>esTarj(x.fp)).map(x=>({...x,dia:d})),tA=r2(ar.reduce((s,x)=>s+x.imp,0));
+    if(ops[d]){const op=ops[d],tB=r2(op.reduce((s,x)=>s+x.imp,0)),e=emparejarTpv(op,ar);
+      /* pistas: cobros de ese día apuntados con otra forma de pago (contado, Bizum…) que suman lo mismo */
+      const otros=AC[d].f.filter(x=>!esTarj(x.fp)),pista=imp=>{const c=Math.round(imp*100),l=otros.filter(x=>Math.round(x.imp*100)===c).map(x=>[x]);
+        const pt={};for(const x of otros)(pt[x.tit]=pt[x.tit]||[]).push(x);for(const g of Object.values(pt))if(g.length>1&&Math.round(g.reduce((s,x)=>s+x.imp,0)*100)===c)l.push(g);
+        const ap={};for(const x of otros){const k=String(x.tit).split(" ").slice(-2).join(" ");(ap[k]=ap[k]||[]).push(x)}
+        for(const g of Object.values(ap))if(g.length>1&&new Set(g.map(x=>x.tit)).size>1&&Math.round(g.reduce((s,x)=>s+x.imp,0)*100)===c)l.push(g);
+        return l.length<=2?l:[]};
+      for(const o of e.soloA)o.pistas=pista(o.imp);
+      return {d,modo:"ops",tA,tB,nA:ar.length,nB:op.length,soloBanco:e.soloA,soloArgos:e.soloB,grupos:e.grupos,ok:!e.soloA.length&&!e.soloB.length}}
+    /* sin PDF: la liquidación es el primer día con abonos TPV después de d; cubre desde la anterior hasta el día antes */
+    const fv=fvs.find(f=>f>d);if(!fv)return {d,modo:"espera",tA,nA:ar.length,ok:null};
+    const ant=fvs.filter(f=>f<fv).pop(),d0=ant||sumaDias(fv,-1),d1=sumaDias(fv,-1),cub=[];for(let x=d0;x<=d1;x=sumaDias(x,1))cub.push(x);
+    const falta=cub.filter(x=>!AC[x]&&diaDe(x)!=="Domingo"),tB=r2(tpvs.filter(m=>m.fv===fv).reduce((s,m)=>s+m.importe,0));
+    const tAw=r2(cub.reduce((s,x)=>s+(AC[x]?AC[x].f.filter(y=>esTarj(y.fp)).reduce((t,y)=>t+y.imp,0):0),0));
+    return {d,modo:"total",tA,nA:ar.length,fv,cub,falta,tB,tAw,ok:falta.length?null:Math.abs(tB-tAw)<0.01}})}
+/* 14/11/2026 (titular: «no logro localizarlos»): para cada cobro con tarjeta que está en el banco y no en la caja de Argos de ese
+   día, se buscan más pistas: (1) apuntado en Argos otro día cercano (±3) y que allí sobra; (2) apuntado otro día con otra forma de
+   pago; (3) un recibo que Argos da como pagado con tarjeta por ese importe (±1 día); (4) la misma tarjeta ya pagó antes a un alumno;
+   (5) recibos pendientes por ese importe, o de una misma familia (mismos apellidos) que suman ese importe. */
+function pistasTarjeta(o,d,L,AC){const out=[],c=Math.round(o.imp*100),cerca=x=>Math.abs(difDias(x,d))<=3&&x!==d,nom=t=>titulo(String(t||"").toLowerCase());
+  for(const y of L){if(!cerca(y.d)||y.modo!=="ops")continue;for(const r of y.soloArgos||[])if(Math.round(r.imp*100)===c)out.push(`apuntado en Argos el ${fmtFecha(y.d)} con tarjeta: ${nom(r.tit)}${r.num?" ("+r.num+")":""} (ese día sobra en Argos)`)}
+  for(const [x,v] of Object.entries(AC)){if(!cerca(x))continue;for(const r of v.f||[])if(!esTarj(r.fp)&&Math.round(r.imp*100)===c)out.push(`el ${fmtFecha(x)} en Argos con ${String(r.fp||"otra forma").toLowerCase()}: ${nom(r.tit)}`)}
+  const e=pdTry(()=>enlaceTpv({f:d,imp:o.imp,tarj:o.tarj}),[]);
+  for(const x of e.filter(x=>!x.pend))out.push(`recibo pagado con tarjeta en Argos: ${nom(x.n)} (${x.txt})`);
+  const tk=pdTry(()=>tarjetasConocidas(),{}),al=o.tarj&&tk[o.tarj]?S.alumnos.get(tk[o.tarj]):null;
+  if(al){const pe=(al.recibos||[]).filter(r=>r&&r.estado!=="pagado");out.push(`la tarjeta …${o.tarj} ya pagó antes a ${nom(al.nombre)}${pe.length?` · tiene pendiente ${pe.map(r=>`${r.numero||""} ${eur(+r.importe||0)}`).join(", ")}`:""}`)}
+  if(!out.length){const pend=e.filter(x=>x.pend);
+    if(pend.length&&pend.length<=5)out.push(`recibos pendientes de ${eur(o.imp)}: ${pend.map(x=>`${nom(x.n)} (${String(x.txt).replace(" · pendiente en Argos","")})`).join(", ")}`);
+    else if(pend.length)out.push(`${pend.length} alumnos tienen un recibo pendiente de ${eur(o.imp)}: no se puede saber cuál solo por el importe`);
+    const fam={};for(const [id,a] of S.alumnos){if(a.baja)continue;const k=String(a.nombre||"").trim().split(/\s+/).slice(-2).join(" ");if(!k.includes(" "))continue;
+      for(const r of a.recibos||[])if(r&&r.estado!=="pagado"&&String(r.emitido||"")<=d)(fam[k]=fam[k]||[]).push({a,r})}
+    for(const [k,l] of Object.entries(fam)){if(new Set(l.map(x=>x.a)).size<2&&l.length<2)continue;
+      const R=l.slice(0,12),dp=new Map([[0,[]]]);for(const x of R){const v=Math.round((+x.r.importe||0)*100);for(const [s,q] of [...dp]){const n=s+v;if(n<=c&&!dp.has(n))dp.set(n,[...q,x])}}
+      const sel=dp.get(c);if(sel&&sel.length>1)out.push(`familia ${titulo(k.toLowerCase())}: ${sel.map(x=>`${nom(x.a.nombre).split(" ")[0]} ${x.r.numero||""} ${eur(+x.r.importe||0)}`).join(" + ")} (pendientes)`)}}
+  return [...new Set(out)].slice(0,6)}
+function vCuadreTarjeta(){const L=cuadreTarjetaDias();if(!L.length)return "";const AC=argosCajaDias();
+  const mal=L.filter(x=>x.ok===false),txt=x=>x.modo==="espera"?`<span class="note">${eur(x.tA)} con tarjeta en Argos · aún no ha llegado la liquidación</span>`
+    :x.modo==="ops"?(x.ok?`<span class="badge b-si">Cuadra</span> <span class="note">${x.nA} cobros · ${eur(x.tA)}${x.grupos.length?` · ${x.grupos.map(g=>`un pago de ${eur(g.o.imp)} = ${g.rows.length} cobros (${[...new Set(g.rows.map(r=>titulo(r.tit)))].map(esc).join(", ")})`).join(" · ")}`:""}</span>`:`<span class="badge b-no">Descuadre</span> <span class="note">Argos ${eur(x.tA)} (${x.nA}) · banco ${eur(x.tB)} (${x.nB})</span>
+        ${x.soloBanco.map(o=>`<div class="note" style="margin-left:12px;color:var(--bad)">En el banco y no en Argos: <b>${eur(o.imp)}</b>${o.tarj?` · tarjeta …${esc(o.tarj)}`:""}${o.pistas&&o.pistas.length?` · ¿apuntado en Argos con otra forma de pago? ${o.pistas.map(g=>g.map(r=>`${esc(titulo(r.tit))} (${esc(r.fp)}${r.h?" "+esc(r.h):""}${g.length>1?", "+eur(r.imp):""})`).join(" + ")).join(" o ")}`:x.soloArgos.length?"":" (no está en Argos: ¿cobro sin apuntar?)"}${(l=>l.length?`<ul style="margin:2px 0 4px 28px;padding:0;color:var(--ink)">${l.map(t=>`<li>Pista: ${esc(t)}</li>`).join("")}</ul>`:"")(o.pistas&&o.pistas.length?[]:pistasTarjeta(o,x.d,L,AC))}</div>`).join("")}
+        ${x.soloArgos.map(o=>`<div class="note" style="margin-left:12px;color:var(--bad)">En Argos con tarjeta y no en el banco: <b>${eur(o.imp)}</b> · ${esc(titulo(o.tit))}${o.num?` (${esc(o.num)})`:""}${o.h?` · ${esc(o.h)}`:""}</div>`).join("")}`)
+    :(x.ok===null?`<span class="note">${eur(x.tA)} con tarjeta · liquidación del ${fmtFecha(x.fv)}: falta subir la caja de ${x.falta.map(fmtFecha).join(", ")}</span>`
+      :x.ok?`<span class="badge b-si">Cuadra</span> <span class="note">${eur(x.tA)} · liquidación del ${fmtFecha(x.fv)}${x.cub.length>1?` (${x.cub.map(fmtFecha).join(" + ")})`:""}</span>`
+      :`<span class="badge b-no">Descuadre</span> <span class="note">liquidación del ${fmtFecha(x.fv)}: banco ${eur(x.tB)} · Argos ${eur(x.tAw)}${x.cub.length>1?` (${x.cub.map(fmtFecha).join(" + ")})`:""} · diferencia <b>${eur(r2(x.tB-x.tAw))}</b>. Sube el PDF de esa liquidación para ver qué operación es.</span>`);
+  return `<details class="aviso ${mal.length?"pend":"info"}" style="display:block;margin-bottom:10px" ${ACJ.ver||mal.length?"open":""} data-gcdet="acj"><summary><b>Cuadre de tarjeta con la caja de Argos:</b> ${mal.length?`<span style="color:var(--bad)">${mal.length} día${mal.length===1?"":"s"} con descuadre</span>`:"todo cuadra"} · ${L.length} día${L.length===1?"":"s"} subido${L.length===1?"":"s"}</summary>
+    ${[...L].reverse().slice(0,ACJ.todos?400:14).map(x=>`<div class="row" style="flex-wrap:wrap;gap:6px;align-items:flex-start"><span style="min-width:92px"><b>${diaDe(x.d).slice(0,3)} ${fmtFecha(x.d)}</b></span><span class="grow" style="white-space:normal">${txt(x)}</span></div>`).join("")}
+    ${L.length>14&&!ACJ.todos?`<a href="#" data-gb="acjtodos" class="note">Ver todos los días</a>`:""}</details>`}
 async function gbLeerArchivos(files){
   try{await cargarJs(XLSXJS)}catch(_){GB.imp={err:"No se ha podido cargar el lector de Excel. Comprueba la conexión y vuelve a intentarlo."};render();return}
   const ya=new Set(movsTodos().map(m=>m.id)),reglas=(GB.cfg&&GB.cfg.reglas)||{},res=[];
@@ -867,6 +984,7 @@ async function gbCambiarCat(mes,id,cat){
 }
 document.addEventListener("change",async e=>{const t=e.target;if(!t||!gbVer())return;
   if(t.id==="gb-file"){const fs=[...t.files];t.value="";if(fs.length)await gbLeerArchivos(fs)}
+  else if(t.id==="gb-acaja"){const fs=[...t.files];t.value="";if(fs.length)await subirCajaArgos(fs)}
   else if(t.id==="gb-justf"){const fs=[...t.files];t.value="";if(fs.length)await gbSubirJustificantes(fs)}
   else if(t.id==="gb-ventas"){const fs=[...t.files];t.value="";if(fs.length)await subirVentas(fs)}
   else if(t.dataset&&t.dataset.gbreq){try{const cfg={...(GB.cfg||{}),docReq:{...((GB.cfg&&GB.cfg.docReq)||{}),[t.dataset.gbreq]:t.value}};await S.db.doc("config/banco").set(cfg);GB.cfg=cfg;GB.verReq=true;render();toast("Guardado")}catch(_){toast("No se ha podido guardar.")}}
@@ -917,6 +1035,15 @@ document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.c
   else if(act==="enlcerrar"){GB.enl=null;render()}
   else if(act==="enlok"||act==="enlno"){const [mes,id]=t.dataset.k.split("|"),d=GB.docs.find(x=>x.id===mes),m=d&&d.movs&&d.movs[id];if(!m)return;const v=act==="enlok"?{id:t.dataset.al,nums:[t.dataset.n]}:null;
     try{await S.db.doc("banco/"+mes).update({["movs."+id+".enl"]:v});m.enl=v;GB.enl=null;render();toast(v?"Recibo enlazado":"Recibo quitado")}catch(e){console.error(e);toast("No se ha podido guardar.")}}
+  /* 14/11/2026 (titular): cobro sin alumno, p. ej. una clase de prueba de alguien que no se ha apuntado. movs.<id>.enl =
+     {sinAl:"prueba"|"otro", nom, tel, nota, t, por}: deja de salir como «sin alumno» y en Descuadres, y se recuerda para el futuro */
+  else if(act==="enlprueba"||act==="enlotro"){const [mes,id]=t.dataset.k.split("|"),d=GB.docs.find(x=>x.id===mes),m=d&&d.movs&&d.movs[id];if(!m)return;
+    const pr=act==="enlprueba",def=titulo(String(m.ordenante||String(m.concepto||"").replace(/^.*?\bDE\s+/i,"")).toLowerCase()).trim();
+    const nom=prompt(pr?"Nombre de quien hizo la clase de prueba (el alumno, no quien paga, si lo sabes):":"¿De quién o de qué es este ingreso?",def);if(nom===null)return;
+    const tel=pr?prompt("Teléfono (opcional, para reconocerle si vuelve):",""):"";if(tel===null)return;
+    const v={sinAl:pr?"prueba":"otro",nom:String(nom).trim().slice(0,80),tel:digitos(tel||"").slice(-9),nota:String(m.obs||"").slice(0,140),t:nowISO(),por:quienSoy()};
+    try{await S.db.doc("banco/"+mes).update({["movs."+id+".enl"]:v});m.enl=v;GB.enl=null;render();toast(pr?"Apuntada como clase de prueba":"Apuntado como ingreso sin alumno")}catch(e){console.error(e);toast("No se ha podido guardar.")}}
+  else if(act==="acjtodos"){ACJ.todos=true;render()}
   else if(act==="nodeduc"){const [mes,id]=t.dataset.k.split("|");await gbCambiarCat(mes,id,"nodeduc")}
   else if(act==="nota"){const [mes,id]=t.dataset.k.split("|"),d=GB.docs.find(x=>x.id===mes),m=d&&d.movs[id];if(!m)return;const v=prompt("Nota del movimiento",m.nota||"");if(v===null)return;
     try{await S.db.doc("banco/"+mes).update({["movs."+id+".nota"]:String(v).slice(0,140)});m.nota=String(v).slice(0,140);render()}catch(_){toast("No se ha podido guardar la nota.")}}
@@ -941,7 +1068,10 @@ function leerComprobante(items){
   const signo={"TC1":-1,"Liquidación TPV":1,"Bizum":1,"Ingreso de efectivo":1,"Transferencia recibida":1,"Adeudo":-1,"Transferencia emitida":-1}[tipo]||0;
   const ibans=[...t.matchAll(/ES\d{2}(?:\s?\d{4}){5}/g)].map(m=>m[0].replace(/\s/g,""));
   const importes=[...new Set([...t.matchAll(/(?<![\d,.])\d{1,3}(?:\.\d{3})*,\d{2}(?![\d])/g)].map(m=>numBanco(m[0])).filter(n=>n>0))];
-  const fechas=[...new Set([...t.matchAll(/(?<![\d.-])(\d{1,2})([-\/.])(\d{1,2})\2(\d{2}|\d{4})(?![\d-])/g)].map(m=>fechaBanco(m[0])).filter(Boolean))];
+  const MES_TXT={enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12};
+  /* 14/11/2026: también fechas escritas («12 noviembre 2026», «12 de noviembre de 2026»), como en las facturas de Amazon */
+  const fTxt=[...t.toLowerCase().matchAll(/\b(\d{1,2})\s+(?:de\s+)?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\s+(?:de\s+)?(\d{4})\b/g)].map(m=>`${m[3]}-${String(MES_TXT[m[2]]).padStart(2,"0")}-${m[1].padStart(2,"0")}`);
+  const fechas=[...new Set([...[...t.matchAll(/(?<![\d.-])(\d{1,2})([-\/.])(\d{1,2})\2(\d{2}|\d{4})(?![\d-])/g)].map(m=>fechaBanco(m[0])),...fTxt].filter(Boolean))];
   const refs=[...new Set([...t.matchAll(/\b\d{8,}\b/g)].map(m=>m[0]))];
   /* CIF del emisor de una factura (en los adeudos SEPA la referencia empieza por el CIF del acreedor: A3 → «B01726595…») */
   const cifs=[...new Set([...t.toUpperCase().matchAll(/\b([ABCDEFGHJNPQRSUVW])[-.\s]?(\d{7})([0-9A-J])\b/g)].map(m=>m[1]+m[2]+m[3]))];
@@ -953,14 +1083,19 @@ function leerComprobante(items){
   if(tipo==="Ingreso de efectivo"){const b=(t.match(/(\d+) billete\(s\) de (\d+)/gi)||[]).join(", ");obs=b?"Billetes: "+b:""}
   const fv=fechaBanco(campoBajo(items,"Fecha valor abono")||campoBajo(items,"Fecha valor de cargo en cuenta")||campoBajo(items,"Valoración"))||fechas[0]||"";
   let tpv=null,importe0=null;
+  /* 10/11/2026: el adeudo del Sabadell lleva el detalle de la factura (base, IVA, total) antes del importe; vale el que va tras «Importe EUR» */
+  const impEtq=(m=>m?numBanco(m[1]):null)(t.match(/Importe\s*EUR\s*(?:Comisi[oó]n\s*EUR\s*)?(?:Valoraci[oó]n\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})/i));
   if(tipo==="Liquidación TPV"){tpv=[];
     for(const c of items.filter(i=>/^\d{4}\.\*{4}\.\*{4}\.\d{4}$/.test(i.s.trim()))){const fila=items.filter(i=>(i.p||0)===(c.p||0)&&Math.abs(i.y-c.y)<2&&i.x>c.x);
       const f=fila.find(i=>/^\d{2}\.\d{2}\.\d{2}$/.test(i.s.trim())),imp=fila.map(i=>i.s.trim()).find(x=>/^\d{1,3}(\.\d{3})*,\d{2}$/.test(x)),com=fila.map(i=>i.s.trim()).find(x=>/^-\d+,\d{2}$/.test(x));
       if(f&&imp)tpv.push({f:fechaBanco(f.s),imp:numBanco(imp),com:com?numBanco(com):0,tarj:c.s.trim().slice(-4)})}
     const tot=items.find(i=>i.s.trim()==="Total nominal en euros");if(tot){const v=items.filter(i=>(i.p||0)===(tot.p||0)&&i.y<tot.y&&i.y>tot.y-26&&Math.abs(i.x-tot.x)<45).map(i=>numBanco(i.s)).find(n=>n>0);if(v)importe0=v}
     if(importe0==null&&tpv.length)importe0=r2(tpv.reduce((a,o)=>a+o.imp,0));}
-  return {tipo,signo,ibans,importes,fechas,refs,ref,tpv,cifs,texto:tipo==="Factura"||tipo==="Comprobante"?t.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,""):"",ordenante:nombre.trim(),obs:String(obs||"").trim().slice(0,140),fv,
-    importe:importe0??liqTC??(tipo==="Factura"&&importes.length?Math.max(...importes):null)??numBanco((campoBajo(items,"Nominal").match(/[\d.]+,\d{2}/)||[""])[0])??importes[0]??null};
+  /* 14/11/2026: una factura de proveedor sin el NIF de la titular no sirve para deducir: se avisa para pedirla con los datos */
+  const miNif=String((typeof faEmisor==="function"?(faEmisor()||{}).nif:"")||"48966357R").toUpperCase().replace(/[^0-9A-Z]/g,"");
+  const sinNif=tipo==="Factura"&&!!miNif&&!t.toUpperCase().replace(/[^0-9A-Z]/g,"").includes(miNif);
+  return {tipo,signo,ibans,importes,fechas,refs,ref,tpv,cifs,sinNif,texto:tipo==="Factura"||tipo==="Comprobante"?t.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,""):"",ordenante:nombre.trim(),obs:String(obs||"").trim().slice(0,140),fv,
+    importe:importe0??liqTC??impEtq??(tipo==="Factura"&&importes.length?Math.max(...importes):null)??numBanco((campoBajo(items,"Nominal").match(/[\d.]+,\d{2}/)||[""])[0])??importes[0]??null};
 }
 async function leerPdfItems(file){
   await cargarJs(PDFJS);window.pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_W;
@@ -985,8 +1120,21 @@ function enlaceTpv(op){const out=[];
 const NORM=x=>String(x||"").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
 const PAL_NO=new Set(["ENERO","FEBRERO","MARZO","ABRIL","MAYO","JUNIO","JULIO","AGOSTO","SEPTIEMBRE","SETIEMBRE","OCTUBRE","NOVIEMBRE","DICIEMBRE","CLASE","CLASES","PAGO","CUOTA","MES","MENSUALIDAD","RECIBO","ALTHEA","ACADEMIA","LOGOPEDIA","BIZUM","TRANSFERENCIA","DEL","LOS","LAS","CON","POR","PARA","HIJO","HIJA","ESTEFANIA","PEREZ","BUSATI"]);
 /* Recibo elegido a mano (08/11/2026: el Bizum suele venir a nombre del padre o la madre): movs.<id>.enl = {id: alumno, nums: [nº recibo]} */
-function enlaceCobro(m){
+/* 10/11/2026: si un Bizum no encaja con nada:
+   1) puede ser el primer recibo de una preinscripción (la familia dice que pagó por Bizum ese importe);
+   2) puede ser un Bizum hecho en dos o tres veces (mismo concepto, mismo día o el siguiente): se prueba con la suma. */
+function preCandidatos(imp,f){const P=typeof PR!=="undefined"&&PR.docs?PR.docs:[];
+  return P.filter(p=>p&&["alta","completada","procesando","enviada"].includes(p.estado)&&(()=>{const pr=p.primer||(typeof preProrrateo==="function"?preProrrateo(p.importe,p.clases,p.inicio):null);return pr&&Math.abs(+pr.total-imp)<0.005})()&&(!p.bizum||difDias(String(p.bizum).slice(0,10),f)<=4))
+    .map(p=>({id:p.alumno&&S.alumnos.has(p.alumno)?p.alumno:"",a:(p.alumno&&S.alumnos.get(p.alumno))||{nombre:p.nombre||""},pt:6,rec:[],pagado:false,pre:p})).slice(0,3)}
+function enlaceCobro(m){const r=enlaceCobroBase(m);if(r.length||m.enl||m._junto||m.cat!=="bizum")return r;
+  const pc=preCandidatos(m.importe,m.fv);if(pc.length)return pc;
+  const sib=movsTodos().filter(x=>x.id!==m.id&&x.cat===m.cat&&x.importe>0&&String(x.concepto)===String(m.concepto)&&Math.abs(difDias(x.fv,m.fv))<=1&&!x.enl);
+  if(!sib.length||sib.length>3)return [];
+  const tot=r2(m.importe+sib.reduce((s,x)=>s+x.importe,0)),mm={...m,importe:tot,_junto:true};let r3=enlaceCobroBase(mm);if(!r3.length)r3=preCandidatos(tot,m.fv);
+  return r3.map(x=>({...x,junto:sib,tot}))}
+function enlaceCobroBase(m){
   const forma=m.cat==="bizum"?/bizum/i:/transf/i,res=[];
+  if(m.enl&&m.enl.sinAl)return [{id:"",a:{nombre:m.enl.nom||"sin nombre"},pt:99,rec:[],pagado:false,man:true,sinAl:m.enl.sinAl}];
   if(m.enl&&m.enl.id){const a=S.alumnos.get(m.enl.id);if(a){const rec=(a.recibos||[]).filter(r=>r&&(m.enl.nums||[]).includes(r.numero||r.id));return [{id:m.enl.id,a,pt:99,rec,pagado:rec.length>0&&rec.every(r=>r.estado==="pagado"),man:true}]}}
   /* el nombre que trae el concepto («ABONO BIZUM DE MANUELA A. G.») también cuenta, por si coincide con el del alumno */
   const deC=String(m.concepto||"").replace(/^.*?\bDE\s+/i,"");
@@ -1006,12 +1154,13 @@ function vEnlaceCobro(m){if(!["bizum","transf"].includes(m.cat)||m.importe<=0)re
   const k=`${esc(m.mes)}|${esc(m.id)}`,abierto=GB.enl===m.mes+"|"+m.id;
   const elegir=abierto?vElegirRecibo(m):` <button class="btn small" data-gb="enl" data-k="${k}" title="Elige el alumno y el recibo que paga este ${m.cat==="bizum"?"Bizum":"ingreso"} (por ejemplo, si viene a nombre del padre o la madre)">${e.length&&e[0].man?"Cambiar":"Elegir recibo"}</button>`;
   if(!e.length)return `<br><span class="note" style="color:var(--warn)">→ sin alumno identificado${m.ordenante?"":" (sube el PDF del banco para ver quién paga, o elígelo)"}</span>${elegir}`;
-  const txt=x=>`<a href="#" data-act="ir" data-id="${esc(x.id)}">${esc(titulo(x.a.nombre))}</a>${x.rec.length?` (${x.rec.map(r=>esc(r.numero||r.concepto||"")).join(" + ")} · ${x.pagado?"pagado en Argos":"pendiente en Argos"})`:""}`;
+  const txt=x=>`${x.junto?`junto con ${x.junto.map(j=>`el Bizum de ${eur(j.importe)}${j.fv!==m.fv?" del "+fmtFecha(j.fv):""}`).join(" y ")} = <b>${eur(x.tot)}</b>: `:""}${x.id?`<a href="#" data-act="ir" data-id="${esc(x.id)}">${esc(titulo(x.a.nombre))}</a>`:`<b>${esc(titulo(x.a.nombre))}</b>`}${x.sinAl?(x.sinAl==="prueba"?" · <b>clase de prueba</b>, no se apuntó (sin recibo; hazle factura en Argos)":" · ingreso sin alumno"):x.pre?` (primer recibo de la preinscripción${x.pre.bizum?", la familia dijo que pagó por Bizum":""})`:x.rec.length?` (${x.rec.map(r=>esc(r.numero||r.concepto||"")).join(" + ")} · ${x.pagado?"pagado en Argos":"pendiente en Argos"})`:""}`;
   return `<br><span class="note">→ ${e.length===1?txt(e[0]):`<span style="color:var(--warn)">puede ser</span> ${e.map(txt).join(" o ")}`}${e[0].man?` · elegido a mano <button class="btn small" data-gb="enlno" data-k="${k}" title="Quitar el recibo elegido" aria-label="Quitar">×</button>`:""}</span>${e.length===1&&!abierto&&!e[0].man?"":elegir}`;
 }
 /* Buscador para elegir el recibo: alumnos por nombre; de cada uno, sus recibos más cercanos al importe y la fecha del movimiento. */
 function vElegirRecibo(m){return `<div style="margin-top:4px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)">
   <div style="display:flex;gap:6px;align-items:center"><input type="search" id="gb-enlq" placeholder="Nombre del alumno" style="flex:1" value="${esc(GB.enlQ||"")}"><button class="btn small" data-gb="enlcerrar">Cancelar</button></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><span class="note">¿No es de ningún alumno?</span><button class="btn small" data-gb="enlprueba" data-k="${esc(m.mes)}|${esc(m.id)}" title="Alguien que vino a una clase de prueba y no se apuntó: se guarda su nombre para reconocerle si vuelve">Clase de prueba (no se apuntó)</button><button class="btn small" data-gb="enlotro" data-k="${esc(m.mes)}|${esc(m.id)}">Otro ingreso sin alumno</button></div>
   <div id="gb-enlres">${vElegirRes(m)}</div></div>`}
 function vElegirRes(m){const q=nzC(GB.enlQ||""),k=`${esc(m.mes)}|${esc(m.id)}`;
   let l=q.length>=2?sortedAlumnos().filter(([,a])=>a.nombre.includes(q)).slice(0,8)
@@ -1020,15 +1169,72 @@ function vElegirRes(m){const q=nzC(GB.enlQ||""),k=`${esc(m.mes)}|${esc(m.id)}`;
   return (q.length>=2?"":`<p class="note" style="margin:6px 0 2px">Con un recibo de ${eur(m.importe)}:</p>`)+l.map(([id,a])=>{
     const rs=(a.recibos||[]).filter(r=>r&&r.importe!=null).sort((x,y)=>(Math.abs(+x.importe-m.importe)<0.005?0:1)-(Math.abs(+y.importe-m.importe)<0.005?0:1)||difDias(String(x.emitido||"").slice(0,10)||m.fv,m.fv)-difDias(String(y.emitido||"").slice(0,10)||m.fv,m.fv)).slice(0,4);
     return `<div style="margin-top:6px"><b style="font-size:13px">${esc(titulo(a.nombre))}</b> ${rs.map(r=>`<button class="btn small ${Math.abs(+r.importe-m.importe)<0.005?"primary":""}" data-gb="enlok" data-k="${k}" data-al="${esc(id)}" data-n="${esc(r.numero||r.id)}" title="${esc(r.concepto||"")}">${esc(r.numero||"")} · ${eur(+r.importe)} · ${r.estado==="pagado"?"pagado":"pendiente"}</button>`).join(" ")||`<span class="note">sin recibos</span>`}</div>`}).join("")}
-function vTpvOps(m){if(!m.tpv||!m.tpv.length)return "";
+function vTpvOpsDet(m){if(!m.tpv||!m.tpv.length)return "";
   const ult=S.recCfg&&S.recCfg.ultima,viejo=ult&&m.tpv.some(o=>o.f>ult);
   return `<details style="margin-top:2px"><summary class="note">${m.tpv.length} ${m.tpv.length===1?"operación":"operaciones"} con tarjeta</summary>${viejo?`<div class="note" style="margin-left:12px;color:var(--warn)">El último listado de Argos es del ${fmtFecha(ult)}: sube uno más reciente (Recibos → Cargar listado de Argos) para ver quién pagó.</div>`:""}${m.tpv.map(o=>{const e=enlaceTpv(o);
     if(e.length&&e[0].pend)return `<div class="note" style="margin-left:12px">${fmtFecha(o.f)} · ${eur(o.imp)} · tarjeta …${esc(o.tarj)} → <span style="color:var(--warn)">${e.length>6?`${e.length} recibos pendientes de ${eur(o.imp)}`:`posible: ${e.map(x=>`<a href="#" data-act="ir" data-id="${esc(x.id)}">${esc(titulo(x.n))}</a> (${esc(x.txt)})`).join(" · ")}`}</span></div>`;
     return `<div class="note" style="margin-left:12px">${fmtFecha(o.f)} · ${eur(o.imp)} · tarjeta …${esc(o.tarj)} → ${e.length===1?`<a href="#" data-act="ir" data-id="${esc(e[0].id)}">${esc(titulo(e[0].n))}</a> (${esc(e[0].txt)})`:e.length>1?`<span style="color:var(--warn)">puede ser ${e.map(x=>esc(titulo(x.n))).join(" o ")}</span>`:`<span style="color:var(--warn)">sin recibo pagado con tarjeta</span>`}</div>`}).join("")}</details>`}
+/* 09/11/2026 (titular): en cada abono del TPV, a qué recibos corresponde y si cuadra.
+   - Con el PDF del banco (operaciones una a una): cuántas operaciones tienen recibo y si la suma de operaciones es el abono.
+   - Sin el PDF: los abonos del TPV de ese día (los dos terminales) frente a los cobros con tarjeta desde el abono anterior hasta
+     el día antes. Hasta 2027 se miran los recibos pagados con tarjeta en Argos; desde 2027, los cobros con tarjeta de la Caja. */
+function tpvCobrosEntre(d0,d1){const out=[];
+  if(!cajaPrueba()&&typeof GC!=="undefined"){for(const d of GC.docs)if(d.tipo==="cobro"&&d.forma==="tarjeta"&&d.dia>=d0&&d.dia<=d1&&!anulados().has(d.id))out.push({id:d.alumno,n:d.nombre,f:d.dia,imp:+d.total||0,txt:"Caja "+horaC(d)})}
+  else for(const [id,a] of S.alumnos)for(const r of (a.recibos||[]))if(r&&r.estado==="pagado"&&r.pagado&&/tarj|tpv|dat[aá]fono/i.test(r.forma||"")){const f=String(r.pagado).slice(0,10);if(f>=d0&&f<=d1)out.push({id,n:a.nombre,f,imp:+r.importe||0,txt:r.numero||r.concepto||""})}
+  return out.sort((x,y)=>x.f.localeCompare(y.f)||x.n.localeCompare(y.n,"es"))}
+/* Reparto de las operaciones de una liquidación entre recibos (09/11/2026, «mucho ruido»):
+   1) la tarjeta ya conocida: si una tarjeta (…1234) salió antes con un solo alumno, se usa para elegir;
+   2) cada recibo solo vale para una operación: lo ya asignado se quita de las demás (y el mismo alumno no cuenta dos veces);
+   3) lo que queda se agrupa por importe: «2 de 40 € entre 3 recibos posibles», con los nombres plegados. */
+function tarjetasConocidas(){const o={},malas=new Set();
+  for(const m of movsTodos())for(const op of (m.tpv||[])){if(!op.tarj)continue;const e=enlaceTpv(op).filter(x=>!x.pend);const ids=[...new Set(e.map(x=>x.id))];if(ids.length!==1)continue;
+    if(o[op.tarj]&&o[op.tarj]!==ids[0])malas.add(op.tarj);else o[op.tarj]=ids[0]}
+  for(const k of malas)delete o[k];return o}
+function repartoTpv(ops){const tk=tarjetasConocidas();
+  const c=ops.map(o=>{const e=enlaceTpv(o),pend=e.length&&e.every(x=>x.pend);const v=[],ya=new Set();for(const x of e)if(!x.pend&&!ya.has(x.id+"|"+x.txt)){ya.add(x.id+"|"+x.txt);v.push(x)}
+    let cand=v;if(cand.length>1&&tk[o.tarj]){const k=cand.filter(x=>x.id===tk[o.tarj]);if(k.length)cand=k.slice(0,1)}
+    return {o,cand,pend:pend?e:null}});
+  let cambia=true;while(cambia){cambia=false;const usados=new Set(c.filter(x=>x.cand.length===1).map(x=>x.cand[0].id+"|"+x.cand[0].txt));
+    for(const x of c)if(x.cand.length>1){const r=x.cand.filter(y=>!usados.has(y.id+"|"+y.txt));if(r.length&&r.length<x.cand.length){x.cand=r;cambia=true}}}
+  const ok=c.filter(x=>x.cand.length===1),sin=c.filter(x=>!x.cand.length&&!x.pend),pend=c.filter(x=>!x.cand.length&&x.pend),dud=c.filter(x=>x.cand.length>1);
+  const grupos={};for(const x of dud){const k=x.o.f+"|"+x.o.imp;(grupos[k]=grupos[k]||{f:x.o.f,imp:x.o.imp,ops:[],cand:new Map()}).ops.push(x.o);for(const y of x.cand)grupos[k].cand.set(y.id+"|"+y.txt,y)}
+  return {ok,sin,pend,grupos:Object.values(grupos)}}
+function vTpvOps(m){
+  /* con la caja de Argos de esos días subida: solo cuadra / descuadre por operación */
+  if(m.tpv&&m.tpv.length){const AC=argosCajaDias(),fs=[...new Set(m.tpv.map(o=>o.f))];
+    if(fs.every(f=>AC[f])){const ar=fs.flatMap(f=>AC[f].f.filter(x=>esTarj(x.fp)).map(x=>({...x,dia:f}))),op=m.tpv.map(o=>({imp:+o.imp||0,tarj:o.tarj||"",f:o.f}));
+      /* otras liquidaciones con operaciones de esos mismos días se llevan sus cobros */
+      const otros=movsTodos().filter(x=>x.id!==m.id&&x.cat==="tpv"&&(x.tpv||[]).some(o=>fs.includes(o.f))).flatMap(x=>x.tpv.filter(o=>fs.includes(o.f)).map(o=>({imp:+o.imp||0})));
+      const libres=emparejarTpv(otros,ar).soloB,e=emparejarTpv(op,libres),ok=!e.soloA.length,tot=r2(op.reduce((s,x)=>s+x.imp,0));
+      return `<div class="note" style="margin-top:2px">${m.tpv.length} operaciones con tarjeta · caja de Argos del ${fs.map(fmtFecha).join(", ")} <span class="badge ${ok&&Math.abs(tot-m.importe)<0.01?"b-si":"b-no"}">${ok&&Math.abs(tot-m.importe)<0.01?"Cuadra":"Descuadre"}</span></div>
+        ${e.soloA.map(o=>`<div class="note" style="margin-left:12px;color:var(--bad)">${eur(o.imp)} · ${fmtFecha(o.f)}${o.tarj?` · tarjeta …${esc(o.tarj)}`:""}: no está en la caja de Argos con tarjeta</div>`).join("")}
+        ${Math.abs(tot-m.importe)>=0.01?`<div class="note" style="margin-left:12px;color:var(--warn)">Las operaciones suman ${eur(tot)} y el abono es de ${eur(m.importe)}</div>`:""}`}}
+  if(m.tpv&&m.tpv.length){const ops=m.tpv,R=repartoTpv(ops),tot=r2(ops.reduce((x,o)=>x+(+o.imp||0),0));
+    /* un grupo «cuadra» si hay tantos recibos posibles como operaciones (se reparten entre ellos aunque no se sepa cuál es cuál) */
+    const gOk=R.grupos.filter(g=>g.cand.size===g.ops.length),gNo=R.grupos.filter(g=>g.cand.size!==g.ops.length);
+    const nOk=R.ok.length+gOk.reduce((x,g)=>x+g.ops.length,0),cuadra=nOk===ops.length&&Math.abs(tot-m.importe)<0.01;
+    const ult=S.recCfg&&S.recCfg.ultima,viejo=ult&&ops.some(o=>o.f>ult);
+    const al=x=>`<a href="#" data-act="ir" data-id="${esc(x.id)}">${esc(titulo(x.n))}</a>`;
+    const filas=[...R.ok.map(x=>`<div class="note" style="margin-left:12px">${eur(x.o.imp)} → ${al(x.cand[0])} <span style="opacity:.7">${esc(x.cand[0].txt)}</span></div>`),
+      ...gOk.map(g=>`<div class="note" style="margin-left:12px">${g.ops.length} × ${eur(g.imp)} → ${[...g.cand.values()].map(al).join(", ")}</div>`),
+      ...gNo.map(g=>`<details class="note" style="margin-left:12px;color:var(--warn)"><summary>${g.ops.length} × ${eur(g.imp)}: ${g.cand.size} recibos posibles, no se sabe cuál${g.ops.length===1?"":"es"}</summary><div style="margin-left:12px">${[...g.cand.values()].map(al).join(", ")}</div></details>`),
+      ...R.pend.map(x=>`<div class="note" style="margin-left:12px;color:var(--warn)">${eur(x.o.imp)} · tarjeta …${esc(x.o.tarj)} → recibo aún pendiente en Argos${x.pend.length<=2?": "+x.pend.map(al).join(" o "):""}</div>`),
+      ...R.sin.map(x=>`<div class="note" style="margin-left:12px;color:var(--bad)">${eur(x.o.imp)} · ${fmtFecha(x.o.f)} · tarjeta …${esc(x.o.tarj)} → sin recibo pagado con tarjeta</div>`)].join("");
+    const pegas=[R.sin.length?`${R.sin.length} sin recibo`:"",R.pend.length?`${R.pend.length} pendiente${R.pend.length===1?"":"s"} en Argos`:"",gNo.length?`${gNo.reduce((x,g)=>x+g.ops.length,0)} sin aclarar`:"",Math.abs(tot-m.importe)>=0.01?`las operaciones suman ${eur(tot)}`:""].filter(Boolean).join(" · ");
+    return `<details style="margin-top:2px"><summary class="note">${ops.length} operaciones con tarjeta <span class="badge ${cuadra?"b-si":"b-pend"}" style="margin-left:4px">${cuadra?"Cuadra":nOk+" de "+ops.length+" cuadran"}</span>${pegas?` <span style="color:var(--warn)">${pegas}</span>`:""}</summary>
+      ${viejo?`<div class="note" style="margin-left:12px;color:var(--warn)">El último listado de Argos es del ${fmtFecha(ult)}: sube uno más reciente para ver quién pagó.</div>`:""}${filas}</details>`}
+  if(m.cat!=="tpv"||!(m.importe>0)||!m.fv)return "";
+  const tpvs=movsTodos().filter(x=>x.cat==="tpv"&&x.importe>0&&x.fv),mismos=tpvs.filter(x=>x.fv===m.fv),prev=tpvs.map(x=>x.fv).filter(f=>f<m.fv).sort().pop();
+  const d1=sumaDias(m.fv,-1),d0=prev||d1,l=tpvCobrosEntre(d0,d1),tot=r2(l.reduce((x,o)=>x+o.imp,0)),abo=r2(mismos.reduce((x,o)=>x+o.importe,0)),dif=r2(abo-tot),cuadra=Math.abs(dif)<0.01;
+  const per=d0===d1?`del ${fmtFecha(d1)}`:`del ${fmtFecha(d0)} al ${fmtFecha(d1)}`;
+  return `<details style="margin-top:2px"><summary class="note">${mismos.length>1?`Abonos TPV de este día (${mismos.length}): ${eur(abo)} · `:""}cobros con tarjeta ${per}: ${eur(tot)} <span class="badge ${cuadra?"b-si":"b-pend"}" style="margin-left:4px">${cuadra?"Cuadra":(dif>0?"Faltan recibos por ":"Sobran ")+eur(Math.abs(dif))}</span></summary>
+    ${l.length?l.map(o=>`<div class="note" style="margin-left:12px">${fmtFecha(o.f)} · ${eur(o.imp)} → <a href="#" data-act="ir" data-id="${esc(o.id)}">${esc(titulo(o.n))}</a> (${esc(o.txt)})</div>`).join(""):`<div class="note" style="margin-left:12px">No hay recibos pagados con tarjeta esos días${cajaPrueba()?" en el último listado de Argos":" en la Caja"}.</div>`}
+    <div class="note" style="margin-left:12px">${cajaPrueba()?"Hasta 2027 se comparan los recibos que Argos da como pagados con tarjeta.":"Se comparan los cobros con tarjeta de la Caja."} Para verlo operación por operación, sube el PDF de la liquidación del banco como justificante.</div></details>`}
 const difDias=(a,b)=>Math.abs((new Date(a+"T12:00:00")-new Date(b+"T12:00:00"))/864e5);
 function buscarMov(c,usados){
   const todos=movsTodos().filter(m=>!esCaja(m)||c.slot==="doc"),conocidas=new Set(todos.map(m=>m.cuenta)),cuentas=c.ibans.map(i=>i.slice(-4)).filter(x=>conocidas.has(x));
-  const libre=m=>c.slot==="doc"?!docsMov(m).d:!m.just;
+  /* 14/11/2026: el hueco de la factura cuenta como libre si la que hay no lleva el NIF y la nueva sí (la sustituye) */
+  const libre=m=>{if(c.slot!=="doc")return !m.just;const d=docsMov(m).d;return !d||(!!d.sinNif&&!c.sinNif)};
   /* TC1: el cargo de la Seguridad Social por el líquido total, entre 0 y 60 días después de la fecha del recibo */
   if(c.tipo==="TC1"){const f0=c.fechas[0]||"";const l=todos.filter(m=>!usados.has(m.id)&&m.importe<0&&c.importe!=null&&Math.abs(-m.importe-c.importe)<0.005&&(m.cat==="ssemp"||/TGSS|SEGURIDAD SOCIAL/i.test(m.concepto))&&(!f0||(m.fv>=f0&&difDias(m.fv,f0)<=60)));
     const o=l.filter(libre).sort((a,b)=>String(a.fv).localeCompare(String(b.fv)));if(o.length)c.seguro=o.length===1;return o[0]||l[0]||null}
@@ -1046,7 +1252,9 @@ function buscarMov(c,usados){
   /* facturas: el comercio del concepto del banco tiene que salir en la factura (AMAZON, APPLE, A3 ASESORES, ANTHROPIC…) */
   const GEN=/^(COMPRA|TARJ|ADEUDO|RECIBO|TRANSFERENCIA|ABONO|DEVOLUCION|WWW|COM|SAU|SLP|SPAIN|ESPANA)$/;
   const comercio=m=>m.concepto.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").split(/[^A-Z0-9]+/).filter(w=>w.length>=3&&!/\d{3}/.test(w)&&!GEN.test(w));
-  if(c.texto){ms=ms.filter(m=>comercio(m).some(w=>c.texto.includes(w)));if(ms.length<=1){if(ms[0]&&c.slot==="doc")c.seguro=true;return ms[0]||null}
+  /* 14/11/2026: el banco abrevia algunos comercios (Amazon sale como «AMZN Mktp ES», «AMZN Digital»…) */
+  const ALIAS={AMZN:"AMAZON",MKTP:"AMAZON",AMAZONES:"AMAZON",GOOGLE:"GOOGLE",APPLECOMBILL:"APPLE"};
+  if(c.texto){ms=ms.filter(m=>comercio(m).some(w=>c.texto.includes(ALIAS[w]||w)));if(ms.length<=1){if(ms[0]&&c.slot==="doc")c.seguro=true;return ms[0]||null}
     const tot=Math.max(...c.importes);const t2=ms.filter(m=>Math.abs(Math.abs(m.importe)-tot)<0.005);if(t2.length===1)return t2[0];
     const cerca=m=>Math.min(...c.fechas.map(f=>difDias(m.fv,f)));const o=[...(t2.length?t2:ms)].sort((a,b)=>cerca(a)-cerca(b));return cerca(o[0])<cerca(o[1])?o[0]:null}
   if(ms.length<=1)return ms[0]||null;
@@ -1076,10 +1284,11 @@ async function gbSubirJustificantes(files){
       const m=buscarMov(c,usados);
       if(!m)GB.just.sin.push(`${c.tipo} · ${quien} · ${c.importe!=null?eur(c.importe):"?"} · ${c.fv?fmtFecha(c.fv):"?"}`);
       else if(c.slot==="doc"){usados.add(m.id);const tipo=c.tipo==="TC1"?"tc":"factura";
-        if(docsMov(m).d)GB.just.ya.push(`${DOC_TXT[tipo]} · ${quien} · ${eur(Math.abs(m.importe))} · ya tenía ${DOC_TXT[tipo].toLowerCase()}`);
-        else{const r=await as.upload(f,{clase:"gasto"}),o={id:r.id,n:f.name.slice(0,80),t:nowISO(),tipo};
+        const dPrev=docsMov(m).d,sust=!!(dPrev&&dPrev.sinNif&&!c.sinNif);
+        if(dPrev&&!sust)GB.just.ya.push(`${DOC_TXT[tipo]} · ${quien} · ${eur(Math.abs(m.importe))} · ya tenía ${DOC_TXT[tipo].toLowerCase()}`);
+        else{const r=await as.upload(f,{clase:"gasto"}),o={id:r.id,n:f.name.slice(0,80),t:nowISO(),tipo,...(c.sinNif?{sinNif:true}:{})};
           await S.db.doc("banco/"+m.mes).update({["movs."+m.id+".doc"]:o,["movs."+m.id+".df"]:firma});const dd=GB.docs.find(y=>y.id===m.mes);if(dd&&dd.movs[m.id])Object.assign(dd.movs[m.id],{doc:o,df:firma});
-          GB.just.ok.push(`${DOC_TXT[tipo]}${c.tipo==="Factura"?" · "+f.name.replace(/\.pdf$/i,""):""} → ${m.concepto.slice(0,50)} · ${eur(Math.abs(m.importe))} · ${fmtFecha(m.fv)}${c.seguro?"":" (revísalo)"}`)}}
+          GB.just.ok.push(`${DOC_TXT[tipo]}${c.tipo==="Factura"?" · "+f.name.replace(/\.pdf$/i,""):""}${sust?" (sustituye a la que no llevaba tu NIF)":""} → ${m.concepto.slice(0,50)} · ${eur(Math.abs(m.importe))} · ${fmtFecha(m.fv)}${c.seguro?"":" (revísalo)"}${c.sinNif?" · ⚠ NO LLEVA TU NIF: pide al vendedor la factura con tus datos fiscales":""}`)}}
       else{usados.add(m.id);
         if(docsMov(m).dEn==="just"){/* el hueco tenía la factura (versión de un solo hueco): pasa a su sitio y deja libre el del justificante */
           const o={...m.just,tipo:docReq(m)};await S.db.doc("banco/"+m.mes).update({["movs."+m.id+".doc"]:o,["movs."+m.id+".just"]:null});Object.assign(m,{doc:o,just:null});
@@ -1251,26 +1460,47 @@ function datosInforme(mes){
 /* Dirección: lo que se envió a la asesoría, tal cual lo ve ella */
 const aseD=x=>{if(!x)return null;try{return x.Dj?JSON.parse(x.Dj):x.D}catch(_){return null}};
 const aseDocsDir=()=>Object.entries(GB.ase||{}).map(([id,x])=>({id,t:x.t,por:x.por,D:aseD(x)})).filter(d=>d.D).sort((x,y)=>y.id.localeCompare(x.id));
+/* 12/11/2026: lo enviado a la asesoría es una copia del momento del envío. Si después se sube un justificante o una factura,
+   se cambia una categoría o aparecen movimientos, la copia queda atrasada: se avisa en el informe y en «Ver lo enviado». */
+function aseCambios(mes){const x=GB.ase&&GB.ase[mes];if(!x)return null;const E=aseD(x);if(!E)return null;
+  /* se empareja por id y, si no, por fecha + importe + concepto (14/11/2026: tras reenviar seguía saliendo «atrasado») */
+  const A=paraAsesoria(datosInforme(mes)),ant=new Map(),out=[],kc=m=>`${m.fv}|${(+m.importe||0).toFixed(2)}|${String(m.concepto||"").trim()}`;
+  for(const m of E.movs||[])ant.set(m.id||kc(m),m);const porK=new Map();for(const [k,m] of ant)porK.set(kc(m),k);
+  const fid=o=>o&&o.id||"";
+  for(const m of A.movs||[]){let k=ant.has(m.id)?m.id:porK.get(kc(m));const o=k!=null?ant.get(k):null,c=`${fmtFecha(m.fv)} ${String(m.concepto).slice(0,40)}`;if(k!=null){ant.delete(k);porK.delete(kc(o||m))}
+    if(!o){out.push(`${c}: movimiento nuevo`);continue}
+    const q=[];if(fid(m.just)!==fid(o.just))q.push(m.just?"justificante subido":"justificante quitado");
+    if(fid(m.doc)!==fid(o.doc))q.push(m.doc?`${dLb(m).toLowerCase()} subida`:`${dLb(o).toLowerCase()} quitada`);
+    if(m.cat!==o.cat)q.push(`categoría: ${m.cat}`);if(Math.abs((+m.importe||0)-(+o.importe||0))>0.005)q.push("importe");
+    if(q.length)out.push(`${c}: ${q.join(", ")}`)}
+  for(const [,o] of ant)out.push(`${fmtFecha(o.fv)} ${String(o.concepto).slice(0,40)}: ya no está`);
+  return out}
+const aseAvisoCambios=mes=>{const l=aseCambios(mes);if(!l||!l.length)return "";
+  return `<div class="aviso pend noprint" style="display:block;margin:8px 0"><b>Lo que tiene la asesoría de ${mesTxt(mes)} está atrasado:</b> desde que se envió (${fmtFecha(String(GB.ase[mes].t).slice(0,10))}) ha${l.length===1?"":"n"} cambiado ${l.length} cosa${l.length===1?"":"s"}. La asesoría sigue viendo lo de antes hasta que lo vuelvas a enviar.
+    <details style="margin-top:4px"><summary class="note">Ver qué ha cambiado</summary><ul style="margin:4px 0 0 18px;padding:0">${l.slice(0,40).map(t=>`<li class="note">${esc(t)}</li>`).join("")}${l.length>40?`<li class="note">… y ${l.length-40} más</li>`:""}</ul></details>
+    <button class="btn small primary" data-gb="infase" data-mes="${esc(mes)}" style="margin-top:6px">Volver a enviar ${mesTxt(mes)}</button></div>`};
 function vAseDir(){const docs=aseDocsDir(),key=GB.verAse,V=aseVista(key,docs);
   if(!V){GB.verAse="";return vInforme()}
   return `<div class="bar noprint"><h2>Lo que ve la asesoría</h2><span class="legend"><button class="btn small" data-gb="veraseno">← Volver al informe</button></span></div>
-  <div class="aviso info noprint" style="display:block">Es exactamente lo que ve la asesoría al entrar. Si cambias algo de un mes, vuelve a enviarlo desde el informe de ese mes.</div>
+  <div class="aviso info noprint" style="display:block">Es exactamente lo que ve la asesoría al entrar: la copia que se envió, no los datos de ahora. Si cambias algo de un mes, vuelve a enviarlo.</div>
+  ${(/-T\d$/.test(key)?mesesTrim(key):[key]).map(aseAvisoCambios).join("")}
   <div class="bar noprint" style="gap:8px;flex-wrap:wrap"><label class="f" style="flex:0 1 210px">Periodo<select id="gb-asep">${opcionesPeriodo(docs,key)}</select></label>
     <button class="btn primary" data-gb="infprint">Imprimir o guardar en PDF</button><button class="btn" data-gb="asexls">Descargar su Excel</button><span class="note">${V.info}</span></div>
-  ${informeCuerpo(V.D,key)}${aseMovs(V.D)}`}
+  ${vImpuestos(/-T\d$/.test(key)?key:trimDe(key))}${vRetAlq(V.D.alq||[],false,null,key)}${informeCuerpo(V.D,key)}${aseMovs(V.D)}`}
 function vInforme(){
   cajaEscuchar();aseEscuchar();if(GB.verAse)return vAseDir();const ms=mesesBanco(),mes=GB.mes||ms[0]||todayISO().slice(0,7),D=datosInforme(mes),x=GB.ase&&GB.ase[mes];
   return `<div class="bar noprint"><h2>Informe del mes</h2><span class="legend"><button class="btn small" data-gb="infno">← Volver a Gastos</button></span></div>
   <div class="bar noprint" style="gap:8px;flex-wrap:wrap"><label class="f" style="flex:0 1 180px">Mes<select id="gb-mes">${(ms.length?ms:[mes]).map(m=>`<option value="${m}" ${m===mes?"selected":""}>${mesTxt(m)}</option>`).join("")}</select></label>
     <button class="btn primary" data-gb="infprint">Imprimir o guardar en PDF</button><button class="btn" data-gb="infxls">Descargar Excel</button>
     <button class="btn" data-gb="infase" title="Deja este informe, los movimientos del banco con sus justificantes y los cobros del mes a la vista de la asesoría (usuario de solo lectura)">${x?"Volver a enviar a la asesoría":"Enviar a la asesoría"}</button>
-    ${x?`<span class="note">Enviado el ${fmtFecha(String(x.t).slice(0,10))} a las ${String(x.t).slice(11,16)}${x.por?` por ${esc(x.por)}`:""}</span><button class="btn" data-gb="verase">Ver lo enviado</button>`:""}</div>`+informeCuerpo(D,mes);
+    ${x?`<span class="note">Enviado el ${fmtFecha(String(x.t).slice(0,10))} a las ${String(x.t).slice(11,16)}${x.por?` por ${esc(x.por)}`:""}</span><button class="btn" data-gb="verase">Ver lo enviado</button>`:""}</div>${x?aseAvisoCambios(mes):""}<div class="noprint">${vImpuestos(trimDe(mes))}${vRetAlq(pdTry(()=>alqRetMes(mes),[]),true,mes)}</div>`+informeCuerpo(D,mes);
 }
 /* Copia para la asesoría (decisión de la titular, 31/10/2026): sin nada de lo que no es de la actividad (ni movimientos ni
    total ni «Queda en la academia») y con los ingresos solo por lo que entra en el banco: tarjeta (TPV), Bizum, transferencias,
    efectivo ingresado en el cajero (por fecha del ingreso) y otros ingresos del banco. Sin efectivo de Argos, caja ni recibos
    pagados en contado. */
-function paraAsesoria(D){const nA=catTxt("noact"),cu=Object.fromEntries((D.cuadre||[]).map(([l,b])=>[l,b]));
+function paraAsesoria(D){return {...paraAsesoria0(D),alq:pdTry(()=>alqRetMes(D.mes),[])}}
+function paraAsesoria0(D){const nA=catTxt("noact"),cu=Object.fromEntries((D.cuadre||[]).map(([l,b])=>[l,b]));
   const ingBanco=[["Cobros con tarjeta (TPV)",cu["Tarjeta (TPV)"]||0],["Cobros por Bizum",cu["Bizum"]||0],["Cobros por transferencia",cu["Transferencia"]||0],["Efectivo ingresado en el cajero",D.E?D.E.ing:0]].filter(x=>x[1]);
   const ingOtros=D.IA&&D.IA.otrosBanco?[["Otros ingresos del banco",D.IA.otrosBanco]]:[];
   const totIng=r2([...ingBanco,...ingOtros].reduce((s,x)=>s+x[1],0)),res=r2(totIng-D.totGas);
@@ -1384,6 +1614,7 @@ function juntarD(l){const suma=(get,n)=>{const o=new Map();for(const [,D] of l)f
     fuera:suma(D=>D.fuera,1),cuadre:suma(D=>D.cuadre,2),pendClas:tot("pendClas"),sinJust:tot("sinJust"),emitN:tot("emitN"),emitT:tot("emitT"),pagN:tot("pagN"),pagT:tot("pagT"),
     pendL:ult.pendL||[],pendT:ult.pendT||0,prueba:l.some(([,D])=>D.prueba),gen:l.map(([,D])=>D.gen||"").sort().pop(),
     movs:l.flatMap(([,D])=>D.movs||[]).sort((a,b)=>String(a.fv).localeCompare(String(b.fv))),cobros:l.flatMap(([,D])=>D.cobros||[]),
+    alq:l.flatMap(([,D])=>D.alq||[]),
     ventas:l.some(([,D])=>D.ventas&&D.ventas.l.length)?{l:l.flatMap(([,D])=>(D.ventas&&D.ventas.l)||[]).sort((a,b)=>a.n.localeCompare(b.n)),pdfs:l.flatMap(([,D])=>(D.ventas&&D.ventas.pdfs)||[]),lis:l.flatMap(([,D])=>(D.ventas&&D.ventas.lis)||[])}:null}}
 /* docs = [{id:mes, D, t}] enviados. Devuelve {D, info} del mes o del trimestre */
 function aseVista(key,docs){if(!/-T\d$/.test(key)){const x=docs.find(d=>d.id===key);return x?{D:x.D||{},info:`Enviado por el centro el ${fmtFecha(String(x.t).slice(0,10))} a las ${String(x.t).slice(11,16)}.`}:null}
@@ -1411,7 +1642,7 @@ function detalleGastos(D){const g=gastosDe(D);if(!g.length)return "";const conJ=
     <table class="ft inf" style="min-width:0;width:100%"><thead><tr><th>Fecha</th><th>Concepto</th><th style="text-align:right">Importe</th>${!D.ase&&g.some(m=>m.id)?`<th class="noprint">Categoría</th>`:""}<th>Justificante y factura</th></tr></thead><tbody>
     ${por.map(([c,l])=>`<tr><td colspan="${!D.ase&&g.some(m=>m.id)?5:4}" style="font-weight:700;padding-top:8px">${esc(c)} <span class="note">(${eur(r2(-l.reduce((s,m)=>s+m.importe,0)))})</span></td></tr>`+l.map(m=>`<tr><td style="white-space:nowrap">${fmtFecha(m.fv)}</td><td style="white-space:normal">${esc(m.concepto)}${m.quien?`<br><span class="note">${esc(m.quien)}</span>`:""}</td><td style="text-align:right;white-space:nowrap">${eur(r2(-m.importe))}</td>
       ${!D.ase&&m.id?`<td class="noprint"><select data-gbcat="${esc(m.mes)}|${esc(m.id)}" aria-label="Categoría" style="max-width:190px;font-size:13px">${CATS.filter(([k])=>k!=="pend").map(([k,l])=>`<option value="${k}" ${k===m.ck?"selected":""}>${esc(l)}</option>`).join("")}</select></td>`:""}
-      <td>${dCelda(m)}</td></tr>`).join("")).join("")}</tbody></table>`}
+      <td>${dCelda(m)}${!D.ase&&m.id&&m.ck==="alquiler"?(alqCfg()[claveMov(m.concepto)]?` <span class="badge b-si noprint" title="Lleva retención: sale en «Retenciones del alquiler (modelo 115)»">con retención</span> <button class="btn small noprint" data-im="alqno" data-c="${esc(claveMov(m.concepto))}" title="No lleva retención">×</button>`:` <button class="btn small noprint" data-im="alqsi" data-c="${esc(claveMov(m.concepto))}" title="Es un alquiler con retención de IRPF (modelo 115)">¿Lleva retención?</button>`):""}</td></tr>`).join("")).join("")}</tbody></table>`}
 /* Todas las facturas y justificantes de gastos en un .zip (dirección y asesoría) */
 const JSZIPJS="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
 const cargarZip=()=>window.JSZip?Promise.resolve():new Promise((ok,ko)=>{const x=document.createElement("script");x.src=JSZIPJS;x.onload=()=>ok();x.onerror=()=>ko(new Error("zip"));document.head.appendChild(x)});
@@ -1492,7 +1723,7 @@ document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.c
   else if(act==="verase"){e.preventDefault();GB.verAse=GB.mes||mesesBanco()[0];render();scrollTo(0,0)}
   else if(act==="veraseno"){e.preventDefault();GB.verAse="";render();scrollTo(0,0)}
   else if(act==="asexls"){e.preventDefault();const V=aseVista(GB.verAse,aseDocsDir());if(V){t.disabled=true;await informeExcel(GB.verAse,V.D);t.disabled=false}}
-  else if(act==="infase"){e.preventDefault();const mes=GB.mes||mesesBanco()[0];if(!mes)return;const D=datosInforme(mes),ya=GB.ase&&GB.ase[mes];
+  else if(act==="infase"){e.preventDefault();const mes=t.dataset.mes||GB.mes||mesesBanco()[0];if(!mes)return;const D=datosInforme(mes),ya=GB.ase&&GB.ase[mes];
     const av=[D.pendClas?`${D.pendClas} movimientos sin clasificar`:"",D.sinJust?`${D.sinJust} sin todos sus documentos (justificante o factura)`:""].filter(Boolean).join(" y ");
     if(!confirm(`${ya?"Se sustituirá lo que se envió el "+fmtFecha(String(ya.t).slice(0,10))+". ":""}La asesoría verá el informe de ${mesTxt(mes)} con los ingresos según el banco (tarjeta, Bizum, transferencias y efectivo ingresado en el cajero), los gastos y los movimientos del banco con sus justificantes. No verá nada de lo que no es de la actividad.${av?"\n\nOjo: hay "+av+".":""}${D.prueba?"\n\nSon datos de prueba (hasta enero de 2027).":""}\n\n¿Enviar?`))return;
     t.disabled=true;try{await S.db.doc("asesoria/"+mes).set({mes,t:nowISO(),por:quienSoy(),Dj:JSON.stringify(paraAsesoria(D))});toast("Enviado a la asesoría")}
@@ -1567,6 +1798,7 @@ document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.c
   if(act==="gen"){e.preventDefault();GT.gen=true;render();scrollTo(0,0)}else if(act==="genno"){e.preventDefault();GT.gen=false;render()}
   else if(act==="fac"){e.preventDefault();GT.fac=true;render();scrollTo(0,0)}else if(act==="facno"){e.preventDefault();GT.fac=false;GT.facCont=null;render()}
   else if(act==="facsem"){e.preventDefault();GT.facSem=sumaDias(GT.facSem,+t.dataset.d);render()}
+  else if(act==="contargos"){e.preventDefault();GT.facCont={...contadores(),fac:{...CONT_ARGOS.fac},alb:{...CONT_ARGOS.alb}};render();toast("Revisa y pulsa «Guardar contadores»")}
   else if(act==="contedit"){e.preventDefault();GT.facCont=JSON.parse(JSON.stringify(contadores()));render()}
   else if(act==="contno"){e.preventDefault();GT.facCont=null;render()}
   else if(act==="contok"){e.preventDefault();const c=leerContadores();if(!c)return;t.disabled=true;const d={...(S.recCfg||{}),contadores:{...c,t:nowISO(),por:quienSoy()}};
@@ -1606,8 +1838,11 @@ function vAsesoria(){
   <div class="bar noprint" style="gap:8px;flex-wrap:wrap"><label class="f" style="flex:0 1 210px">Periodo<select id="as-mes">${opcionesPeriodo(AS.docs,mes)}</select></label>
     <button class="btn primary" data-as="print">Imprimir o guardar en PDF</button><button class="btn" data-as="xls">Descargar Excel</button>
     <span class="note">${V.info}</span></div>
+  ${vImpuestos(/-T\d$/.test(mes)?mes:trimDe(mes))}
+${vRetAlq(D.alq||[],false,null,mes)}
   ${informeCuerpo(D,mes)}
 ${aseMovs(D)}
+${vFacturasAse()}
 ${vFichAse()}`;
 }
 document.addEventListener("change",e=>{if(S.role==="ase"&&e.target&&e.target.id==="as-mes"){AS.mes=e.target.value;vAsePintar();scrollTo(0,0)}});
@@ -1624,7 +1859,9 @@ document.addEventListener("change",e=>{if(e.target&&e.target.id==="gb-asep"&&gbV
    semana (lunes a domingo), con cualquier forma de pago; la titular elige el formato de los contadores de facturas y de albaranes.
    El ensayo compara con las facturas reales de Argos subidas en Gastos (ventas/<mes>) y con lo que entró en el banco esa semana.
    ============================================================================================ */
-const CONT_DEF={fac:{pre:"F",anio:"AA",suf:"",sep:"-",cifras:4,ini:1,anual:true},alb:{pre:"A",anio:"AA",suf:"",sep:"-",cifras:4,ini:1,anual:true}};
+/* 14/11/2026 (titular): mismo formato que Argos, cambiando solo el año: facturas FA26ES/000884 → FA27ES/000001; albaranes A26/001359 → A27/000001 */
+const CONT_DEF={fac:{pre:"FA",anio:"AA",suf:"ES",sep:"/",cifras:6,ini:1,anual:true},alb:{pre:"A",anio:"AA",suf:"",sep:"/",cifras:6,ini:1,anual:true}};
+const CONT_ARGOS=CONT_DEF,contIgual=(a,b)=>["pre","anio","suf","sep","cifras"].every(k=>String(a[k])===String(b[k]));
 const contadores=()=>{const c=(S.recCfg&&S.recCfg.contadores)||{};return {fac:{...CONT_DEF.fac,...(c.fac||{})},alb:{...CONT_DEF.alb,...(c.alb||{})},t:c.t||"",por:c.por||""}};
 const fmtContador=(c,n,anio)=>{const y=String(anio||new Date().getFullYear());return `${c.pre||""}${c.anio==="AAAA"?y:c.anio==="AA"?y.slice(2):""}${c.suf||""}${c.sep||""}${String(n).padStart(Math.max(1,+c.cifras||1),"0")}`};
 function leerContadores(silencio){const v=id=>($("#"+id)||{}).value,o={};
@@ -1649,6 +1886,7 @@ function vContadores(){const C=GT.facCont||contadores(),ed=!!GT.facCont,y=new Da
     <p class="note" style="margin:6px 0 0" id="ct-${k}-prev">Así quedará: <b>${esc(fmtContador(c,c.ini,y))}</b>, ${esc(fmtContador(c,c.ini+1,y))}, ${esc(fmtContador(c,c.ini+2,y))}…</p></div>`
     :`<div class="panel" style="padding:10px 12px;flex:1 1 260px"><b>${tit}</b><p style="margin:4px 0 0;font-size:18px;font-variant-numeric:tabular-nums">${esc(fmtContador(c,c.ini,y))}</p><p class="note" style="margin:2px 0 0">${c.anual?"Vuelve a 1 cada año":"No se reinicia"}</p></div>`};
   return `<div class="bar" style="margin-top:4px"><h2 style="font-size:19px">Contadores</h2><span class="legend">${ed?`<button class="btn small" data-tf="contno">Cancelar</button><button class="btn small primary" data-tf="contok">Guardar contadores</button>`:`<button class="btn small" data-tf="contedit">Cambiar</button>`}</span></div>
+  ${!ed&&(!contIgual(C.fac,CONT_ARGOS.fac)||!contIgual(C.alb,CONT_ARGOS.alb))?`<div class="aviso pend" style="display:block;margin:6px 0">Los contadores guardados no siguen el formato de Argos (facturas ${esc(fmtContador(CONT_ARGOS.fac,1,y))}, albaranes ${esc(fmtContador(CONT_ARGOS.alb,1,y))}). <button class="btn small primary" data-tf="contargos">Usar el formato de Argos</button></div>`:""}
   <div style="display:flex;gap:10px;flex-wrap:wrap">${bloque("fac","Facturas")}${bloque("alb","Albaranes (recibos)")}</div>
   <p class="note" style="margin:6px 0 0">${C.t&&!ed?`Guardados el ${fmtFecha(String(C.t).slice(0,10))}${C.por?" por "+esc(C.por):""}. `:ed?"":"Aún sin guardar: es la propuesta por defecto. "}Desde enero, cada número se asigna una sola vez y no se reutiliza: una factura anulada se corrige con una rectificativa. Si A3 pide continuar la serie de Argos, pon su formato (p. ej. prefijo «FA», año 2 cifras, «ES» tras el año, separador «/», 6 cifras) y el número siguiente.</p>`}
 /* Semana (decisión de la titular, 01/11/2026): se factura lo que ha entrado en el banco esa semana.
@@ -1822,16 +2060,23 @@ document.addEventListener("change",e=>{const t=e.target;if(t&&t.dataset&&t.datas
    ingresos #2a78d6 / gastos #eb6834 (claro) y #3987e5 / #d95926 (oscuro); pérdida #e34948 / #e66767.
    ============================================================================================ */
 const RT={per:"",modo:"todo"};
-function datosRent(){const docs=GB.docs.filter(d=>Object.keys(d.movs||{}).length>=10&&d.id>=mesInicio()).map(d=>d.id).sort();
+/* 14/11/2026 (titular: «el resultado es a mes concluido»): las nóminas cuentan en el mes al que pertenecen, no en el de la
+   transferencia (las de octubre se pagan el 2/11). Primero por el enlace nómina–movimiento (nominas/<id>.mov); si no lo hay,
+   una transferencia de nómina de los 10 primeros días es del mes anterior. La Seguridad Social, igual que antes (mes anterior). */
+function imputaMes(m){const ant=x=>sumaDias(x+"-01",-1).slice(0,7);if(m.cat==="ssemp")return ant(m.mes);
+  if(m.cat==="nominas"){const n=NM.docs.find(d=>d.mov&&d.mov.id===m.id&&d.mov.mes===m.mes&&d.mes);if(n)return n.mes;
+    const f=String(m.fv||m.fo||"");if(f.slice(0,7)===m.mes&&+f.slice(8,10)<=10)return ant(m.mes)}
+  return m.mes}
+function datosRent(){nmEscuchar();const hoyM=todayISO().slice(0,7),docs=GB.docs.filter(d=>Object.keys(d.movs||{}).length>=10&&d.id>=mesInicio()&&d.id<hoyM).map(d=>d.id).sort();
   /* La Seguridad Social de las empleadas se carga a final del mes siguiente (el TC1 cobrado en octubre es de septiembre):
      cuenta en el mes al que pertenece. Si ese cargo aún no ha llegado, se toma la del listado de costes de A3 (prevista). */
-  const mesAnt=m=>sumaDias(m+"-01",-1).slice(0,7),imputa=m=>m.cat==="ssemp"?mesAnt(m.mes):m.mes,todos=movsTodos();RT.ssPrev={};
+  const imputa=imputaMes,todos=movsTodos();RT.ssPrev={};
   return docs.map(mes=>{const movs=todos.filter(m=>m.mes===mes),IA=ingresosActividad(mes,movs),porCat={};
     for(const m of todos)if(catTipo(m.cat)==="g"&&imputa(m)===mes)porCat[m.cat]=r2((porCat[m.cat]||0)-m.importe);
     if(!porCat.ssemp){const L=typeof nmListado==="function"?nmListado(mes):null;if(L&&L.tot&&L.tot.sstot){porCat.ssemp=L.tot.sstot;RT.ssPrev[mes]=L.tot.sstot}}
     const gas=r2(Object.values(porCat).reduce((s2,v)=>s2+v,0)),bk=k=>r2(movs.filter(m=>m.cat===k).reduce((s2,m)=>s2+m.importe,0));
     const ingBanco=r2(bk("tpv")+bk("bizum")+bk("transf")+bk("otrosing")+semanasEfectivo(mes).ing),ing=RT.modo==="banco"?ingBanco:IA.total;
-    return {mes,ing,ingTodo:IA.total,ingBanco,gas,res:r2(ing-gas),porCat,personal:r2((porCat.nominas||0)+(porCat.ssemp||0)),sinArgos:!IA.co.n,pend:movs.filter(m=>(m.cat||"pend")==="pend").length}})}
+    return {mes,ing,ingTodo:IA.total,ingBanco,gas,res:r2(ing-gas),porCat,personal:r2((porCat.nominas||0)+(porCat.ssemp||0)),sinNom:!porCat.nominas,sinArgos:!IA.co.n,pend:movs.filter(m=>(m.cat||"pend")==="pend").length}})}
 const rtCss=`<style>.rt{--rt-ing:#2a78d6;--rt-gas:#eb6834;--rt-pos:#2a78d6;--rt-neg:#e34948;--rt-grid:var(--line);--rt-txt:var(--muted)}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .rt{--rt-ing:#3987e5;--rt-gas:#d95926;--rt-pos:#3987e5;--rt-neg:#e66767}}
 :root[data-theme="dark"] .rt{--rt-ing:#3987e5;--rt-gas:#d95926;--rt-pos:#3987e5;--rt-neg:#e66767}
@@ -1856,7 +2101,7 @@ function svgRes(L){const W=1100,H=210,ml=58,mr=8,mt=14,mb=28,iw=W-ml-mr,ih=H-mt-
       const d=h<=0?"":pos?`M${x0},${z} V${yy+r} Q${x0},${yy} ${x0+r},${yy} H${x0+b-r} Q${x0+b},${yy} ${x0+b},${yy+r} V${z} Z`:`M${x0},${z} V${yy-r} Q${x0},${yy} ${x0+r},${yy} H${x0+b-r} Q${x0+b},${yy} ${x0+b},${yy-r} V${z} Z`;
       return `${d?`<path d="${d}" fill="var(${pos?"--rt-pos":"--rt-neg"})"/>`:""}
         <text x="${cx}" y="${H-8}" text-anchor="middle">${MESES[+x.mes.slice(5)-1].slice(0,3)}${x.mes.slice(5)==="01"||i===0?" "+x.mes.slice(2,4):""}</text><rect class="hit" x="${ml+bw*i}" y="${mt}" width="${bw}" height="${ih}" data-rt="${i}"/>`}).join("")}</svg>`}
-function rtDesglose(k,L){const ms=new Set(L.map(x=>x.mes)),l=movsTodos().filter(m=>ms.has(k==="ssemp"?sumaDias(m.mes+"-01",-1).slice(0,7):m.mes)&&m.cat===k).sort((a,b)=>String(b.fv).localeCompare(String(a.fv)));
+function rtDesglose(k,L){const ms=new Set(L.map(x=>x.mes)),l=movsTodos().filter(m=>ms.has(imputaMes(m))&&m.cat===k).sort((a,b)=>String(b.fv).localeCompare(String(a.fv)));
   return `<div style="margin:2px 0 10px 18px;border-left:2px solid var(--line);padding-left:10px">${l.map(m=>`<div class="row" style="flex-wrap:wrap;padding:3px 0;font-size:13px"><span class="note" style="min-width:70px">${fmtFecha(m.fv)}</span><span class="grow" style="white-space:normal">${esc(m.concepto)}${m.ordenante||m.obs?` <span class="note">· ${esc([m.ordenante?titulo(String(m.ordenante).toLowerCase()):"",m.obs||""].filter(Boolean).join(" · "))}</span>`:""}${m.nota?` <span class="note">«${esc(m.nota)}»</span>`:""}</span>
     <b style="min-width:80px;text-align:right;font-variant-numeric:tabular-nums">${eur(r2(-m.importe))}</b><span style="min-width:120px;text-align:right">${(()=>{const {j,d}=docsMov(m),f=faltas(m);return [j?`<a href="#" data-blob="${esc(j.id)}">🏦</a>`:f.j?`<span class="badge b-pend">Falta just.</span>`:"",d?`<a href="#" data-blob="${esc(d.id)}">📄</a>`:f.d?`<span class="badge b-pend">Falta ${esc((DOC_TXT[docReq(m)]||"").toLowerCase().replace(/ \(.*/,""))}</span>`:""].filter(Boolean).join(" ")||`<span class="note">—</span>`})()}</span>
     <select data-gbcat="${esc(m.mes)}|${esc(m.id)}" aria-label="Categoría" style="max-width:180px;font-size:12px">${CATS.filter(([c])=>c!=="pend").map(([c,lb])=>`<option value="${c}" ${c===m.cat?"selected":""}>${esc(lb)}</option>`).join("")}</select></div>`).join("")||`<p class="note">Sin movimientos.</p>`}
@@ -1869,13 +2114,14 @@ function vRentabilidad(){gbEscuchar();const T=datosRent();
   const act=[...S.alumnos.values()].filter(a=>!a.baja&&a.clases&&a.clases.length).length,porAl=L.length&&act?r2(ing/L.length/act):0;
   const cats={};for(const x of L)for(const [k,v] of Object.entries(x.porCat))cats[k]=r2((cats[k]||0)+v);const cl=Object.entries(cats).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
   const maxC=cl.length?cl[0][1]:1,perTxt=RT.per==="todo"?"todos los meses":RT.per.includes("-T")?periodoTxt(RT.per):"año "+RT.per;
-  const avisos=L.filter(x=>x.sinArgos||x.pend);
+  const avisos=L.filter(x=>x.sinArgos||x.pend||x.sinNom),hoyM=todayISO().slice(0,7);
   return `${rtCss}<div class="rt"><div class="bar"><h2>Rentabilidad</h2><span class="legend"><button class="btn small" data-gb="rentno">← Volver a Gastos</button></span></div>
   <div class="bar" role="tablist" style="gap:6px;margin-bottom:8px">${[["todo","Todo lo cobrado"],["banco","Según el banco (asesoría)"]].map(([k,l])=>`<button role="tab" class="chip" data-rtmodo="${k}" aria-selected="${(RT.modo||"todo")===k}" aria-pressed="${(RT.modo||"todo")===k}" style="${(RT.modo||"todo")===k?"background:var(--ink);color:var(--surface);border-color:var(--ink)":""}">${l}</button>`).join("")}</div>
-  ${!T.length?`<div class="empty">Todavía no hay ningún mes completo. Sube los extractos del banco en Gastos.</div>`:`
+  ${!T.length?`<div class="empty">Todavía no hay ningún mes terminado. Sube los extractos del banco en Gastos; el mes en curso cuenta cuando termina.</div>`:`
+  <p class="note" style="margin:0 0 6px"><b>A mes concluido:</b> ${mesTxt(hoyM)} (en curso) no cuenta hasta que termine. Las nóminas cuentan en el mes al que pertenecen, aunque se paguen a primeros del siguiente.</p>
   <div class="bar" style="gap:8px;flex-wrap:wrap"><label class="f" style="flex:0 1 220px">Periodo<select id="rt-per"><option value="todo" ${RT.per==="todo"?"selected":""}>Todos los meses (${T.length})</option><optgroup label="Años">${anios.map(a=>`<option value="${a}" ${RT.per===a?"selected":""}>${a}</option>`).join("")}</optgroup><optgroup label="Trimestres">${pers.map(k=>`<option value="${k}" ${RT.per===k?"selected":""}>${periodoTxt(k)}</option>`).join("")}</optgroup></select></label>
     <span class="note">${RT.modo==="banco"?"Ingresos = tarjeta, Bizum y transferencias del banco + efectivo ingresado en el cajero (por fecha del ingreso). Es lo que ve la asesoría.":"Ingresos = todo lo cobrado según Argos (por fecha de pago, cualquier forma: también el contado que no se ingresa) + otros ingresos del banco."} Gastos = gastos de la actividad del banco; la Seguridad Social de las empleadas cuenta en el mes al que pertenece (se carga el mes siguiente)${Object.keys(RT.ssPrev||{}).length?`; en ${Object.keys(RT.ssPrev).map(mesTxt).join(", ")} todavía no se ha cargado y se usa la del listado de costes de A3`:""}. No cuenta lo que no es de la actividad. ${cajaPrueba()?"<b>Datos de prueba.</b>":""}</span></div>
-  ${avisos.length?`<div class="aviso pend" style="display:block">${avisos.map(x=>`${esc(mesTxt(x.mes))}: ${[x.sinArgos?"falta el listado de recibos de Argos (sin ingresos)":"",x.pend?`${x.pend} movimientos sin clasificar`:""].filter(Boolean).join(" y ")}`).join(" · ")}. Las cifras de esos meses pueden cambiar.</div>`:""}
+  ${avisos.length?`<div class="aviso pend" style="display:block">${avisos.map(x=>`${esc(mesTxt(x.mes))}: ${[x.sinArgos?"falta el listado de recibos de Argos (sin ingresos)":"",x.pend?`${x.pend} movimientos sin clasificar`:"",x.sinNom?"faltan las nóminas (aún no se han pagado o no se ha subido el extracto en que se pagan)":""].filter(Boolean).join(" y ")}`).join(" · ")}. Las cifras de esos meses pueden cambiar.</div>`:""}
   <div class="stats"><div class="stat"><b>${eur(ing)}</b><span>Ingresos ${RT.modo==="banco"?"por banco":"(todo lo cobrado)"} · ${esc(perTxt)}</span></div><div class="stat"><b>${eur(gas)}</b><span>Gastos</span></div>
     <div class="stat"><b style="color:var(${res>=0?"--ok":"--bad"})">${eurS(res)}</b><span>Resultado${res<0?" (pérdida)":""}</span></div>
     <div class="stat"><b>${(mg<0?"−":"")+Math.abs(mg).toLocaleString("es-ES")} %</b><span>Margen (resultado ÷ ingresos)</span></div>
@@ -1920,9 +2166,11 @@ function periodicidades(){const reglas=(GB.cfg&&GB.cfg.per)||{},g=movsTodos().fi
     for(const m of l)out.set(m.id,{n:m.per?+m.per:n,por:m.per?"mano":como,k})}
   return out}
 /* Gastos generales imputados a un mes (con el reparto en el tiempo) */
-function generalesMes(mes,P){const cats=genCats();let t=0;
+function generalesMes(mes,P){const cats=genCats(),ta=tallerAsignados();let t=0;
   for(const m of movsTodos()){if(m.importe>=0||!cats.has(m.cat))continue;const p=P.get(m.id)||{n:1},m0=String(m.fv).slice(0,7);
-    for(let i=0;i<p.n;i++){const mm=sumaDias(m0+"-15",Math.round(i*30.44)).slice(0,7);if(mm===mes){t+=-m.importe/p.n;break}}}
+    /* lo que se ha asignado a un taller no cuenta como gasto general (va en el margen del taller) */
+    const imp=Math.max(0,-m.importe-(ta[m.mes+"|"+m.id]||0));if(!imp)continue;
+    for(let i=0;i<p.n;i++){const mm=sumaDias(m0+"-15",Math.round(i*30.44)).slice(0,7);if(mm===mes){t+=imp/p.n;break}}}
   return r2(t)}
 /* Clases semanales de cada profesora: horas (franjas distintas) y alumnos */
 /* Horas reales de clase a la semana: duración de cada sesión (las de logopedia pueden ser de 30 o 45 min) y, si varios alumnos
@@ -1938,16 +2186,24 @@ const profeDeRecibo=(a,r)=>{if(r.evento)return EV_PROFE;if(r.extra){const e=(a.e
   if(r.clase||r.extra){const m=String(r.concepto||"").match(/con (\p{L}+)\s*$/u);if(m&&EQUIPO.includes(m[1]))return m[1]}
   if(/evaluaci|psicopedag/i.test(r.concepto||""))return EV_PROFE;return ""};
 /* Ingresos de un mes (mes del recibo) por profesora */
-function ingresosProfes(mes){const o={},add=(p,k,v)=>{const x=o[p]=o[p]||{cob:0,beca:0,pend:0};x[k]+=v};
+/* 11/11/2026: un recibo de varias mensualidades (la familia paga 2 o 3 meses de una vez) se reparte entre esos meses.
+   Se reconoce porque su importe es 2, 3… veces la mensualidad de su tarifa (con un 5 % de margen) o porque el concepto lo dice. */
+const _cuotaCache=new Map();
+function cuotaMesAlumno(a){if(_cuotaCache.has(a))return _cuotaCache.get(a);let v=null;try{const M=calcMatriz(a,tfMapa());if(M.l.length&&!M.falta&&M.total>0)v=M.total}catch(_){}_cuotaCache.set(a,v);setTimeout(()=>_cuotaCache.delete(a),5000);return v}
+function mesesDeRecibo(a,r){const m0=String(r.emitido||"").slice(0,7);if(!m0)return [];
+  let k=1;const t=String(r.concepto||""),mt=t.match(/\b([2-9])\s*(?:mensualidades|meses)\b/i);
+  if(mt)k=+mt[1];else{const c=cuotaMesAlumno(a),v=+r.importe||0;if(c&&v>=c*1.9){const n=Math.round(v/c);if(n>=2&&n<=10&&Math.abs(v-n*c)<=0.05*n*c)k=n}}
+  const out=[];let m=m0;for(let i=0;i<k;i++){out.push(m);const [y,mm]=m.split("-").map(Number);m=mm===12?`${y+1}-01`:`${y}-${String(mm+1).padStart(2,"0")}`}return out}
+function ingresosProfes(mes){const o={};let alId="";const add=(p,k,v)=>{const x=o[p]=o[p]||{cob:0,beca:0,pend:0,al:{}};x[k]+=v;if(alId){const y=x.al[alId]=x.al[alId]||{cob:0,beca:0,pend:0};y[k]+=v}};
   /* Un alumno con logopedia y refuerzo: la parte de logopedia/psicopedagogía del recibo va a sus profesoras de logopedia (FLEX)
      y el resto a las de refuerzo, según lo que vale cada matrícula; dentro de cada parte, según sus clases con cada una. */
   const esLogo=t=>/logop|psicop|psicoped/i.test(String(t||""));
   const reparte=(peso,k,v)=>{const tp=Object.values(peso).reduce((s,w)=>s+w,0);if(!tp)return false;for(const [p,w] of Object.entries(peso))add(p,k,v*w/tp);return true};
-  for(const [,a] of S.alumnos){const pF={},pR={},pT={};
+  for(const [aid,a] of S.alumnos){alId=aid;const pF={},pR={},pT={};
     for(const c of a.clases||[]){if(!c.profe)continue;pT[c.profe]=(pT[c.profe]||0)+1;const d=FLEX.has(c.profe)?pF:pR;d[c.profe]=(d[c.profe]||0)+1}
     const mats=(a.matriculas||[]).filter(m=>m&&m.cuota!=null&&+m.cuota>0),tM=mats.reduce((s,m)=>s+(+m.cuota),0),lM=mats.filter(m=>esLogo(m.curso)).reduce((s,m)=>s+(+m.cuota),0);
-    for(const r of a.recibos||[]){if(!r||r.importe==null||r.estado==="anulado"||!String(r.emitido||"").startsWith(mes))continue;
-      const v=+r.importe||0,k=r.estado==="pagado"?"cob":esperaBeca(a)?"beca":"pend",p1=profeDeRecibo(a,r);
+    for(const r of a.recibos||[]){if(!r||r.importe==null||r.estado==="anulado")continue;const ms=mesesDeRecibo(a,r);if(!ms.includes(mes))continue;
+      const v=(+r.importe||0)/ms.length,k=r.estado==="pagado"?"cob":esperaBeca(a)?"beca":"pend",p1=profeDeRecibo(a,r);
       if(p1){add(p1,k,v);continue}
       const hayF=Object.keys(pF).length,hayR=Object.keys(pR).length;
       if(!hayF&&!hayR){add("",k,v);continue}
@@ -1956,10 +2212,10 @@ function ingresosProfes(mes){const o={},add=(p,k,v)=>{const x=o[p]=o[p]||{cob:0,
       const vL=v*sh,vR=v-vL;
       if(vL&&!reparte(hayF?pF:pT,k,vL))add("",k,vL);
       if(vR&&!reparte(hayR?pR:pT,k,vR))add("",k,vR)}}
-  const vistos=new Set();
+  alId="";const vistos=new Set();
   for(const x of (S.recCfg&&S.recCfg.sinAlumno)||[])if(String(x.fecha||"").startsWith(mes)&&x.estado!=="anulado"){vistos.add(x.numero);add("",x.estado==="pagado"?"cob":"pend",+x.importe||0)}
   for(const x of (S.sinFicha&&S.sinFicha.l)||[])if(String(x.fecha||"").startsWith(mes)&&!vistos.has(x.numero))add("","cob",+x.importe||0);
-  for(const x of Object.values(o))for(const k in x)x[k]=r2(x[k]);return o}
+  for(const x of Object.values(o))for(const k of ["cob","beca","pend"])x[k]=r2(x[k]);return o}
 /* Ocupación (07/11/2026). Profesoras de grupo: plazas ocupadas de las franjas en que trabaja (capDe: 8 en grupo, 1 individual).
    Profesoras de logopedia (FLEX): horas con sesión frente a las horas de su horario. Lo que podría facturar de más = huecos ×
    lo que se factura ahora por plaza (o por hora). */
@@ -1972,48 +2228,94 @@ function ocupacionProfes(carga){const o={};
       o[p]={tipo:"g",disp:pl,us:oc,libre:pl-oc}}}
   return o}
 function datosRentProfes(meses){const P=periodicidades(),carga=cargaProfes(),hTot=Object.values(carga).reduce((s,x)=>s+x.h,0),filas={};
-  const fila=p=>filas[p]=filas[p]||{p,cob:0,beca:0,pend:0,pers:0,gen:0,sinNom:0};
-  for(const mes of meses){const ing=ingresosProfes(mes),gen=generalesMes(mes,P),nom=nmDe(mes);
-    for(const [p,x] of Object.entries(ing)){const f=fila(p);f.cob+=x.cob;f.beca+=x.beca;f.pend+=x.pend}
+  const fila=p=>filas[p]=filas[p]||{p,cob:0,beca:0,pend:0,pers:0,gen:0,sinNom:0,est:0,alm:{},tal:0};
+  /* 11/11/2026: un mes sin nómina (p. ej. el mes en curso) no puede contar 0 € de personal, porque sus recibos sí cuentan.
+     Se estima con la nómina más cercana de esa profesora (la anterior; si no hay, la siguiente) y se marca «estimada».
+     Igual con la cuota de autónoma de la titular y con los gastos generales del mes en curso (media de los meses anteriores). */
+  const hoyM=todayISO().slice(0,7),noms=NM.docs.filter(d=>d.tipo==="nomina"&&+d.coste>0);
+  const nomEst=(p,mes)=>{const l=noms.filter(d=>d.profe===p).sort((a,b)=>String(a.mes).localeCompare(String(b.mes)));if(!l.length)return null;
+    const ant=l.filter(d=>d.mes<mes);return +(ant.length?ant[ant.length-1]:l[0]).coste};
+  const autMes=mes=>r2(-movsTodos().filter(m=>m.mes===mes&&m.cat==="ssaut").reduce((s,m)=>s+m.importe,0));
+  const mesesB=mesesBanco().slice().sort(),genAnt=mes=>{const l=mesesB.filter(m=>m<mes).slice(-3).map(m=>generalesMes(m,P)).filter(v=>v>0);return l.length?r2(l.reduce((s,v)=>s+v,0)/l.length):0};
+  const est={pers:new Set(),gen:new Set()};
+  /* talleres facturados en esos meses: a cada profesora le toca su parte del taller */
+  for(const x of talleresPorProfe(meses))fila(x.p).tal+=x.v;
+  for(const mes of meses){const ing=ingresosProfes(mes),nom=nmDe(mes);let gen=generalesMes(mes,P);
+    if(mes>=hoyM){const g=genAnt(mes);if(g>gen){gen=g;est.gen.add(mes)}}
+    for(const [p,x] of Object.entries(ing)){const f=fila(p);f.cob+=x.cob;f.beca+=x.beca;f.pend+=x.pend;
+      for(const [id,y] of Object.entries(x.al||{})){const z=f.alm[id]=f.alm[id]||{cob:0,beca:0,pend:0};z.cob+=y.cob;z.beca+=y.beca;z.pend+=y.pend}}
     for(const p of EQUIPO){const f=fila(p);
-      if(p===EV_PROFE)f.pers+=r2(-movsTodos().filter(m=>m.mes===mes&&m.cat==="ssaut").reduce((s,m)=>s+m.importe,0));
-      else{const n=nom.find(x=>x.profe===p);if(n)f.pers+=+n.coste||0;else if(carga[p].h)f.sinNom++}
+      if(p===EV_PROFE){let a=autMes(mes);if(!a){const l=mesesB.filter(m=>m!==mes).map(m=>[m,autMes(m)]).filter(x=>x[1]>0);const x=l.filter(y=>y[0]<mes).pop()||l[0];if(x){a=x[1];f.est++;est.pers.add(mes)}}f.pers+=a}
+      else{const n=nom.find(x=>x.profe===p);if(n)f.pers+=+n.coste||0;else if(carga[p].h){const v=nomEst(p,mes);if(v!=null){f.pers+=v;f.est++;est.pers.add(mes)}else f.sinNom++}}
       f.gen+=hTot?gen*carga[p].h/hTot:0}}
-  const l=Object.values(filas).map(f=>{for(const k of ["cob","beca","pend","pers","gen"])f[k]=r2(f[k]);const c=carga[f.p]||{h:0,al:0};
-    return {...f,h:c.h,al:c.al,res:r2(f.cob-f.pers-f.gen),resB:r2(f.cob+f.beca-f.pers-f.gen),eh:c.h&&meses.length?r2(f.cob/(c.h*4.33*meses.length)):null,ch:c.h&&meses.length?r2((f.pers+f.gen)/(c.h*4.33*meses.length)):null}});
+  const l=Object.values(filas).map(f=>{for(const k of ["cob","beca","pend","pers","gen","tal"])f[k]=r2(f[k]);const c=carga[f.p]||{h:0,al:0};
+    return {...f,h:c.h,al:c.al,res:r2(f.cob+f.tal-f.pers-f.gen),resB:r2(f.cob+f.tal+f.beca+f.pend-f.pers-f.gen),med:meses.length>1?r2((f.cob+f.tal-f.pers-f.gen)/meses.length):null,eh:c.h&&meses.length?r2(f.cob/(c.h*4.33*meses.length)):null,ch:c.h&&meses.length?r2((f.pers+f.gen)/(c.h*4.33*meses.length)):null}});
   let oc={};try{oc=ocupacionProfes(carga)}catch(e){console.warn(e)}
   for(const x of l){const O=oc[x.p];if(!O||!meses.length)continue;const fact=(x.cob+x.beca+x.pend)/meses.length;
     x.oc=O;x.pot=O.us?r2(O.libre*fact/O.us):null}
-  return {l:l.sort((a,b)=>(a.p?0:1)-(b.p?0:1)||a.p.localeCompare(b.p)),P,carga}}
-function vRentProfes(){nmEscuchar();const ms=mesesBanco().slice().sort(),hoy=todayISO().slice(0,7),y0=+hoy.slice(0,4)-(+hoy.slice(5)<9?1:0),curso=`${y0}-09`;
-  const opciones=[["curso",`Curso ${y0}-${String(y0+1).slice(2)} (desde ${mesTxt(mesInicio()>curso?mesInicio():curso)} hasta hoy)`],...ms.filter(m=>m>=mesInicio()).reverse().map(m=>[m,mesTxt(m)])];
+  return {l:l.sort((a,b)=>(a.p?0:1)-(b.p?0:1)||a.p.localeCompare(b.p)),P,carga,est:{pers:[...est.pers].sort(),gen:[...est.gen].sort()}}}
+/* 11/11/2026: por profesora, sus alumnos (lo que le toca de cada uno en el periodo): cobrado, sin cobrar y beca */
+function vRentAlumnos(x){const l=Object.entries(x.alm||{}).map(([id,v])=>({id,a:S.alumnos.get(id),cob:r2(v.cob),pend:r2(v.pend),beca:r2(v.beca)})).filter(y=>y.a&&(y.cob||y.pend||y.beca))
+    .sort((u,v)=>(v.pend+v.beca)-(u.pend+u.beca)||v.cob-u.cob);if(!l.length)return "";const ab=RP.ver===x.p;
+  return `<tr><td colspan="20" style="padding:0 6px 6px;white-space:normal"><details ${ab?"open":""} data-rpal="${esc(x.p)}"><summary class="note">Ver sus ${l.length} alumnos${l.some(y=>y.pend)?` · <span style="color:var(--warn)">${l.filter(y=>y.pend).length} con recibos sin cobrar</span>`:""}</summary>
+    <table class="ft" style="min-width:0;width:100%;font-size:12.5px;margin-top:4px"><thead><tr><th>Alumno</th><th style="text-align:right">Cobrado</th><th style="text-align:right">Sin cobrar</th><th style="text-align:right">Beca</th></tr></thead><tbody>
+    ${l.map(y=>`<tr><td><a href="#" data-act="ir" data-id="${esc(y.id)}">${esc(titulo(y.a.nombre))}</a></td><td style="text-align:right">${y.cob?eur(y.cob):"—"}</td><td style="text-align:right;${y.pend?"color:var(--warn);font-weight:600":""}">${y.pend?eur(y.pend):"—"}</td><td style="text-align:right">${y.beca?eur(y.beca):"—"}</td></tr>`).join("")}
+    </tbody></table><p class="note" style="margin:4px 0 0">Si un alumno tiene varias profesoras, aquí sale solo la parte que le toca a ${esc(x.p)}. Los recibos de varias mensualidades se reparten entre esos meses.</p></details></td></tr>`}
+/* ---- Talleres en la rentabilidad (11/11/2026) ----
+   Cada factura de taller emitida cuenta en el mes de su fecha. Su margen (base − costes) es del taller. Para la tabla por
+   profesora: lo que queda del taller tras materiales y otros costes que no son de personal se reparte entre las profesoras que
+   tiene asignadas (según lo que pesa cada una en los costes de personal del taller: horas y parte de nómina); a cada una se le
+   resta lo que se le paga aparte por esas horas (las horas a 10 €/h). La parte de nómina ya está en su coste de personal.
+   Los gastos del banco asignados a un taller dejan de contar como gastos generales. */
+const talleresEmitidos=meses=>(typeof FA!=="undefined"?FA.docs:[]).filter(f=>f.estado==="emitida"&&meses.includes(String(f.fecha||"").slice(0,7)));
+function tallerAsignados(){const o={};for(const f of (typeof FA!=="undefined"?FA.docs:[]))if(f.estado==="emitida")for(const c of f.costes||[])if(c.tipo==="gasto"&&c.mov)o[c.mov.mes+"|"+c.mov.id]=(o[c.mov.mes+"|"+c.mov.id]||0)+(+c.imp||0);return o}
+function tallerReparto(f){const per={},hor={};let otros=0;
+  for(const c of f.costes||[]){const v=faCoste(c);if((c.tipo==="horas"||c.tipo==="nomina")&&c.profe){per[c.profe]=(per[c.profe]||0)+v;if(c.tipo==="horas")hor[c.profe]=(hor[c.profe]||0)+v}else otros+=v}
+  const tp=Object.values(per).reduce((s,v)=>s+v,0),neto=(+f.base||0)-otros;
+  return Object.keys(per).length?Object.keys(per).map(p=>({p,v:r2(neto*(tp?per[p]/tp:1/Object.keys(per).length)-(hor[p]||0))})):[{p:"",v:r2(neto)}]}
+const talleresPorProfe=meses=>talleresEmitidos(meses).flatMap(tallerReparto);
+function vRentTalleres(meses,etq){faEscuchar();const l=talleresEmitidos(meses).sort((a,b)=>String(a.fecha).localeCompare(String(b.fecha)));if(!l.length)return `<div class="panel" style="padding:12px 14px;margin-top:10px"><b>Talleres</b> <span class="note">· ${esc(etq)}: no hay talleres facturados. Se hacen en Facturación; cuando se emita una factura, aparecerá aquí cómo ha ido y la parte de cada profesora.</span></div>`;
+  const fila=f=>{const cs=f.costes||[],per=r2(cs.filter(c=>c.tipo==="horas"||c.tipo==="nomina").reduce((s,c)=>s+faCoste(c),0)),otr=r2(faCostes(f)-per),m=r2((+f.base||0)-faCostes(f));
+    return `<tr><td>${esc(f.numero)}<br><span class="note">${fmtFecha(f.fecha)}</span></td><td style="white-space:normal">${esc(f.taller||"")}<br><span class="note">${esc(f.cliente&&f.cliente.nombre||"")}</span></td><td style="text-align:right">${eur(+f.base||0)}</td><td style="text-align:right">${eur(per)}</td><td style="text-align:right">${eur(otr)}</td><td style="text-align:right;font-weight:600;color:var(${m>=0?"--ok":"--bad"})">${eurS(m)}</td>
+      <td style="white-space:normal" class="note">${tallerReparto(f).map(x=>`${x.p?esc(x.p):"sin profesora"} ${eurS(x.v)}`).join(" · ")}</td><td>${f.cobro&&f.cobro.id?`<span class="badge b-si">Cobrada</span>`:`<span class="badge b-pend">Pendiente</span>`}</td></tr>`};
+  const tb=r2(l.reduce((s,f)=>s+(+f.base||0),0)),tc=r2(l.reduce((s,f)=>s+faCostes(f),0));
+  return `<div class="panel" style="padding:12px 14px;margin-top:10px"><b>Talleres</b> <span class="note">· ${esc(etq)}: lo facturado a entidades frente a lo que ha costado</span>
+    <div class="tbl"><table class="ft" style="min-width:0;width:100%;font-size:13px;margin-top:6px"><thead><tr><th>Factura</th><th>Taller</th><th style="text-align:right">Base</th><th style="text-align:right">Personal</th><th style="text-align:right">Materiales y otros</th><th style="text-align:right">Margen</th><th>Para cada profesora</th><th></th></tr></thead><tbody>
+    ${l.map(fila).join("")}<tr style="font-weight:700"><td colspan="2">Total${l.length>1?` (${l.length} talleres)`:""}</td><td style="text-align:right">${eur(tb)}</td><td colspan="2" style="text-align:right">${eur(tc)}</td><td style="text-align:right;color:var(${tb-tc>=0?"--ok":"--bad"})">${eurS(r2(tb-tc))}</td><td colspan="2">${meses.length>1?`<span class="note">Media al mes: ${eurS(r2((tb-tc)/meses.length))}</span>`:""}</td></tr></tbody></table></div>
+    <p class="note" style="margin:4px 0 0">«Para cada profesora»: lo que le queda al taller después de materiales, repartido según lo que pesa cada profesora en el personal del taller, menos lo que se le paga aparte por esas horas. Sale también en su fila de «Por profesora» (columna Talleres).</p></div>`}
+function vRentProfes(){nmEscuchar();faEscuchar();const ms=mesesBanco().slice().sort(),hoy=todayISO().slice(0,7),y0=+hoy.slice(0,4)-(+hoy.slice(5)<9?1:0),curso=`${y0}-09`;
   const conNom=[...new Set(NM.docs.filter(d=>d.tipo==="nomina").map(d=>d.mes))].sort();
+  /* 11/11/2026: el curso se mira a mes concluido: solo los meses ya terminados y con nóminas (el mes en curso, no) */
+  const ultNom=conNom.length?conNom[conNom.length-1]:"",mCurso=ms.filter(m=>m>=curso&&m>=mesInicio()&&m<hoy&&(!ultNom||m<=ultNom));
+  const opciones=[["curso",`Curso ${y0}-${String(y0+1).slice(2)}${mCurso.length?` · meses cerrados: ${mCurso.length===1?mesTxt(mCurso[0]):`${mesTxt(mCurso[0])} a ${mesTxt(mCurso[mCurso.length-1])}`}`:" · aún sin meses cerrados"}`],...ms.filter(m=>m>=mesInicio()).reverse().map(m=>[m,mesTxt(m)+(m>=hoy?" (en curso)":"")])];
   if(!RP.per)RP.per=conNom.length?conNom[conNom.length-1]:"curso";
-  const meses=RP.per==="curso"?ms.filter(m=>m>=curso&&m>=mesInicio()&&m<=hoy):[RP.per],D=datosRentProfes(meses),L=D.l,T=k=>r2(L.reduce((s,x)=>s+(x[k]||0),0));
-  const col=v=>`color:var(${v>=0?"--ok":"--bad"})`,faltaNom=L.filter(x=>x.sinNom).map(x=>x.p);
+  const meses=RP.per==="curso"?mCurso:[RP.per],D=datosRentProfes(meses),L=D.l,T=k=>r2(L.reduce((s,x)=>s+(x[k]||0),0));
+  const med=meses.length>1,col=v=>`color:var(${v>=0?"--ok":"--bad"})`,faltaNom=L.filter(x=>x.sinNom).map(x=>x.p);
   const ver=[...D.P.entries()].map(([id,p])=>({p,m:movsTodos().find(x=>x.id===id)})).filter(x=>x.m&&genCats().has(x.m.cat)&&(x.p.n>1||x.p.por==="mano"));
   const unicos=[...new Map(ver.map(x=>[x.p.k,x])).values()].sort((a,b)=>String(b.m.fv).localeCompare(String(a.m.fv)));
   return `<div class="panel" style="padding:12px 14px;margin-top:10px"><b>Por profesora</b> <span class="note">· lo que se cobra por sus clases frente a lo que cuesta</span>
     <div class="bar" style="gap:8px;flex-wrap:wrap;margin-top:6px"><label class="f" style="flex:0 1 260px">Periodo<select id="rp-per">${opciones.map(([v,t])=>`<option value="${v}" ${RP.per===v?"selected":""}>${esc(t)}${conNom.includes(v)?" · con nóminas":""}</option>`).join("")}</select></label></div>
     ${faltaNom.length?`<p class="note" style="color:var(--warn);margin:4px 0">Faltan nóminas de ${faltaNom.join(", ")} en ${RP.per==="curso"?"algún mes del curso":mesTxt(RP.per)}: su coste de personal sale incompleto. Súbelas en Gastos → «Subir documentos».</p>`:""}
-    <div class="tbl"><table class="ft rp" style="min-width:0;width:100%;margin-top:6px;white-space:nowrap;font-size:13px"><style>.rp th,.rp td{padding-left:6px;padding-right:6px}.rp th{white-space:normal;line-height:1.2}</style><thead><tr><th>Profesora</th><th style="text-align:right">Horas /sem.</th><th style="text-align:right">Alum&shy;nos</th><th style="text-align:right">Cobrado</th><th style="text-align:right">Pendiente de beca</th><th style="text-align:right" title="Recibos de ese mes aún sin pagar (sin contar becas): no suman en el resultado">Sin cobrar</th><th style="text-align:right">Coste de personal</th><th style="text-align:right">Gastos generales</th><th style="text-align:right">Resultado</th><th style="text-align:right">Con la beca</th><th style="text-align:right" title="Lo cobrado dividido entre sus horas de clase del periodo">Cobrado por hora</th><th style="text-align:right" title="Coste de personal + gastos generales, dividido entre sus horas de clase del periodo">Cuesta por hora</th></tr></thead><tbody>
+    ${D.est.pers.length||D.est.gen.length?`<p class="note" style="color:var(--warn);margin:4px 0">${D.est.pers.length?`Aún no están las nóminas de ${D.est.pers.map(mesTxt).join(", ")}: el coste de personal de ese mes es <b>estimado</b> con la nómina anterior de cada profesora. `:""}${D.est.gen.length?`* Los gastos generales de ${D.est.gen.map(mesTxt).join(", ")} (mes en curso) se estiman con la media de los meses anteriores, porque aún faltan cargos del banco. `:""}Cuando subas las nóminas y el extracto del mes, se calcula con lo real.</p>`:""}
+    <div class="tbl"><table class="ft rp" style="min-width:0;width:100%;margin-top:6px;white-space:nowrap;font-size:13px"><style>.rp th,.rp td{padding-left:6px;padding-right:6px}.rp th{white-space:normal;line-height:1.2}</style><thead><tr><th>Profesora</th><th style="text-align:right">Horas /sem.</th><th style="text-align:right">Alum&shy;nos</th><th style="text-align:right">Cobrado</th><th style="text-align:right">Pendiente de beca</th><th style="text-align:right" title="Recibos de ese mes aún sin pagar (sin contar becas): no suman en el resultado">Sin cobrar</th><th style="text-align:right">Coste de personal</th><th style="text-align:right">Gastos generales</th><th style="text-align:right" title="Su parte del margen de los talleres facturados en el periodo (lo que queda de cada taller después de materiales y otros gastos, repartido según sus horas en el taller)">Talleres</th><th style="text-align:right" title="Lo cobrado más su parte de los talleres, menos lo que cuesta">Resultado con lo cobrado</th><th style="text-align:right" title="Si se cobra todo lo pendiente: lo sin cobrar y las becas">Si se cobra todo</th><th style="text-align:right" title="Lo cobrado dividido entre sus horas de clase del periodo">Cobrado por hora</th><th style="text-align:right" title="Coste de personal + gastos generales, dividido entre sus horas de clase del periodo">Cuesta por hora</th>${med?`<th style="text-align:right" title="Resultado con lo cobrado dividido entre los meses del periodo">Media al mes</th>`:""}</tr></thead><tbody>
     ${L.map(x=>`<tr><td>${x.p?esc(x.p):`<span class="note">Sin asignar</span>`}${x.p===EV_PROFE?` <span class="note">(titular)</span>`:""}</td><td style="text-align:right">${x.p?String(x.h).replace(".",","):""}</td><td style="text-align:right">${x.p?x.al:""}</td><td style="text-align:right">${eur(x.cob)}</td><td style="text-align:right">${x.beca?eur(x.beca):"—"}</td><td style="text-align:right;${x.pend?"color:var(--warn)":""}">${x.pend?eur(x.pend):"—"}</td>
-      <td style="text-align:right">${x.p?eur(x.pers):""}${x.sinNom?` <span class="badge b-pend">falta nómina</span>`:""}</td><td style="text-align:right">${x.p?eur(x.gen):""}</td><td style="text-align:right;font-weight:600;${x.p?col(x.res):""}">${x.p?eurS(x.res):""}</td><td style="text-align:right;${x.p?col(x.resB):""}">${x.p&&x.beca?eurS(x.resB):x.p?"—":""}</td><td style="text-align:right">${x.eh!=null?eur(x.eh):"—"}</td><td style="text-align:right;${x.ch!=null&&x.eh!=null&&x.ch>x.eh?"color:var(--bad)":""}">${x.ch!=null?eur(x.ch):"—"}</td></tr>`).join("")}
-    <tr style="font-weight:700"><td>Total</td><td></td><td></td><td style="text-align:right">${eur(T("cob"))}</td><td style="text-align:right">${eur(T("beca"))}</td><td style="text-align:right">${eur(T("pend"))}</td><td style="text-align:right">${eur(T("pers"))}</td><td style="text-align:right">${eur(T("gen"))}</td><td style="text-align:right;${col(T("res"))}">${eurS(T("res"))}</td><td style="text-align:right;${col(T("resB"))}">${eurS(T("resB"))}</td><td></td><td></td></tr></tbody></table></div>
+      <td style="text-align:right">${x.p?eur(x.pers):""}${x.sinNom?` <span class="badge b-pend">falta nómina</span>`:x.est?` <span class="badge b-off" title="Algún mes no tiene nómina todavía: se ha puesto la nómina más cercana de esa profesora">estimado</span>`:""}</td><td style="text-align:right">${x.p?eur(x.gen):""}${x.p&&D.est.gen.length?`<span class="note">*</span>`:""}</td><td style="text-align:right">${x.tal?eur(x.tal):"—"}</td><td style="text-align:right;font-weight:600;${x.p?col(x.res):""}">${x.p?eurS(x.res):""}</td><td style="text-align:right;${x.p?col(x.resB):""}">${x.p&&(x.beca||x.pend)?eurS(x.resB):x.p?"—":""}</td><td style="text-align:right">${x.eh!=null?eur(x.eh):"—"}</td><td style="text-align:right;${x.ch!=null&&x.eh!=null&&x.ch>x.eh?"color:var(--bad)":""}">${x.ch!=null?eur(x.ch):"—"}</td>${med?`<td style="text-align:right;${x.p&&x.med!=null?col(x.med):""}">${x.p&&x.med!=null?eurS(x.med):""}</td>`:""}</tr>${x.p?vRentAlumnos(x):""}`).join("")}
+    <tr style="font-weight:700"><td>Total</td><td></td><td></td><td style="text-align:right">${eur(T("cob"))}</td><td style="text-align:right">${eur(T("beca"))}</td><td style="text-align:right">${eur(T("pend"))}</td><td style="text-align:right">${eur(T("pers"))}</td><td style="text-align:right">${eur(T("gen"))}</td><td style="text-align:right">${T("tal")?eur(T("tal")):"—"}</td><td style="text-align:right;${col(T("res"))}">${eurS(T("res"))}</td><td style="text-align:right;${col(T("resB"))}">${eurS(T("resB"))}</td><td></td><td></td>${med?`<td style="text-align:right;${col(r2(T("res")/meses.length))}">${eurS(r2(T("res")/meses.length))}</td>`:""}</tr></tbody></table></div>
     ${(()=>{const lo=L.filter(x=>x.oc);if(!lo.length)return "";const tp=r2(lo.reduce((s,x)=>s+(x.pot||0),0));
       return `<b style="display:block;margin-top:12px">Ocupación y huecos libres</b><table class="ft" style="min-width:0;width:100%;margin-top:4px;font-size:13px"><thead><tr><th>Profesora</th><th>Ocupación</th><th style="text-align:right">Libre</th><th style="text-align:right" title="Si se llenaran los huecos, a lo que se factura ahora por plaza (o por hora). Contando lo cobrado, la beca y lo pendiente.">Podría facturar más al mes</th></tr></thead><tbody>
       ${lo.map(x=>{const O=x.oc,pc=O.disp?Math.round(O.us/O.disp*100):0;return `<tr><td>${esc(x.p)}</td><td><span style="display:inline-flex;align-items:center;gap:8px;min-width:240px"><span style="flex:1;background:var(--sunk);border-radius:4px;height:10px;overflow:hidden;min-width:90px"><span style="display:block;height:100%;width:${pc}%;background:var(${pc>=75?"--ok":pc>=50?"--warn":"--bad"})"></span></span><span class="note" style="white-space:nowrap">${pc} % · ${O.tipo==="g"?`${O.us} de ${O.disp} plazas`:`${String(O.us).replace(".",",")} de ${String(O.disp).replace(".",",")} h`}</span></span></td>
         <td style="text-align:right;white-space:nowrap">${O.tipo==="g"?`${O.libre} plazas`:`${String(O.libre).replace(".",",")} h`}</td><td style="text-align:right">${x.pot!=null?eur(x.pot):"—"}</td></tr>`}).join("")}
       <tr style="font-weight:700"><td>Total</td><td></td><td></td><td style="text-align:right">${eur(tp)}</td></tr></tbody></table>
       <p class="note" style="margin:4px 0 0">Grupos: plazas ocupadas a la semana en las horas que trabaja (8 por grupo, 1 si la hora es individual). Logopedia: horas con sesión frente a las de su horario. «Podría facturar más»: los huecos llenos, a lo que se factura ahora por plaza o por hora. No incluye nuevos costes, porque la profesora y el local ya están pagados.</p>`})()}
-    <p class="note" style="margin:6px 0 0">Cobrado: recibos pagados, contados en el mes del recibo (no en el del pago), así que se actualiza solo cuando llega un pago atrasado o la beca. Un alumno con varias profesoras: la parte de logopedia del recibo va a sus profesoras de logopedia y la de refuerzo a las de refuerzo (según lo que vale cada matrícula), y dentro de cada parte según sus clases semanales con cada una (horario actual). Coste de personal: coste empresa de la nómina; en la titular, su cuota de autónoma. Gastos generales: las categorías marcadas abajo, repartidas según las horas de clase de cada una. «Sin asignar»: recibos de alumnos sin clases en la app (bajas) o sin ficha.</p>
+    <p class="note" style="margin:6px 0 0">Cobrado: recibos pagados, contados en el mes del recibo (no en el del pago; si un recibo es de varias mensualidades, se reparte entre esos meses), así que se actualiza solo cuando llega un pago atrasado o la beca. Un alumno con varias profesoras: la parte de logopedia del recibo va a sus profesoras de logopedia y la de refuerzo a las de refuerzo (según lo que vale cada matrícula), y dentro de cada parte según sus clases semanales con cada una (horario actual). Coste de personal: coste empresa de la nómina; en la titular, su cuota de autónoma. Gastos generales: las categorías marcadas abajo, repartidas según las horas de clase de cada una. «Sin asignar»: recibos de alumnos sin clases en la app (bajas) o sin ficha.</p>
     <details style="margin-top:8px" ${RP.verPer?"open":""} data-rpdet="1"><summary class="note"><b>Gastos generales y gastos que se reparten en varios meses</b></summary>
       <p class="note" style="margin:6px 0 4px">Categorías que cuentan como continente y contenido:</p>
       <div style="display:flex;flex-wrap:wrap;gap:4px 14px">${CATS.filter(([,,t])=>t==="g").filter(([k])=>!["nominas","ssemp","ssaut","impuestos"].includes(k)).map(([k,lb])=>`<label class="note" style="display:flex;gap:4px;align-items:center"><input type="checkbox" data-rpcat="${k}" ${genCats().has(k)?"checked":""}>${esc(lb)}</label>`).join("")}</div>
       <p class="note" style="margin:10px 0 4px">Gastos que no son mensuales (se reparten a partes iguales desde el mes del cargo). La app lo deduce de cada cuánto se repiten; los seguros que solo aparecen una vez se toman como anuales. Cámbialo si no es así: vale para los próximos cargos de ese concepto.</p>
       ${unicos.length?`<table class="ft" style="min-width:0;width:100%"><tbody>${unicos.map(({p,m})=>`<tr><td style="white-space:nowrap">${fmtFecha(m.fv)}</td><td style="white-space:normal">${esc(m.concepto)}</td><td style="text-align:right">${eur(-m.importe)}</td><td><select data-rpper="${esc(p.k)}" aria-label="Periodicidad">${[[1,"Mensual (no se reparte)"],[2,"Bimestral · 2 meses"],[3,"Trimestral · 3 meses"],[6,"Semestral · 6 meses"],[12,"Anual · 12 meses"],[24,"24 meses (compra grande)"],[36,"36 meses (compra grande)"]].map(([n,t])=>`<option value="${n}" ${p.n===n?"selected":""}>${t}</option>`).join("")}</select> <span class="note">${p.por==="mano"?"puesto a mano":p.por==="seguro"?"seguro: anual":"deducido"}</span></td></tr>`).join("")}</tbody></table>`:`<p class="note">Ninguno todavía.</p>`}
       <p class="note" style="margin:8px 0 0">Para repartir otro gasto (por ejemplo, un ordenador), búscalo y elige los meses: <select id="rp-otro" style="max-width:420px"><option value="">Elige un gasto…</option>${movsTodos().filter(m=>m.importe<0&&genCats().has(m.cat)&&!(D.P.get(m.id)&&D.P.get(m.id).n>1)).sort((a,b)=>a.importe-b.importe).slice(0,60).map(m=>`<option value="${esc(claveMov(m.concepto))}">${esc(fmtFecha(m.fv))} · ${esc(m.concepto.slice(0,50))} · ${eur(-m.importe)}</option>`).join("")}</select></p>
-    </details></div>`}
+    </details></div>
+    ${vRentTalleres(meses,RP.per==="curso"?"el curso":mesTxt(RP.per))}`}
 document.addEventListener("change",async e=>{const t=e.target;if(!t||!gbVer())return;
   if(t.id==="rp-per"){RP.per=t.value;render();return}
   const guardar=async cfg=>{try{await S.db.doc("config/banco").set(cfg);GB.cfg=cfg;RP.verPer=true;render();toast("Guardado")}catch(_){toast("No se ha podido guardar.")}};
@@ -2492,7 +2794,7 @@ function fcTramos(p,dia){const ev=fcEventos(p,dia),tr=[];let ab=null;
   const min=tr.reduce((s,t)=>s+(t.ini&&t.fin?Math.max(0,minDe(t.fin.h)-minDe(t.ini.h)):0),0);
   return {tr,min,mal:tr.some(t=>!t.ini||!t.fin),aj:ev.some(e=>e.aj)}}
 const fcDentro=p=>{const ev=fcEventos(p,todayISO()),u=ev[ev.length-1];return u&&u.acc==="entrada"?u:null};
-const fcPrevisto=(p,dia)=>{if(festivoDe(dia))return 0;const d=diaDe(dia);if(!DIAS.includes(d))return 0;return tramosDe(p,d).reduce((s,[a,b])=>s+(b-a),0)};
+const fcPrevisto=(p,dia)=>{if(festivoDe(dia))return 0;const d=diaDe(dia);if(!DIAS.includes(d))return 0;return (typeof tramosContrato==="function"?tramosContrato:tramosDe)(p,d).reduce((s,[a,b])=>s+(b-a),0)};
 const diasMes=mes=>{const o=[];for(let d=mes+"-01";d.startsWith(mes);d=sumaDias(d,1))o.push(d);return o};
 const fcSolPend=()=>FC.docs.filter(x=>x.tipo==="solicitud"&&!FC.docs.some(y=>(y.tipo==="ajuste"||y.tipo==="rechazo")&&y.ref===x.id));
 function fcIncid(){const out=[],hoy=todayISO();for(const p of FICH_PROFES())for(const d of [...new Set(FC.docs.filter(x=>x.profe===p).map(x=>(x.tipo==="entrada"||x.tipo==="salida")?diaLocal(x.t):x.dia).filter(d=>d<hoy))].sort()){const T=fcTramos(p,d);if(T.mal)out.push({p,d,T})}return out}
@@ -2539,13 +2841,13 @@ function vKiosko(){const ps=FICH_PROFES();
       <button class="btn primary" data-act="fckiook" data-acc="${dn?"salida":"entrada"}">${dn?"Fichar la salida":"Fichar la entrada"}</button><button class="btn" data-act="fckiono">Cancelar</button></div>
       ${FC.pines[FC.kio]?"":`<p class="note" style="color:var(--warn)">${esc(FC.kio)} aún no tiene PIN: lo pone en su app, en «Mis fichajes».</p>`}`})():""}</div>`}
 function vFichajes(){fcEscuchar();if(!FC.ok)return `<div class="empty">Cargando…</div>`;if(FC.err)return `<div class="empty">No se pueden leer los fichajes: publica las reglas nuevas de Firebase.</div>`;
-  if(!fichActivo()){const ps=FICH_PROFES();return `<div class="bar"><h2>Fichajes</h2></div><div class="aviso info" style="display:block">El fichaje en la app empieza el <b>${fmtFecha(FICH_DESDE)}</b>. Hasta entonces se sigue fichando en Argos. Mientras, cada profesora puede poner su PIN para el mostrador en «Mis fichajes».</div>
+  if(!fichActivo()){const ps=FICH_PROFES();return `<div class="bar"><h2>Fichajes</h2></div>${vHorasExtraProfes()}<div class="aviso info" style="display:block">El fichaje en la app empieza el <b>${fmtFecha(FICH_DESDE)}</b>. Hasta entonces se sigue fichando en Argos. Mientras, cada profesora puede poner su PIN para el mostrador en «Mis fichajes».</div>
     ${esMos()?"":`<p class="note">PIN puesto: ${ps.map(p=>`${esc(p)} ${FC.pines[p]?"✓":"—"}`).join(" · ")}</p>`}`}
   if(esMos())return `<div class="bar"><h2>Fichar</h2></div>${vKiosko()}`;
   const ps=FICH_PROFES();if(!FC.profe||!ps.includes(FC.profe))FC.profe=ps[0];if(!FC.mes)FC.mes=hoyMes();
   const sols=fcSolPend(),inc=fcIncid();
   const accDir=(d,T)=>`<button class="btn small" data-act="fcaj" data-d="${d}" title="Añadir una entrada o salida con su motivo">Corregir</button>`;
-  return `<div class="bar"><h2>Fichajes</h2><span class="legend">Registro de jornada de las profesoras</span></div>
+  return `<div class="bar"><h2>Fichajes</h2><span class="legend">Registro de jornada de las profesoras</span></div>${vHorasExtraProfes()}
   <div class="stats">${ps.map(p=>{const dn=fcDentro(p);return `<div class="stat static"><b style="font-size:18px;color:var(${dn?"--ok":"--muted"})">${dn?"Dentro":"Fuera"}</b><span>${esc(p)}${dn?` · desde las ${dn.h}${dn.por==="mostrador"?" (mostrador)":""}`:""}</span></div>`}).join("")}</div>
   ${sols.length?`<div class="aviso pend" style="display:block;margin:10px 0"><b>${sols.length} solicitud${sols.length===1?"":"es"} de corrección</b>${sols.map(x=>`<div class="row" style="gap:6px;flex-wrap:wrap;padding:6px 0;border:0"><span class="grow">${esc(x.profe)} · ${fmtFecha(x.dia)} · ${x.accion} a las <b>${esc(x.hora)}</b> · «${esc(x.motivo)}»</span><button class="btn small primary" data-act="fcsolok" data-id="${x.id}">Aprobar</button><button class="btn small" data-act="fcsolno" data-id="${x.id}">Rechazar</button></div>`).join("")}</div>`:""}
   ${inc.length?`<div class="aviso pend" style="display:block;margin:10px 0"><b>${inc.length} día${inc.length===1?"":"s"} con un fichaje sin pareja</b> (entrada sin salida o al revés)${inc.slice(-10).map(x=>`<div class="note">${esc(x.p)} · ${fmtFecha(x.d)} · ${x.T.tr.map(t=>`${t.ini?t.ini.h:"¿?"}–${t.fin?t.fin.h:"¿?"}`).join(", ")} <a href="#" data-act="fcir" data-p="${esc(x.p)}" data-d="${x.d}">corregir</a></div>`).join("")}</div>`:""}
@@ -2622,3 +2924,485 @@ document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.c
     else await fcCrear({tipo:"rechazo",profe:x.profe,dia:x.dia,ref:x.id,motivo:"",por:"direccion",quien:quienSoy()},"Rechazada");render()}});
 /* recordatorio: cada minuto, la barra de la profesora se vuelve a pintar */
 setInterval(()=>{if(S.role==="profe"&&!S.pv&&S.screen==="app"&&!document.hidden){const b=document.getElementById("fich-bar");if(b)b.outerHTML=`<div id="fich-bar">${vFichBar()}</div>`}},60000);
+
+/* ============================================================================================
+   Descuadres y pagos sin identificar (09/11/2026, titular: «un cajón de sastre»). Pestaña de dirección.
+   Junta en una lista todo el dinero que no cuadra o que no se sabe de quién es, para poder buscarlo cuando una familia diga
+   «yo pagué tal día»:
+   - Tarjeta: operaciones del TPV que están en el banco y no en la caja de Argos (y al revés), o diferencia de una liquidación.
+   - Bizum y transferencias recibidas sin alumno identificado.
+   - Efectivo: descuadres del cierre de la Caja de la app y apuntes «Descuadre sin justificar» (desde que la Caja es real).
+   Cada uno se puede asignar a un alumno (con nota) o marcar como justificado; queda en banco/<AAAA-MM>.desc.<clave> =
+   {estado:"asignado"|"justificado", alumno, nombre, nota, t, por}. Filtros: estado, tipo, fechas y texto/importe.
+   ============================================================================================ */
+const DQ={f:"pend",tipo:"",d0:"",d1:"",q:"",abre:null,aq:""};
+function descGuardados(){const o={};for(const d of GB.docs)for(const [k,v] of Object.entries(d.desc||{}))if(v)o[k]={...v,mes:d.id};return o}
+function descItems(){const out=[],add=x=>{x.k=hashTxt(x.src);out.push(x)},desde=docDesde();
+  /* tarjeta */
+  for(const x of cuadreTarjetaDias()){if(x.d<desde)continue;
+    if(x.modo==="ops"){for(const o of x.soloBanco)add({src:`tpv|${x.d}|${o.imp}|${o.tarj}`,tipo:"Tarjeta",fecha:x.d,imp:o.imp,det:`Cobro con tarjeta${o.tarj?" …"+o.tarj:""} que está en el banco y no en la caja de Argos`,
+        pista:(o.pistas||[]).map(g=>g.map(r=>`${titulo(r.tit)} (${r.fp})`).join(" + ")).join(" o ")});
+      for(const r of x.soloArgos)add({src:`tpva|${x.d}|${r.num}|${r.imp}|${r.tit}`,tipo:"Tarjeta",fecha:x.d,imp:-r.imp,det:`Cobrado con tarjeta en Argos (${titulo(r.tit)}${r.num?", "+r.num:""}) y no aparece en el banco`})}
+    else if(x.modo==="total"&&x.ok===false)add({src:`tpvt|${x.fv}`,tipo:"Tarjeta",fecha:x.fv,imp:r2(x.tB-x.tAw),det:`Liquidación del TPV del ${fmtFecha(x.fv)}: banco ${eur(x.tB)} y Argos ${eur(x.tAw)}. Sube su PDF para ver qué operación es`})}
+  /* bizum y transferencias sin alumno */
+  for(const m of movsTodos())if(["bizum","transf"].includes(m.cat)&&m.importe>0&&String(m.fv||"")>=desde&&!m.enl&&!enlaceCobro(m).length)
+    add({src:`mov|${m.mes}|${m.id}`,tipo:m.cat==="bizum"?"Bizum":"Transferencia",fecha:m.fv,imp:m.importe,det:`${m.concepto}${m.ordenante?" · "+titulo(String(m.ordenante).toLowerCase()):""}${m.obs?" · «"+m.obs+"»":""}`,mov:m});
+  /* efectivo (Caja de la app, cuando ya es real) */
+  if(typeof GC!=="undefined"){const an=anulados();for(const d of GC.docs){if(!d.dia||d.dia<CAJA_REAL_DESDE||d.dia<desde||an.has(d.id))continue;
+    if(d.tipo==="cierre"&&Math.abs(+d.descuadre||0)>0.009)add({src:`caja|${d.id}`,tipo:"Efectivo",fecha:d.dia,imp:+d.descuadre,det:`Cierre de caja: esperado ${eur(+d.esperado)}, contado ${eur(+d.contado)}${d.nota?" · «"+d.nota+"»":""} · ${d.quien||""}`});
+    if(d.tipo==="apertura"&&Math.abs(+d.descuadre||0)>0.009)add({src:`ape|${d.id}`,tipo:"Efectivo",fecha:d.dia,imp:+d.descuadre,det:`Apertura de caja: debía haber ${eur(+d.arrastre)}${d.sinCerrar?` (la caja del ${fmtFecha(d.desdeDia)} no se cerró)`:""} y se contaron ${eur(+d.fondo)} · ${d.quien||""}`});
+    if(d.tipo==="apunte"&&d.cc==="descuadre")add({src:`apu|${d.id}`,tipo:"Efectivo",fecha:d.dia,imp:(+d.signo<0?-1:1)*(+d.importe||0),det:`Apunte «Descuadre sin justificar»${d.nota?" · «"+d.nota+"»":""} · ${d.quien||""}`})}}
+  const G=descGuardados();for(const x of out)x.res=G[x.k]||null;
+  return out.sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||Math.abs(b.imp)-Math.abs(a.imp))}
+const descPend=()=>{try{return gbVer()&&GB.ok?descItems().filter(x=>!x.res).length:0}catch(_){return 0}};
+function vDescuadres(){if(!gbVer())return `<div class="empty">Solo dirección.</div>`;gbEscuchar();cajaEscuchar();
+  if(!GB.ok)return `<div class="empty">Cargando…</div>`;
+  const all=descItems(),q=nzC(DQ.q).normalize("NFD").replace(/[̀-ͯ]/g,""),qn=gtNum(DQ.q);
+  let l=all.filter(x=>DQ.f==="todos"||(DQ.f==="pend"?!x.res:!!x.res));
+  if(DQ.tipo)l=l.filter(x=>x.tipo===DQ.tipo);if(DQ.d0)l=l.filter(x=>x.fecha>=DQ.d0);if(DQ.d1)l=l.filter(x=>x.fecha<=DQ.d1);
+  if(q)l=l.filter(x=>(qn!=null&&!isNaN(qn)&&Math.abs(Math.abs(x.imp)-qn)<0.005)||nzC([x.det,x.pista,x.res&&x.res.nombre,x.res&&x.res.nota,x.tipo].join(" ")).normalize("NFD").replace(/[̀-ͯ]/g,"").includes(q));
+  const nP=all.filter(x=>!x.res).length,sumP=r2(all.filter(x=>!x.res).reduce((s,x)=>s+x.imp,0));
+  const fila=x=>`<div class="row" style="flex-wrap:wrap;gap:6px;align-items:flex-start${x.res?";opacity:.7":""}">
+      <span style="min-width:96px"><b>${fmtFecha(x.fecha)}</b><br><span class="note">${x.tipo}</span></span>
+      <span class="grow" style="white-space:normal;flex-basis:260px">${esc(x.det)}${x.pista?`<br><span class="note" style="color:var(--warn)">¿Será ${esc(x.pista)}?</span>`:""}
+        ${x.res?`<br><span class="badge ${x.res.estado==="asignado"?"b-si":"b-off"}">${x.res.estado==="asignado"?"Asignado a "+esc(titulo(x.res.nombre||"")):"Justificado"}</span>${x.res.nota?` <span class="note">«${esc(x.res.nota)}»</span>`:""} <span class="note">· ${esc(x.res.por||"")} ${fmtFecha(String(x.res.t||"").slice(0,10))}</span>`:""}
+        ${DQ.abre===x.k?vDescAsignar(x):""}</span>
+      <b style="min-width:80px;text-align:right;color:var(${x.imp>=0?"--ok":"--bad"})">${x.imp>=0?"+":"−"}${eur(Math.abs(x.imp))}</b>
+      <span style="display:flex;gap:4px;flex-wrap:wrap">${x.res?`<button class="btn small" data-dq="reabrir" data-k="${x.k}" data-d="${esc(x.fecha)}">Reabrir</button>`
+        :`<button class="btn small primary" data-dq="abrir" data-k="${x.k}">Asignar a alumno</button><button class="btn small" data-dq="just" data-k="${x.k}" data-d="${esc(x.fecha)}">Justificado</button>`}</span></div>`;
+  return `<div class="bar"><h2>Descuadres y pagos sin identificar</h2><span class="legend">${nP?`<b style="color:var(--bad)">${nP} pendiente${nP===1?"":"s"}</b> · ${sumP>=0?"+":"−"}${eur(Math.abs(sumP))}`:"Nada pendiente"}</span></div>
+  <p class="note" style="margin-top:0">Aquí llega solo lo que no cuadra: cobros con tarjeta que no están en la caja de Argos (sube la caja de cada día en Gastos), Bizum y transferencias sin alumno, y descuadres de efectivo de la Caja. Cuando una familia diga «yo pagué tal día», búscalo por fecha, importe o tarjeta y asígnalo a su alumno.</p>
+  <div class="bar" style="gap:8px;flex-wrap:wrap">
+    <label class="f" style="flex:0 1 150px">Estado<select id="dq-f"><option value="pend" ${DQ.f==="pend"?"selected":""}>Pendientes</option><option value="res" ${DQ.f==="res"?"selected":""}>Resueltos</option><option value="todos" ${DQ.f==="todos"?"selected":""}>Todos</option></select></label>
+    <label class="f" style="flex:0 1 150px">Tipo<select id="dq-tipo"><option value="">Todos</option>${["Tarjeta","Bizum","Transferencia","Efectivo"].map(t=>`<option ${DQ.tipo===t?"selected":""}>${t}</option>`).join("")}</select></label>
+    <label class="f" style="flex:0 1 150px">Desde<input type="date" id="dq-d0" value="${esc(DQ.d0)}"></label><label class="f" style="flex:0 1 150px">Hasta<input type="date" id="dq-d1" value="${esc(DQ.d1)}"></label>
+    <label class="f" style="flex:1 1 200px">Buscar<input type="search" id="dq-q" value="${esc(DQ.q)}" placeholder="Importe (40), tarjeta (8814), nombre…"></label></div>
+  <div class="panel" style="padding:4px 14px">${l.length?l.map(fila).join(""):`<div class="empty">${all.length?"Nada con estos filtros.":"No hay descuadres. Sube la caja de Argos de cada día en Gastos para que se comparen las tarjetas."}</div>`}</div>`}
+function vDescAsignar(x){const q=nzC(DQ.aq||"");const l=q.length>=2?sortedAlumnos().filter(([,a])=>a.nombre.includes(q)).slice(0,8):[];
+  return `<div style="margin-top:6px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)">
+    <div style="display:flex;gap:6px"><input type="search" id="dq-aq" placeholder="Nombre del alumno" value="${esc(DQ.aq||"")}" style="flex:1"><button class="btn small" data-dq="cerrar">Cancelar</button></div>
+    <input type="text" id="dq-nota" placeholder="Nota (opcional): p. ej. «lo dijo la madre; se le marca el recibo de noviembre»" style="width:100%;margin-top:6px">
+    <div id="dq-ares">${l.map(([id,a])=>`<button class="btn small" style="margin:4px 4px 0 0" data-dq="asignar" data-k="${x.k}" data-d="${esc(x.fecha)}" data-al="${esc(id)}">${esc(titulo(a.nombre))}</button>`).join("")||(q.length>=2?`<span class="note">Ningún alumno con ese nombre.</span>`:"")}</div>
+    <p class="note" style="margin:6px 0 0">Asignar no cambia el recibo en Argos: sirve para saber de quién es. Marca allí el recibo como pagado y vuelve a subir el listado.</p></div>`}
+async function descGuardar(k,dia,v){const mes=String(dia).slice(0,7),ref=S.db.doc("banco/"+mes);
+  try{const sn=await ref.get();if(sn.exists)await ref.update({["desc."+k]:v});else await ref.set({mes,desc:{[k]:v}});return true}catch(e){console.error(e);toast("No se ha podido guardar.");return false}}
+document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.closest("[data-dq]");if(!t||!gbVer())return;e.preventDefault();const act=t.dataset.dq,k=t.dataset.k;
+  if(act==="abrir"){DQ.abre=k;DQ.aq="";render();setTimeout(()=>{const i=$("#dq-aq");if(i)i.focus()},0)}
+  else if(act==="cerrar"){DQ.abre=null;render()}
+  else if(act==="asignar"){const a=S.alumnos.get(t.dataset.al);if(!a)return;const nota=String(($("#dq-nota")||{}).value||"").trim().slice(0,200);
+    if(await descGuardar(k,t.dataset.d,{estado:"asignado",alumno:t.dataset.al,nombre:a.nombre,nota,t:nowISO(),por:quienSoy()})){DQ.abre=null;toast("Asignado a "+titulo(a.nombre));render()}}
+  else if(act==="just"){if(!t.dataset.ok){t.dataset.ok="1";t.textContent="¿Seguro? Pulsa otra vez";setTimeout(()=>{if(t.isConnected){delete t.dataset.ok;t.textContent="Justificado"}},4000);return}
+    if(await descGuardar(k,t.dataset.d,{estado:"justificado",t:nowISO(),por:quienSoy()})){toast("Marcado como justificado");render()}}
+  else if(act==="reabrir"){if(await descGuardar(k,t.dataset.d,null)){toast("Vuelve a pendientes");render()}}});
+document.addEventListener("input",e=>{const t=e.target;if(!t||!gbVer())return;
+  if(t.id==="dq-aq"){DQ.aq=t.value;const x=descItems().find(y=>y.k===DQ.abre),r=$("#dq-ares");if(x&&r){const tmp=document.createElement("div");tmp.innerHTML=vDescAsignar(x);const n=tmp.querySelector("#dq-ares");if(n)r.innerHTML=n.innerHTML}}
+  else if(t.id==="dq-q"){DQ.q=t.value;clearTimeout(DQ.tq);DQ.tq=setTimeout(()=>{render();const i=$("#dq-q");if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},350)}});
+document.addEventListener("change",e=>{const t=e.target;if(!t||!gbVer())return;
+  if(t.id==="dq-f"){DQ.f=t.value;render()}else if(t.id==="dq-tipo"){DQ.tipo=t.value;render()}else if(t.id==="dq-d0"){DQ.d0=t.value;render()}else if(t.id==="dq-d1"){DQ.d1=t.value;render()}});
+
+/* ============================================================================================
+   Horas extra de las profesoras (10/11/2026). Las nóminas de A3 no traen las horas del contrato, así que el horario contratado
+   es el horario de cada profesora en la app (HORARIO_PROFE: el que limita dónde se pueden poner clases).
+   Hora extra = tiempo con clase (normal, cambio, recuperación u hora extra de alumno) fuera de su horario ese día, o en festivo.
+   No cuentan las clases en las que todos los alumnos faltaron. Por cada una: qué alumnos y cuánto se les cobra (hora extra
+   del alumno: su recibo HX o la tarifa de la hora extra; cambios y recuperaciones: 0 €). Coste: lo que cuesta una hora de esa
+   profesora ese mes (coste empresa de su nómina / horas de su horario en el mes; si no hay nómina de ese mes, la última).
+   Desde que se ficha en la app (2027), además: tiempo fichado por encima de su horario.
+   ============================================================================================ */
+const HXP={mes:""};
+/* 10/11/2026 (titular): cada hora extra se le paga a la profesora a 10 €/h */
+const PRECIO_HORA_EXTRA_PROFE=10;
+function costeHoraProfe(p,mes){const ns=NM.docs.filter(d=>d.tipo==="nomina"&&d.profe===p&&d.coste>0).sort((a,b)=>String(b.mes).localeCompare(String(a.mes)));
+  const n=ns.find(d=>d.mes===mes)||ns.find(d=>d.mes<mes)||ns[0];if(!n)return null;
+  const h=diasMes(n.mes).reduce((s,d)=>s+fcPrevisto(p,d),0)/60;return h>0?{v:r2(n.coste/h),mes:n.mes}:null}
+function horasExtraProfe(p,mes){const hoy=todayISO(),ev=[],usados={},fechasSuelta={};
+  for(const f of diasMes(mes)){if(f>hoy)break;const d=diaDe(f),fe=festivoDe(f),tr=fe||!DIAS.includes(d)?[]:(typeof tramosContrato==="function"?tramosContrato:tramosDe)(p,d);
+    /* 11/11/2026 (titular): solo cuenta la sesión si en la asistencia está «Asistió» */
+    const ses=sesionesFecha(p,f).filter(s=>(s.o.t==="normal"||s.o.t==="extra")&&asistDe(s.a,f,s.o.hora||keyDeMin(s.o.ini),p)==="si");if(!ses.length)continue;
+    const bl=[];for(const s of ses){const b=bl.find(b=>s.o.ini<b.fin&&s.o.fin>b.ini);if(b){b.ini=Math.min(b.ini,s.o.ini);b.fin=Math.max(b.fin,s.o.fin);b.s.push(s)}else bl.push({ini:s.o.ini,fin:s.o.fin,s:[s]})}
+    for(const b of bl){const dentro=tr.reduce((x,[a,c])=>x+Math.max(0,Math.min(b.fin,c)-Math.max(b.ini,a)),0),fuera=(b.fin-b.ini)-dentro;if(fuera<=0)continue;
+      const fueraDe=o=>(o.fin-o.ini)-tr.reduce((x,[a,c])=>x+Math.max(0,Math.min(o.fin,c)-Math.max(o.ini,a)),0);
+      const fs=b.s.filter(s=>fueraDe(s.o)>0),f0=Math.min(...fs.map(s=>s.o.ini)),f1=Math.max(...fs.map(s=>s.o.fin));
+      /* ¿tiene recibo esa hora? hora extra del alumno: su recibo de la app (HX), o cobrada en Argos; si no, «sin recibo» */
+      const al=fs.map(s=>{const o=s.o,e=o.mv&&o.mv.origen==="hextra"?o.mv.e:null;let ing=0,txt="",rec="";
+        if(e){const r=(s.a.recibos||[]).find(r=>r&&(r.extra===e.id||(Array.isArray(r.lineas)&&r.lineas.some(x=>x&&x.extra===e.id))));
+          if(r){const ln=Array.isArray(r.lineas)?r.lineas.find(x=>x&&x.extra===e.id):null;ing=ln?+ln.imp||0:+r.importe||0;rec=`recibo ${r.numero||""}${r.estado==="pagado"?" pagado":" pendiente"}`}
+          else if(e.cobro&&e.cobro.no){rec="no se cobra"}
+          else if(e.cobro){ing=tarifaDe(s.a,e)||0;rec=e.cobro.auto?"cobrada en Argos":"marcada cobrada en Argos"}
+          else rec="SIN RECIBO";txt="hora extra"}
+        /* 11/11/2026: alumno de clases sueltas (paga cada clase): su recibo de ese día (o de los 5 siguientes, sin repetir) */
+        /* también alumnos con clase fija que pagan cada hora (recibos «HORA …» de un día concreto, como Antonio Verdugo) */
+        else if(s.a.sueltas||o.t==="normal"&&(s.a.recibos||[]).some(r=>r&&/\bHORA\b/i.test(String(r.concepto||"")+" "+String(r.curso||""))&&String(r.emitido||"").slice(0,7)===f.slice(0,7))){const fr=r=>String(r.emitido||r.fecha||"").slice(0,10),u=usados[s.id]=usados[s.id]||new Set();
+          /* el recibo de su mismo día; si no hay, uno de los 5 días siguientes que no sea de otro día con clase */
+          const conClase=fechasSuelta[s.id]=fechasSuelta[s.id]||new Set(diasMes(mes).filter(d=>d<=hoy&&sesionesFecha(p,d).some(x=>x.id===s.id)));
+          const libres=(s.a.recibos||[]).filter(r=>r&&!u.has(r.numero||r.id||fr(r))&&(s.a.sueltas||/\bHORA\b/i.test(String(r.concepto||"")+" "+String(r.curso||""))));
+          const r=libres.find(r=>fr(r)===f)||libres.filter(r=>fr(r)>f&&fr(r)<=sumaDias(f,5)&&!conClase.has(fr(r))).sort((x,y)=>fr(x).localeCompare(fr(y)))[0];
+          txt=s.a.sueltas?"clase suelta":"paga por hora";if(r){u.add(r.numero||r.id||fr(r));ing=+r.importe||0;rec=`recibo ${r.numero||fmtFecha(fr(r))}${r.estado==="pagado"?" pagado":" pendiente"}`}else rec="SIN RECIBO"}
+        else{txt=o.t==="extra"?(o.mv&&o.mv.recup?"recuperación":"cambio de clase"):"su clase";rec=o.t==="extra"?"no se cobra":"en su mensualidad"}
+        return {id:s.id,n:s.a.nombre,ing:r2(ing),txt,rec,sin:rec==="SIN RECIBO"}});
+      ev.push({f,ini:f0,fin:f1,fuera,fest:!!fe,al,ing:r2(al.reduce((x,y)=>x+y.ing,0))})}}
+  const min=ev.reduce((s,x)=>s+x.fuera,0),ing=r2(ev.reduce((s,x)=>s+x.ing,0)),ch={v:PRECIO_HORA_EXTRA_PROFE},coste=r2(ch.v*min/60),sinRec=ev.reduce((s,x)=>s+x.al.filter(a=>a.sin).length,0);
+  let fich=null;if(typeof fichActivo==="function"&&fichActivo()&&FC.ok){let m=0;for(const d of diasMes(mes)){if(d>hoy||d<FICH_DESDE)continue;m+=Math.max(0,fcTramos(p,d).min-fcPrevisto(p,d))}fich=m}
+  return {p,ev,min,ing,ch,coste,ben:r2(ing-coste),fich,sinRec}}
+const hmTxt=m=>`${Math.floor(m/60)} h${m%60?" "+String(m%60).padStart(2,"0")+" min":""}`;
+function vHorasExtraProfes(){if(S.role!=="dir"||esMos())return "";nmEscuchar();if(!HXP.mes)HXP.mes=todayISO().slice(0,7);
+  const ms=[];for(let d=todayISO().slice(0,7)+"-01",i=0;i<12;i++,d=sumaDias(d,-1).slice(0,7)+"-01")ms.push(d.slice(0,7));
+  const L=FICH_PROFES().map(p=>horasExtraProfe(p,HXP.mes)),tot={min:L.reduce((s,x)=>s+x.min,0),ing:r2(L.reduce((s,x)=>s+x.ing,0)),coste:L.every(x=>x.coste!=null)?r2(L.reduce((s,x)=>s+x.coste,0)):null};
+  const fila=x=>`<details style="border-top:1px solid var(--line);padding:6px 0"><summary style="display:flex;gap:10px;flex-wrap:wrap;align-items:baseline"><b style="min-width:70px">${esc(x.p)}</b>
+      <span>${x.min?`<b>${hmTxt(x.min)}</b> fuera de su horario`:`<span class="note">Sin horas fuera de su horario</span>`}</span>
+      ${x.min?`<span class="note">· cobrado ${eur(x.ing)}${x.coste!=null?` · coste ${eur(x.coste)}`:""}</span>${x.ben!=null?` <b style="color:var(${x.ben>=0?"--ok":"--bad"})">${x.ben>=0?"+":"−"}${eur(Math.abs(x.ben))}</b>`:""}`:""}
+      ${x.sinRec?`<span class="badge b-no">${x.sinRec} sin recibo</span>`:""}${x.fich!=null?`<span class="note">· fichado de más: ${hmTxt(x.fich)}</span>`:""}</summary>
+    ${x.ev.map(e=>`<div class="note" style="margin-left:16px">${fmtFecha(e.f)} ${diaDe(e.f).slice(0,3)} · ${hm(e.ini)}–${hm(e.fin)} · <b>${hmTxt(e.fuera)}</b> fuera${e.fest?" (festivo)":""} · ${e.al.map(a=>`<a href="#" data-act="ir" data-id="${esc(a.id)}">${esc(titulo(a.n))}</a> (${esc(a.txt)} · <span style="${a.sin?"color:var(--bad);font-weight:600":""}">${esc(a.rec)}</span>${a.ing?": "+eur(a.ing):""})`).join(", ")}</div>`).join("")}</details>`;
+  return `<div class="panel" style="padding:12px 14px;margin-bottom:12px"><div class="bar" style="margin:0;gap:8px;flex-wrap:wrap"><b style="font-size:16px">Horas extra de las profesoras</b>
+      <select id="hxp-mes">${ms.map(m=>`<option value="${m}" ${m===HXP.mes?"selected":""}>${MESES[+m.slice(5,7)-1]} ${m.slice(0,4)}</option>`).join("")}</select>
+      <span class="legend">${tot.min?`${hmTxt(tot.min)} · cobrado ${eur(tot.ing)}${tot.coste!=null?` · coste ${eur(tot.coste)} · <b style="color:var(${tot.ing-tot.coste>=0?"--ok":"--bad"})">${tot.ing-tot.coste>=0?"+":"−"}${eur(Math.abs(r2(tot.ing-tot.coste)))}</b>`:""}`:"Nada fuera de horario este mes"}</span></div>
+    <p class="note" style="margin:4px 0 6px">Tiempo con clase fuera del horario de contrato de cada profesora (Ainea y Laura hasta las 20:00; las demás, su horario de la app). Solo cuentan las sesiones con «Asistió». Lo cobrado es el recibo de la hora extra del alumno (si no lo tiene, sale «SIN RECIBO»); su clase de siempre va en su mensualidad y los cambios y recuperaciones no se cobran. Coste: ${eur(PRECIO_HORA_EXTRA_PROFE)} por hora extra de la profesora.</p>
+    ${L.map(fila).join("")}</div>`}
+document.addEventListener("change",e=>{const t=e.target;if(t&&t.id==="hxp-mes"){HXP.mes=t.value;render()}});
+
+/* ============================================================================================
+   Facturación de talleres y servicios a entidades (11/11/2026, titular). Ayuntamiento, empresas públicas…: factura completa
+   (con IVA o exenta, y retención si la hay), los costes que ocasiona cada taller (horas de profesora, parte de una nómina,
+   materiales u otros gastos del banco, otros) y el margen. La asesoría ve las facturas emitidas en su pestaña (para el IVA
+   trimestral) y puede descargar el libro de facturas emitidas en Excel.
+   facturasTaller/<id> = {estado:"borrador"|"emitida"|"anulada", serie, anio, n, numero, fecha, taller, cliente:{nombre,cif,dir,cp,pob,email},
+     lineas:[{d,c,p}], iva, exento, irpf, base, cuotaIva, ret, total, pago:{forma,iban,venc}, notas, emisor:{…}, costes:[…],
+     cobro:{mes,id,fecha,imp}, t, por}
+   config/facturacion = datos del emisor (nombre, nif, dir, cp, pob, prov, iban, email, tel, serie).
+   La numeración es correlativa por serie y año, y se asigna al emitir (los borradores no tienen número).
+   ============================================================================================ */
+const FA={docs:[],ok:false,err:"",sub:null,cfg:null,ed:null,anio:"",ver:null};
+const FA_EMISOR={nombre:"Estefanía Pérez Busati",comercial:"Althea Formación",nif:"48966357R",dir:"C/ Iro, 5",cp:"11130",pob:"Chiclana de la Frontera",prov:"Cádiz",iban:"",email:"",tel:"",serie:"T"};
+const FA_EXENTA="Operación exenta de IVA (art. 20.Uno.9º de la Ley 37/1992: enseñanza)";
+function faEscuchar(){if(FA.sub||!S.db)return;
+  FA.sub=S.db.collection("facturasTaller").onSnapshot(s=>{FA.docs=s.docs.map(d=>({id:d.id,...d.data()}));FA.ok=true;FA.err="";if(S.view==="facturacion"&&!faEscribiendo())render();else if(S.view==="gastos"&&GB.rent)gbRefrescar();if(S.role==="ase")vAsePintar()},
+    e=>{FA.ok=true;FA.err="No se pueden leer las facturas: faltan permisos (publica las reglas nuevas en Firebase).";if(S.view==="facturacion")render()});
+  if(S.role==="dir")S.db.doc("config/facturacion").onSnapshot(d=>{FA.cfg=d.exists?d.data():null},()=>{})}
+const faEscribiendo=()=>{const ae=document.activeElement;return ae&&ae.closest&&ae.closest("#fa-ed")&&ae.matches("input,textarea,select")};
+const faEmisor=()=>({...FA_EMISOR,...(FA.cfg||{})});
+function faTotales(f){const base=r2((f.lineas||[]).reduce((s,l)=>s+(+l.c||0)*(+l.p||0),0)),iva=+f.iva||0,irpf=+f.irpf||0,cuotaIva=r2(base*iva/100),ret=r2(base*irpf/100);
+  return {base,cuotaIva,ret,total:r2(base+cuotaIva-ret)}}
+function faCoste(c){if(c.tipo==="horas")return r2((+c.horas||0)*(+c.precio||0));
+  if(c.tipo==="nomina"){const n=NM.docs.find(d=>d.tipo==="nomina"&&d.profe===c.profe&&d.mes===c.mes);return n?r2((+n.coste||0)*(+c.pct||0)/100):0}
+  return r2(+c.imp||0)}
+const faCostes=f=>r2((f.costes||[]).reduce((s,c)=>s+faCoste(c),0));
+const faNumero=(serie,anio,n)=>`${serie}${anio}/${String(n).padStart(4,"0")}`;
+function faSiguiente(serie,anio){return FA.docs.filter(d=>d.estado!=="borrador"&&d.serie===serie&&String(d.anio)===String(anio)).reduce((m,d)=>Math.max(m,+d.n||0),0)+1}
+function faNueva(){const E=faEmisor();return {estado:"borrador",serie:E.serie||"T",fecha:todayISO(),taller:"",cliente:{nombre:"",cif:"",dir:"",cp:"",pob:"",email:""},lineas:[{d:"",c:1,p:""}],iva:21,exento:FA_EXENTA,irpf:0,pago:{forma:"Transferencia bancaria",iban:E.iban||"",venc:sumaDias(todayISO(),30)},notas:"",costes:[]}}
+async function faGuardar(f,extra){const T=faTotales(f),d={...f,...T,...(extra||{}),t:nowISO(),por:quienSoy()};delete d.id;
+  try{if(!f.id)f.id="f"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);await S.db.doc("facturasTaller/"+f.id).set(d);return true}
+  catch(e){console.error(e);toast("No se ha podido guardar: faltan permisos (publica las reglas nuevas en Firebase).");return false}}
+/* página imprimible de la factura (dirección y asesoría) */
+function faHtml(f){const E=f.emisor||faEmisor(),T=faTotales(f),C=f.cliente||{},e=x=>esc(x||"");
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Factura ${e(f.numero||"borrador")}</title><style>
+  body{font:13px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#222;margin:32px auto;max-width:760px;padding:0 20px}
+  h1{font-size:22px;margin:0;color:#a3262c;letter-spacing:.5px}.top{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
+  .box{border:1px solid #ccc;border-radius:6px;padding:10px 12px;flex:1}.lbl{font-size:11px;color:#777;text-transform:uppercase;letter-spacing:.4px}
+  table{width:100%;border-collapse:collapse;margin-top:18px}th,td{padding:7px 8px;border-bottom:1px solid #e3e3e3;text-align:left}th{background:#f5f2f2;font-size:12px}
+  .r{text-align:right}.tot td{border:0;padding:4px 8px}.tot .g td{font-weight:700;font-size:15px;border-top:2px solid #333}
+  .nota{margin-top:18px;font-size:12px;color:#444}.bor{color:#a3262c;font-weight:700;border:2px solid #a3262c;display:inline-block;padding:2px 8px;border-radius:4px}
+  @media print{body{margin:0}.noprint{display:none}}</style></head><body>
+  <div class="noprint" style="text-align:right;margin-bottom:10px"><button onclick="print()">Imprimir o guardar en PDF</button></div>
+  <div class="top"><div><h1>${e(E.comercial||E.nombre)}</h1><div>${e(E.nombre)} · NIF ${e(E.nif)}</div><div>${e(E.dir)} · ${e(E.cp)} ${e(E.pob)} (${e(E.prov)})</div>${E.tel||E.email?`<div>${e([E.tel,E.email].filter(Boolean).join(" · "))}</div>`:""}</div>
+    <div style="text-align:right"><div class="lbl">Factura</div><div style="font-size:18px;font-weight:700">${f.numero?e(f.numero):`<span class="bor">BORRADOR</span>`}</div><div>Fecha: ${fmtFecha(f.fecha)}</div>${f.estado==="anulada"?`<div class="bor">ANULADA</div>`:""}</div></div>
+  <div class="top" style="margin-top:18px"><div class="box"><div class="lbl">Cliente</div><b>${e(C.nombre)}</b><div>CIF/NIF ${e(C.cif)}</div><div>${e(C.dir)}</div><div>${e(C.cp)} ${e(C.pob)}</div></div>
+    ${f.taller?`<div class="box"><div class="lbl">Taller / servicio</div>${e(f.taller)}</div>`:""}</div>
+  <table><thead><tr><th>Descripción</th><th class="r">Cantidad</th><th class="r">Precio</th><th class="r">Importe</th></tr></thead><tbody>
+  ${(f.lineas||[]).filter(l=>l.d||+l.p).map(l=>`<tr><td>${e(l.d)}</td><td class="r">${String(+l.c||0).replace(".",",")}</td><td class="r">${eur(+l.p||0)}</td><td class="r">${eur(r2((+l.c||0)*(+l.p||0)))}</td></tr>`).join("")}</tbody></table>
+  <table class="tot" style="width:auto;margin-left:auto"><tr><td>Base imponible</td><td class="r">${eur(T.base)}</td></tr>
+    <tr><td>IVA ${+f.iva||0} %</td><td class="r">${eur(T.cuotaIva)}</td></tr>${+f.irpf?`<tr><td>Retención IRPF ${+f.irpf} %</td><td class="r">−${eur(T.ret)}</td></tr>`:""}
+    <tr class="g"><td>Total</td><td class="r">${eur(T.total)}</td></tr></table>
+  ${+f.iva?"":`<div class="nota">${e(f.exento||FA_EXENTA)}</div>`}
+  <div class="nota"><b>Forma de pago:</b> ${e(f.pago&&f.pago.forma)}${f.pago&&f.pago.iban?` · IBAN ${e(f.pago.iban)}`:""}${f.pago&&f.pago.venc?` · Vencimiento ${fmtFecha(f.pago.venc)}`:""}</div>
+  ${f.notas?`<div class="nota">${e(f.notas)}</div>`:""}</body></html>`}
+function faAbrir(f){const w=window.open("","_blank");if(!w){toast("El navegador ha bloqueado la ventana: permite las ventanas emergentes");return}w.document.open();w.document.write(faHtml(f));w.document.close()}
+/* 14/11/2026: se llamaba vFacturacion y tapaba la «Facturación semanal» de Tarifas (misma función): renombrada */
+function vFactTalleres(){if(!gbVer())return `<div class="empty">Solo dirección.</div>`;faEscuchar();nmEscuchar();gbEscuchar();
+  if(!FA.ok)return `<div class="empty">Cargando…</div>`;if(FA.err)return `<div class="empty">${esc(FA.err)}</div>`;
+  if(FA.ed)return vFacturaEd(FA.ed);
+  const anios=[...new Set([todayISO().slice(0,4),...FA.docs.map(d=>String(d.fecha||"").slice(0,4))])].filter(Boolean).sort().reverse();if(!FA.anio)FA.anio=anios[0];
+  const l=FA.docs.filter(d=>String(d.fecha||"").startsWith(FA.anio)).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||(+b.n||0)-(+a.n||0));
+  const em=l.filter(d=>d.estado==="emitida"),tb=r2(em.reduce((s,d)=>s+(+d.base||0),0)),tiva=r2(em.reduce((s,d)=>s+(+d.cuotaIva||0),0)),tcos=r2(em.reduce((s,d)=>s+faCostes(d),0));
+  const E=faEmisor();
+  return `<div class="bar"><h2>Facturación de talleres</h2><span class="legend"><button class="btn" data-fa="semanal" title="Lo facturado en Argos frente a lo que ha entrado en el banco, semana a semana">Facturación semanal (Argos y banco)</button><button class="btn primary" data-fa="nueva">Nueva factura</button></span></div>
+  <p class="note" style="margin-top:0">Facturas a ayuntamientos, empresas públicas u otras entidades (no las de los alumnos, que siguen en Argos). A cada factura se le pueden asignar sus costes (horas de profesora, parte de una nómina, materiales…) para ver el margen. La asesoría ve las emitidas en su pestaña, con el IVA de cada trimestre.</p>
+  <div class="bar" style="gap:8px;flex-wrap:wrap"><label class="f" style="flex:0 1 120px">Año<select id="fa-anio">${anios.map(a=>`<option ${a===FA.anio?"selected":""}>${a}</option>`).join("")}</select></label>
+    <span class="legend">${em.length} emitida${em.length===1?"":"s"} · base ${eur(tb)} · IVA ${eur(tiva)}${tcos?` · costes ${eur(tcos)} · margen <b style="color:var(${tb-tcos>=0?"--ok":"--bad"})">${eurS(r2(tb-tcos))}</b>`:""}</span></div>
+  <div class="panel" style="padding:4px 14px">${l.length?l.map(d=>{const c=faCostes(d),cob=d.cobro&&d.cobro.id;return `<div class="row" style="flex-wrap:wrap;gap:8px;align-items:center">
+      <span style="min-width:120px"><b>${d.numero?esc(d.numero):`<span class="badge b-pend">Borrador</span>`}</b><br><span class="note">${fmtFecha(d.fecha)}</span></span>
+      <span class="grow" style="white-space:normal">${esc(d.cliente&&d.cliente.nombre||"(sin cliente)")}${d.taller?` <span class="note">· ${esc(d.taller)}</span>`:""}<br>
+        <span class="note">base ${eur(+d.base||0)} · IVA ${+d.iva||0} % ${eur(+d.cuotaIva||0)}${+d.irpf?` · ret. ${eur(+d.ret||0)}`:""}${c?` · costes ${eur(c)} · margen <b style="color:var(${(+d.base||0)-c>=0?"--ok":"--bad"})">${eurS(r2((+d.base||0)-c))}</b>`:""}</span></span>
+      <b style="min-width:80px;text-align:right">${eur(+d.total||0)}</b>
+      ${d.estado==="anulada"?`<span class="badge b-no">Anulada</span>`:d.estado==="emitida"?`<span class="badge ${cob?"b-si":"b-pend"}">${cob?"Cobrada":"Pendiente de cobro"}</span>`:""}
+      <span style="display:flex;gap:4px"><button class="btn small" data-fa="abrir" data-id="${esc(d.id)}">${d.estado==="borrador"?"Seguir":"Abrir"}</button><button class="btn small" data-fa="ver" data-id="${esc(d.id)}">Ver / PDF</button></span></div>`}).join(""):`<div class="empty">No hay facturas en ${esc(FA.anio)}.</div>`}</div>
+  <details class="panel" style="padding:10px 14px;margin-top:10px"><summary><b>Datos del emisor</b> <span class="note">· salen en todas las facturas</span></summary>
+    <div class="r2" style="margin-top:8px">${[["comercial","Nombre comercial"],["nombre","Titular"],["nif","NIF"],["dir","Dirección"],["cp","C.P."],["pob","Población"],["prov","Provincia"],["iban","IBAN para cobrar"],["tel","Teléfono"],["email","Correo"],["serie","Serie de las facturas"]].map(([k,t])=>`<label class="f">${t}<input type="text" data-faem="${k}" value="${esc(E[k]||"")}"></label>`).join("")}</div>
+    <button class="btn small primary" data-fa="emisor" style="margin-top:8px">Guardar datos del emisor</button>
+    <p class="note" style="margin:6px 0 0">La serie («${esc(E.serie||"T")}») se usa para numerar: ${esc(faNumero(E.serie||"T",todayISO().slice(0,4),1))}, …/0002… Cada año empieza en 1. Que sea distinta de las de Argos.</p></details>`}
+function vFacturaEd(f){const T=faTotales(f),bloq=f.estado!=="borrador",dis=bloq?"disabled":"",c=f.cliente||{},cos=faCostes(f);
+  const clientes=[...new Map(FA.docs.filter(d=>d.cliente&&d.cliente.nombre).map(d=>[d.cliente.nombre,d.cliente])).values()];
+  const movsG=movsTodos().filter(m=>m.importe<0&&String(m.fv||"")>=sumaDias(todayISO(),-200)).sort((a,b)=>String(b.fv).localeCompare(String(a.fv)));
+  const movsI=movsTodos().filter(m=>m.importe>0&&["transf","otrosing","talleres","pend"].includes(m.cat||"pend")&&String(m.fv||"")>=String(f.fecha||"")).sort((a,b)=>Math.abs(a.importe-T.total)-Math.abs(b.importe-T.total));
+  const nomMeses=[...new Set(NM.docs.filter(d=>d.tipo==="nomina").map(d=>d.mes))].sort().reverse();
+  const fc=(i,x)=>{const sel=(k,opts,v)=>`<select data-fac="${i}|${k}">${opts.map(o=>`<option value="${esc(o[0])}" ${String(o[0])===String(v)?"selected":""}>${esc(o[1])}</option>`).join("")}</select>`;
+    let det="";if(x.tipo==="horas")det=`${sel("profe",FICH_PROFES().concat([EV_PROFE]).map(p=>[p,p]),x.profe)} <input type="text" inputmode="decimal" data-fac="${i}|horas" value="${esc(x.horas??"")}" placeholder="horas" style="width:70px"> h × <input type="text" inputmode="decimal" data-fac="${i}|precio" value="${esc(x.precio??10)}" style="width:70px"> €/h`;
+    else if(x.tipo==="nomina")det=`${sel("profe",FICH_PROFES().map(p=>[p,p]),x.profe)} ${sel("mes",nomMeses.map(m=>[m,mesTxt(m)]),x.mes)} <input type="text" inputmode="decimal" data-fac="${i}|pct" value="${esc(x.pct??"")}" placeholder="%" style="width:60px"> % de su nómina`;
+    else if(x.tipo==="gasto")det=`${sel("mov",[["","Elige un gasto del banco…"],...movsG.map(m=>[m.mes+"|"+m.id,`${fmtFecha(m.fv)} · ${String(m.concepto).slice(0,50)} · ${eur(-m.importe)}`])],x.mov?x.mov.mes+"|"+x.mov.id:"")} <input type="text" inputmode="decimal" data-fac="${i}|imp" value="${esc(x.imp??"")}" placeholder="€ que le tocan" style="width:110px"> €`;
+    else det=`<input type="text" data-fac="${i}|d" value="${esc(x.d||"")}" placeholder="Qué es" style="width:220px"> <input type="text" inputmode="decimal" data-fac="${i}|imp" value="${esc(x.imp??"")}" placeholder="€" style="width:90px"> €`;
+    return `<div class="row" style="flex-wrap:wrap;gap:6px;align-items:center"><span class="badge b-off">${{horas:"Horas de profesora",nomina:"Parte de una nómina",gasto:"Gasto del banco",otro:"Otro coste"}[x.tipo]}</span>${det}<b style="margin-left:auto">${eur(faCoste(x))}</b><button class="btn small" data-fa="cosquitar" data-i="${i}" aria-label="Quitar">×</button></div>`};
+  return `<div id="fa-ed"><div class="bar"><h2>${f.numero?`Factura ${esc(f.numero)}`:"Nueva factura (borrador)"}</h2><span class="legend"><button class="btn" data-fa="volver">← Volver</button></span></div>
+  ${bloq?`<p class="note" style="margin-top:0">${f.estado==="anulada"?"Factura anulada.":"Emitida: los datos de la factura ya no se pueden cambiar (si hay un error, se anula y se hace otra). Los costes y el cobro sí."}</p>`:""}
+  <div class="panel" style="padding:12px 14px"><div class="r2">
+    <label class="f">Taller o servicio (para ti)<input type="text" data-fa1="taller" value="${esc(f.taller||"")}" ${dis} placeholder="Ej.: Taller de técnicas de estudio · Ayto. Chiclana"></label>
+    <label class="f">Fecha de la factura<input type="date" data-fa1="fecha" value="${esc(f.fecha||"")}" ${dis}></label></div>
+    <b style="display:block;margin-top:10px">Cliente</b><div class="r2">
+    <label class="f">Nombre o razón social<input type="text" data-fac1="nombre" list="fa-cl" value="${esc(c.nombre||"")}" ${dis}><datalist id="fa-cl">${clientes.map(x=>`<option value="${esc(x.nombre)}">`).join("")}</datalist></label>
+    <label class="f">CIF/NIF<input type="text" data-fac1="cif" value="${esc(c.cif||"")}" ${dis}></label>
+    <label class="f">Dirección<input type="text" data-fac1="dir" value="${esc(c.dir||"")}" ${dis}></label>
+    <label class="f">C.P. y población<span style="display:flex;gap:6px"><input type="text" data-fac1="cp" value="${esc(c.cp||"")}" ${dis} style="width:80px"><input type="text" data-fac1="pob" value="${esc(c.pob||"")}" ${dis}></span></label></div>
+    <b style="display:block;margin-top:10px">Conceptos</b>
+    ${(f.lineas||[]).map((l,i)=>`<div class="row" style="gap:6px;flex-wrap:wrap;align-items:center"><input type="text" data-fal="${i}|d" value="${esc(l.d||"")}" placeholder="Descripción" style="flex:3 1 260px" ${dis}><input type="text" inputmode="decimal" data-fal="${i}|c" value="${esc(l.c??1)}" style="width:70px" title="Cantidad" ${dis}><span class="note">×</span><input type="text" inputmode="decimal" data-fal="${i}|p" value="${esc(l.p??"")}" placeholder="Precio €" style="width:100px" ${dis}><b style="min-width:80px;text-align:right">${eur(r2((+l.c||0)*(+l.p||0)))}</b>${bloq?"":`<button class="btn small" data-fa="linquitar" data-i="${i}" aria-label="Quitar">×</button>`}</div>`).join("")}
+    ${bloq?"":`<button class="btn small" data-fa="linadd" style="margin-top:6px">+ Añadir concepto</button>`}
+    <div class="r2" style="margin-top:10px"><label class="f">IVA<select data-fa1="iva" ${dis}>${[21,10,4,0].map(v=>`<option value="${v}" ${+f.iva===v?"selected":""}>${v?v+" %":"Exenta (0 %)"}</option>`).join("")}</select></label>
+      <label class="f">Retención IRPF<select data-fa1="irpf" ${dis}>${[0,7,15,19].map(v=>`<option value="${v}" ${+f.irpf===v?"selected":""}>${v?v+" %":"Sin retención"}</option>`).join("")}</select></label></div>
+    ${+f.iva?"":`<label class="f">Motivo de la exención (sale en la factura)<input type="text" data-fa1="exento" value="${esc(f.exento||FA_EXENTA)}" ${dis}></label>`}
+    <div class="r2"><label class="f">Forma de pago<input type="text" data-fap="forma" value="${esc(f.pago&&f.pago.forma||"")}" ${dis}></label><label class="f">IBAN<input type="text" data-fap="iban" value="${esc(f.pago&&f.pago.iban||"")}" ${dis}></label><label class="f">Vencimiento<input type="date" data-fap="venc" value="${esc(f.pago&&f.pago.venc||"")}" ${dis}></label></div>
+    <label class="f">Notas (salen en la factura)<input type="text" data-fa1="notas" value="${esc(f.notas||"")}" ${dis}></label>
+    <div style="text-align:right;margin-top:8px">Base <b>${eur(T.base)}</b> · IVA ${eur(T.cuotaIva)}${+f.irpf?` · retención −${eur(T.ret)}`:""} · <b style="font-size:16px">Total ${eur(T.total)}</b></div>
+    <div class="row" style="gap:6px;justify-content:flex-end;border:0">${bloq?"":`<button class="btn" data-fa="guardar">Guardar borrador</button><button class="btn primary" data-fa="emitir">Emitir factura</button>`}<button class="btn" data-fa="vered">Ver / PDF</button>${f.estado==="emitida"?`<button class="btn small" data-fa="anular" style="color:var(--bad)">Anular</button>`:""}${f.estado==="borrador"&&f.id?`<button class="btn small" data-fa="borrar" style="color:var(--bad)">Borrar borrador</button>`:""}</div></div>
+  <div class="panel" style="padding:12px 14px;margin-top:10px"><b>Costes de este taller</b> <span class="note">· no salen en la factura; sirven para ver el margen</span>
+    ${(f.costes||[]).map((x,i)=>fc(i,x)).join("")||`<p class="note">Sin costes asignados todavía.</p>`}
+    <div class="row" style="gap:6px;flex-wrap:wrap;border:0"><button class="btn small" data-fa="cosadd" data-t="horas">+ Horas de profesora</button><button class="btn small" data-fa="cosadd" data-t="nomina">+ Parte de una nómina</button><button class="btn small" data-fa="cosadd" data-t="gasto">+ Material u otro gasto del banco</button><button class="btn small" data-fa="cosadd" data-t="otro">+ Otro coste</button></div>
+    <div style="text-align:right">Costes <b>${eur(cos)}</b> · Margen (base − costes) <b style="font-size:16px;color:var(${T.base-cos>=0?"--ok":"--bad"})">${eurS(r2(T.base-cos))}</b></div>
+    ${(f.costes||[]).length?`<div style="text-align:right"><button class="btn small primary" data-fa="guardarcos">Guardar costes</button></div>`:""}</div>
+  ${f.estado==="emitida"?`<div class="panel" style="padding:12px 14px;margin-top:10px"><b>Cobro</b>
+    ${f.cobro&&f.cobro.id?`<p>Cobrada: ${fmtFecha(f.cobro.fecha)} · ${eur(+f.cobro.imp||0)} <button class="btn small" data-fa="cobroquitar">Quitar</button></p>`
+      :`<label class="f">Ingreso del banco<select id="fa-cobro"><option value="">Elige el ingreso…</option>${movsI.slice(0,40).map(m=>`<option value="${esc(m.mes+"|"+m.id)}">${fmtFecha(m.fv)} · ${esc(String(m.concepto).slice(0,60))} · ${eur(m.importe)}${Math.abs(m.importe-T.total)<0.01?" ← mismo importe":""}</option>`).join("")}</select></label><button class="btn small primary" data-fa="cobrar" style="margin-top:6px">Marcar cobrada</button>`}</div>`:""}</div>`}
+const faSincronizar=()=>{const f=FA.ed;if(!f)return;document.querySelectorAll("#fa-ed [data-fa1]").forEach(i=>{f[i.dataset.fa1]=i.value});
+  document.querySelectorAll("#fa-ed [data-fac1]").forEach(i=>{f.cliente[i.dataset.fac1]=i.value});
+  document.querySelectorAll("#fa-ed [data-fap]").forEach(i=>{f.pago=f.pago||{};f.pago[i.dataset.fap]=i.value});
+  document.querySelectorAll("#fa-ed [data-fal]").forEach(i=>{const [n,k]=i.dataset.fal.split("|");const l=f.lineas[+n];if(l)l[k]=k==="d"?i.value:(gtNum(i.value)??i.value)});
+  document.querySelectorAll("#fa-ed [data-fac]").forEach(i=>{const [n,k]=i.dataset.fac.split("|");const x=f.costes[+n];if(!x)return;
+    if(k==="mov"){const [m,id]=i.value.split("|");const mv=movsTodos().find(y=>y.mes===m&&y.id===id);x.mov=mv?{mes:m,id,concepto:String(mv.concepto).slice(0,80),fv:mv.fv,importe:mv.importe}:null;if(mv&&(x.imp===""||x.imp==null))x.imp=r2(-mv.importe)}
+    else x[k]=["profe","mes","d"].includes(k)?i.value:(gtNum(i.value)??i.value)});
+  f.iva=+f.iva||0;f.irpf=+f.irpf||0};
+document.addEventListener("change",e=>{const t=e.target;if(!t||!gbVer())return;
+  if(t.id==="fa-anio"){FA.anio=t.value;render()}
+  else if(t.closest&&t.closest("#fa-ed")&&(t.matches("select")||t.dataset.fal||t.dataset.fac)){faSincronizar();render()}});
+document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.closest("[data-fa]");if(!t||!gbVer())return;e.preventDefault();const act=t.dataset.fa;
+  if(FA.ed&&act!=="volver")faSincronizar();const f=FA.ed;
+  if(act==="semanal"){GT.fac=true;const t=document.getElementById("t-tarifas");if(t)t.click();scrollTo(0,0);return}
+  if(act==="nueva"){FA.ed=faNueva();render();scrollTo(0,0)}
+  else if(act==="abrir"){const d=FA.docs.find(x=>x.id===t.dataset.id);if(d){FA.ed=JSON.parse(JSON.stringify(d));render();scrollTo(0,0)}}
+  else if(act==="ver"){const d=FA.docs.find(x=>x.id===t.dataset.id);if(d)faAbrir(d)}
+  else if(act==="vered")faAbrir(f);
+  else if(act==="volver"){FA.ed=null;render()}
+  else if(act==="linadd"){f.lineas.push({d:"",c:1,p:""});render()}
+  else if(act==="linquitar"){f.lineas.splice(+t.dataset.i,1);if(!f.lineas.length)f.lineas.push({d:"",c:1,p:""});render()}
+  else if(act==="cosadd"){const tp=t.dataset.t;f.costes=f.costes||[];f.costes.push(tp==="horas"?{tipo:tp,profe:FICH_PROFES()[0],horas:"",precio:PRECIO_HORA_EXTRA_PROFE}:tp==="nomina"?{tipo:tp,profe:FICH_PROFES()[0],mes:(NM.docs.filter(d=>d.tipo==="nomina").map(d=>d.mes).sort().pop())||"",pct:""}:{tipo:tp,imp:""});render()}
+  else if(act==="cosquitar"){f.costes.splice(+t.dataset.i,1);render()}
+  else if(act==="guardar"||act==="guardarcos"){if(await faGuardar(f)){toast("Guardado");render()}}
+  else if(act==="emitir"){const T=faTotales(f);if(!f.cliente.nombre||!f.cliente.cif){toast("Falta el nombre y el CIF del cliente");return}if(!(T.base>0)){toast("Pon al menos un concepto con precio");return}if(!f.fecha){toast("Falta la fecha");return}
+    if(!t.dataset.ok){t.dataset.ok="1";t.textContent="¿Emitir? Ya no se podrá cambiar. Pulsa otra vez";setTimeout(()=>{if(t.isConnected){delete t.dataset.ok;t.textContent="Emitir factura"}},5000);return}
+    const E=faEmisor(),serie=E.serie||"T",anio=String(f.fecha).slice(0,4),n=faSiguiente(serie,anio);
+    /* la fecha no puede ser anterior a la de la última factura emitida de la serie */
+    const ult=FA.docs.filter(d=>d.estado!=="borrador"&&d.serie===serie&&String(d.anio)===anio).sort((a,b)=>(+b.n||0)-(+a.n||0))[0];
+    if(ult&&String(f.fecha)<String(ult.fecha)){toast(`La fecha no puede ser anterior a la de la ${ult.numero} (${fmtFecha(ult.fecha)})`);delete t.dataset.ok;t.textContent="Emitir factura";return}
+    if(await faGuardar(f,{estado:"emitida",serie,anio,n,numero:faNumero(serie,anio,n),emisor:E,emitida:nowISO()})){FA.ed=null;toast("Factura "+faNumero(serie,anio,n)+" emitida");render()}}
+  else if(act==="anular"){if(!t.dataset.ok){t.dataset.ok="1";t.textContent="¿Anular? Pulsa otra vez";setTimeout(()=>{if(t.isConnected){delete t.dataset.ok;t.textContent="Anular"}},4000);return}
+    if(await faGuardar(f,{estado:"anulada",anulada:nowISO()})){FA.ed=null;toast("Factura anulada: el número se conserva");render()}}
+  else if(act==="borrar"){if(!t.dataset.ok){t.dataset.ok="1";t.textContent="¿Borrar? Pulsa otra vez";return}try{await S.db.doc("facturasTaller/"+f.id).delete();FA.ed=null;toast("Borrador borrado");render()}catch(_){toast("No se ha podido borrar")}}
+  else if(act==="cobrar"){const v=($("#fa-cobro")||{}).value;if(!v){toast("Elige el ingreso");return}const [m,id]=v.split("|"),mv=movsTodos().find(y=>y.mes===m&&y.id===id);if(!mv)return;
+    if(await faGuardar(f,{cobro:{mes:m,id,fecha:mv.fv,imp:mv.importe}})){f.cobro={mes:m,id,fecha:mv.fv,imp:mv.importe};
+      try{await S.db.doc("banco/"+m).update({["movs."+id+".cat"]:"talleres",["movs."+id+".nota"]:"Factura "+(f.numero||"")})}catch(_){}
+      toast("Factura cobrada");render()}}
+  else if(act==="cobroquitar"){if(await faGuardar(f,{cobro:null})){f.cobro=null;render()}}
+  else if(act==="emisor"){const d={};document.querySelectorAll("[data-faem]").forEach(i=>{d[i.dataset.faem]=i.value.trim()});try{await S.db.doc("config/facturacion").set(d);FA.cfg=d;toast("Datos del emisor guardados")}catch(_){toast("No se ha podido guardar")}}});
+/* Asesoría: facturas emitidas del periodo (para el IVA trimestral) y libro de facturas emitidas en Excel */
+function vFacturasAse(){faEscuchar();if(!FA.ok||FA.err)return "";const key=AS.mes||"",ms=/-T\d$/.test(key)?mesesTrim(key):[key];
+  const l=FA.docs.filter(d=>d.estado!=="borrador"&&ms.includes(String(d.fecha||"").slice(0,7))).sort((a,b)=>String(a.numero).localeCompare(String(b.numero)));if(!l.length)return "";
+  const em=l.filter(d=>d.estado==="emitida"),S1=k=>r2(em.reduce((s,d)=>s+(+d[k]||0),0));
+  return `<div class="panel" style="padding:12px 14px;margin-top:12px"><div class="bar" style="margin:0"><b>Facturas emitidas (talleres y servicios a entidades)</b><span class="legend noprint"><button class="btn small" data-faase="xls">Libro de facturas emitidas (Excel)</button></span></div>
+    <table class="ft" style="width:100%;min-width:0;font-size:13px;margin-top:6px"><thead><tr><th>Número</th><th>Fecha</th><th>Cliente</th><th>CIF</th><th style="text-align:right">Base</th><th style="text-align:right">IVA</th><th style="text-align:right">Cuota IVA</th><th style="text-align:right">Retención</th><th style="text-align:right">Total</th><th class="noprint"></th></tr></thead><tbody>
+    ${l.map(d=>`<tr${d.estado==="anulada"?' style="opacity:.6;text-decoration:line-through"':""}><td>${esc(d.numero)}</td><td>${fmtFecha(d.fecha)}</td><td>${esc(d.cliente&&d.cliente.nombre||"")}</td><td>${esc(d.cliente&&d.cliente.cif||"")}</td><td style="text-align:right">${eur(+d.base||0)}</td><td style="text-align:right">${+d.iva||0} %</td><td style="text-align:right">${eur(+d.cuotaIva||0)}</td><td style="text-align:right">${eur(+d.ret||0)}</td><td style="text-align:right">${eur(+d.total||0)}</td><td class="noprint"><button class="btn small" data-faase="ver" data-id="${esc(d.id)}">Ver</button></td></tr>`).join("")}
+    <tr style="font-weight:700"><td colspan="4">Total (sin anuladas)</td><td style="text-align:right">${eur(S1("base"))}</td><td></td><td style="text-align:right">${eur(S1("cuotaIva"))}</td><td style="text-align:right">${eur(S1("ret"))}</td><td style="text-align:right">${eur(S1("total"))}</td><td class="noprint"></td></tr></tbody></table></div>`}
+document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.closest("[data-faase]");if(!t||!(S.role==="ase"||gbVer()))return;e.preventDefault();
+  if(t.dataset.faase==="ver"){const d=FA.docs.find(x=>x.id===t.dataset.id);if(d)faAbrir(d)}
+  else if(t.dataset.faase==="xls"){try{await cargarJs(XLSXJS)}catch(_){toast("No se ha podido cargar el Excel");return}const key=AS.mes||"",ms=/-T\d$/.test(key)?mesesTrim(key):[key];
+    const l=FA.docs.filter(d=>d.estado!=="borrador"&&ms.includes(String(d.fecha||"").slice(0,7))).sort((a,b)=>String(a.numero).localeCompare(String(b.numero)));
+    const rows=[["Número","Fecha","Cliente","CIF/NIF","Base imponible","% IVA","Cuota IVA","% Retención","Retención","Total","Estado"],...l.map(d=>[d.numero,fmtFecha(d.fecha),d.cliente&&d.cliente.nombre||"",d.cliente&&d.cliente.cif||"",+d.base||0,+d.iva||0,+d.cuotaIva||0,+d.irpf||0,+d.ret||0,+d.total||0,d.estado==="anulada"?"Anulada":"Emitida"])];
+    const wb=window.XLSX.utils.book_new();window.XLSX.utils.book_append_sheet(wb,window.XLSX.utils.aoa_to_sheet(rows),"Facturas emitidas");window.XLSX.writeFile(wb,`facturas-emitidas-${key}.xlsx`)}});
+
+/* ============================================================================================
+   Pendientes de dirección (14/11/2026, petición de la titular): una sola pestaña con todo lo que tiene que hacer dirección
+   (banco, documentos, descuadres, facturación, asesoría, recibos, altas, preinscripciones…). Lo que es de las profesoras
+   (pasar lista, faltas, recuperaciones) sigue en sus pestañas. Cada aviso lleva a donde se resuelve; no se duplica la lógica:
+   los avisos de alumnos y recibos son los mismos paneles de la pestaña Recibos y Alumnos.
+   ============================================================================================ */
+const PD={cache:null,t:0},PD_CAJA_DESDE="2026-12-31";
+const pdTry=(f,def)=>{try{return f()}catch(e){console.warn("pendientes",e);return def}};
+function pdTarjetas(){gbEscuchar();const hoy=todayISO(),hoyM=hoy.slice(0,7),L=[],add0=(g,tit,txt,ir,extra)=>L.push({g,tit,txt,ir,...(extra||{})});
+  /* mientras no han llegado los datos del banco, no se dan avisos que dependen de ellos (saldrían falsos) */
+  const add=(g,...r)=>{if(g!=="rec"&&!GB.ok)return;add0(g,...r)};
+  const movs=pdTry(()=>movsTodos(),[]),ini=docDesde(),cerrados=pdTry(()=>mesesBanco().filter(m=>m>=mesInicio()&&m<hoyM).sort(),[]);
+  /* Banco y gastos */
+  pdTry(()=>{const ult=movs.filter(m=>!esCaja(m)).map(m=>String(m.fv||m.fo||"")).filter(Boolean).sort().pop();
+    if(!ult)add("banco","Sube el extracto del banco","Todavía no hay movimientos.",{v:"gastos"});
+    else{const d=Math.round((new Date(hoy+"T12:00:00")-new Date(ult+"T12:00:00"))/864e5);if(d>7)add("banco","Sube el extracto del banco",`El último movimiento subido es del ${fmtFecha(ult)} (hace ${d} días). Sin él no cuadran ni los cobros ni los gastos.`,{v:"gastos"})}});
+  pdTry(()=>{const n=movs.filter(m=>(m.cat||"pend")==="pend"&&String(m.fv||m.fo||"")>=ini).length;if(n)add("banco",`${n} movimiento${n===1?"":"s"} del banco sin clasificar`,"Ponles categoría en Gastos (si no, no cuentan en la rentabilidad ni en el informe).",{v:"gastos"})});
+  pdTry(()=>{const l=movs.filter(necesitaJust),n=l.length;if(n){const nj=l.filter(m=>faltas(m).j).length,nd=l.filter(m=>faltas(m).d).length;
+    add("banco",`${n} gasto${n===1?"":"s"} sin todos sus documentos`,[nj?`${nj} sin justificante del banco`:"",nd?`${nd} sin factura, nómina o TC1`:""].filter(Boolean).join(" · ")+". Súbelos en Gastos → «Subir documentos».",{v:"gastos"})}});
+  pdTry(()=>{const n=descPend();if(n)add("banco",`${n} descuadre${n===1?"":"s"} por revisar`,"Diferencias de caja, tarjeta o cobros sin explicar.",{v:"descuadres"})});
+  pdTry(()=>{nmEscuchar();if(!NM.sub)return;const conN=new Set(NM.docs.filter(d=>d.tipo==="nomina").map(d=>d.mes));
+    const f=cerrados.filter(m=>!conN.has(m)&&sumaDias(sumaDias(m+"-28",5).slice(0,7)+"-01",5)<=hoy);
+    if(f.length)add("banco",`Sube las nóminas de ${f.map(mesTxt).join(", ")}`,"El PDF de nóminas de A3 (y el listado de costes). Sin ellas, la rentabilidad no tiene el coste de personal.",{v:"gastos"})});
+  /* Caja */
+  /* Caja: la titular (14/11/2026) la empieza a llevar completa en enero: el aviso se activa el 31/12/2026 y solo mira días desde esa fecha */
+  pdTry(()=>{if(hoy<PD_CAJA_DESDE)return;cajaEscuchar();if(!GC.ok)return;const ab=[...new Set(GC.docs.filter(d=>d.tipo==="apertura"&&d.dia<hoy&&d.dia>=PD_CAJA_DESDE).map(d=>d.dia))].sort().map(d=>estadoCaja(d)).filter(x=>x.abierta);
+    if(ab.length)add("caja",`Caja sin cerrar: ${ab.map(x=>fmtFecha(x.dia).slice(0,5)).join(", ")}`,"Se abrió y no se hizo el cierre (contar el efectivo).",{v:"caja"})});
+  /* Facturación (Argos hasta el 31/12) */
+  pdTry(()=>{if(hoy>"2027-01-31")return;const C=cuadreArgos(),u=C.filas[C.filas.length-1];
+    const sinV=cerrados.filter(m=>!ventasMes(m));if(sinV.length)add("fact",`Sube las facturas de venta de Argos de ${sinV.map(mesTxt).join(", ")}`,"Gastos → «Subir facturas de venta de Argos (PDF)»: el PDF de facturas y el listado.",{v:"gastos"});
+    if(u&&u.ac<-0.5)add("fact",`Queda por facturar en Argos: ${eur(-u.ac)}`,`Entró en el banco y no tiene factura${C.sinFac.length?` (${C.sinFac.length} cobro${C.sinFac.length===1?"":"s"} por banco sin factura)`:""}.`,{v:"fac"});
+    if(C.efSin>0.5)add("fact",`Efectivo cobrado sin ingresar: ${eur(C.efSin)}`,"Cobrado en contado desde el inicio y no ingresado en el cajero. Se factura cuando se ingresa.",{v:"fac",info:true})});
+  pdTry(()=>{faEscuchar();if(!FA.ok)return;const b=FA.docs.filter(d=>d.estado==="borrador").length,nc=FA.docs.filter(d=>d.estado==="emitida"&&!d.cobro);
+    if(b)add("fact",`${b} factura${b===1?"":"s"} de talleres en borrador`,"Sin emitir todavía.",{v:"facturacion"});
+    if(nc.length)add("fact",`${nc.length} factura${nc.length===1?"":"s"} de talleres sin cobrar`,`${eur(r2(nc.reduce((s,d)=>s+(+d.total||0),0)))} pendientes.`,{v:"facturacion",info:true})});
+  /* Asesoría */
+  pdTry(()=>{aseEscuchar();if(!GB.ase)return;for(const m of cerrados){const x=GB.ase[m];
+    if(!x){add("ase",`Envía ${mesTxt(m)} a la asesoría`,"Informe del mes → «Enviar a la asesoría» (revisa antes documentos y movimientos sin clasificar).",{v:"inf",mes:m});continue}
+    const c=aseCambios(m);if(c&&c.length)add("ase",`Lo enviado a la asesoría de ${mesTxt(m)} está atrasado`,`${c.length} cambio${c.length===1?"":"s"} desde el envío. Vuelve a enviarlo.`,{v:"inf",mes:m})}});
+  /* Impuestos que ha indicado la asesoría: próximos cargos (para saber) y los que paga el centro (tarea) */
+  pdTry(()=>{imEscuchar();if(!IM.ok)return;for(const x of IM.docs){if(!(+x.importe>0)||imCargo(x))continue;const md=(IMP_MODELOS.find(y=>y[0]===x.modelo)||[x.modelo,"Modelo "+x.modelo])[1];
+    if(x.fecha&&x.fecha<sumaDias(hoy,-15))continue;
+    if(x.forma==="centro")add0("ase",`Pagar ${md.toLowerCase()} (${x.modelo}) del ${periodoTxt(x.tri)}: ${eur(+x.importe)}`,`Lo paga el centro${x.fecha?`, antes del ${fmtFecha(x.fecha)}`:""}. La asesoría ha subido el PDF${x.pdf?"":" (aún no)"}.`,{v:"inf",mes:mesesTrim(x.tri)[2]});
+    else add0("ase",`${md} (${x.modelo}) del ${periodoTxt(x.tri)}: ${eur(+x.importe)}`,`Domiciliado: se cargará en la cuenta${x.fecha?` el ${fmtFecha(x.fecha)}`:""}. Que haya saldo ese día.`,{v:"inf",mes:mesesTrim(x.tri)[2],info:true})}});
+  /* Seguridad (14/11/2026): copia semanal y claves débiles del equipo */
+  pdTry(()=>{const u=S.copias&&S.copias.ultima,d=u?diasDesde(u):null;if(S.copias!==undefined&&(!u||d>7))add0("seg",u?`Haz la copia de seguridad (la última, hace ${d} días)`:"Haz la primera copia de seguridad","Accesos → «Descargar copia». Guárdala fuera del ordenador (memoria USB o nube cifrada): lleva datos personales y las claves.",{v:"accesos"})});
+  pdTry(()=>{const F=window.__fb;if(!F)return;const l=F.claves().filter(([,k])=>claveDebil(k));if(l.length)add0("seg",`${l.length} clave${l.length===1?"":"s"} del equipo débil${l.length===1?"":"es"}`,`${l.map(([u,k])=>k.rol==="dir"?(k.nombre||"Dirección"):k.rol==="ase"?(k.nombre||"Asesoría"):k.rol==="mos"?(k.nombre||"Mostrador"):(k.profe||u)).join(", ")}. En Accesos, «Nueva clave» (o «Cambiar mi clave» la tuya) pone una de 12 caracteres.`,{v:"accesos"})});
+  /* Horas extra de las profesoras sin recibo (este mes y el anterior) */
+  pdTry(()=>{const ms=[sumaDias(hoyM+"-01",-1).slice(0,7),hoyM];let n=0;const q=[];
+    for(const m of ms)for(const p of FICH_PROFES()){const x=horasExtraProfe(p,m);if(x.sinRec){n+=x.sinRec;q.push(p)}}
+    if(n)add("rec",`${n} hora${n===1?"":"s"} extra de profesoras sin recibo`,`${[...new Set(q)].join(", ")}. Hazles el recibo o márcalas como cobradas en Argos.`,{v:"fichajes"})});
+  /* Recibos atrasados y conflictos (datos de la app) */
+  pdTry(()=>{const s=new Set();for(const [id,a] of sortedAlumnos())if((a.recibos||[]).some(r=>atrasado(r))&&!esperaBeca(a))s.add(id);
+    if(s.size)add("rec",`${s.size} alumno${s.size===1?"":"s"} con recibos atrasados`,"Recibos de meses anteriores sin pagar. Desde la lista puedes avisarles por WhatsApp.",{v:"atrasados"})});
+  pdTry(()=>{const n=misConflictos().length;if(n)add("rec",`${n} conflicto${n===1?"":"s"} de horario`,"Clases que se pisan o profesoras con dos cosas a la vez.",{v:"conflictos"})});
+  return L}
+/* Avisos de alumnos y recibos: los mismos paneles que en Recibos y Alumnos (con sus botones). Solo los que piden algo. */
+function pdPaneles(){const mes=todayISO().slice(0,7),out=[];
+  for(const [k,f] of [["pre",()=>vPreLista()],["msg",()=>vMensajesDir()],["altas",()=>vAltasArgos()],["sinrec",()=>vSinRecibo()],["nocuad",()=>vNoCuadran(mes)],["extras",()=>vExtrasDir()],["sinal",()=>vSinAlumno()]]){
+    const h=pdTry(f,"");if(h&&/class="aviso (pend|no)\b/.test(h))out.push(h)}
+  return out}
+function pdContar(){if(S.role!=="dir"||esMos())return 0;if(PD.cache&&Date.now()-PD.t<20000)return PD.cache;
+  const n=pdTarjetas().filter(x=>!x.info).length+pdPaneles().length;PD.cache=n;PD.t=Date.now();return n}
+function vPendientes(){if(S.role!=="dir"||esMos())return `<div class="empty">Solo dirección.</div>`;
+  const T=pdTarjetas(),P=pdPaneles();PD.cache=T.filter(x=>!x.info).length+P.length;PD.t=Date.now();
+  const G=[["banco","Banco, gastos y documentos"],["caja","Caja"],["fact","Facturación"],["ase","Asesoría"],["rec","Recibos, horas extra y horarios"],["seg","Seguridad"]];
+  const tarjeta=x=>`<div class="row" style="flex-wrap:wrap;gap:8px;padding:10px 12px;border-top:1px solid var(--line);align-items:center">
+      <span class="grow" style="min-width:220px"><b${x.info?' style="font-weight:600"':""}>${esc(x.tit)}</b>${x.info?` <span class="badge b-off">para saber</span>`:""}<br><span class="note">${esc(x.txt)}</span></span>
+      <button class="btn small${x.info?"":" primary"}" data-pd="${esc(x.ir.v)}"${x.mes?` data-mes="${esc(x.mes)}"`:""}>Ir</button></div>`;
+  const bloques=G.map(([g,t])=>{const l=T.filter(x=>x.g===g);return l.length?`<div class="panel" style="padding:0;margin-bottom:12px;overflow:hidden"><div style="padding:10px 12px"><b>${t}</b></div>${l.map(tarjeta).join("")}</div>`:""}).join("");
+  const nada=!T.length&&!P.length;
+  return `<div class="bar"><h2>Pendientes de dirección</h2><span class="legend note">${nada?"":`${PD.cache} cosa${PD.cache===1?"":"s"} por hacer`}</span></div>
+  <p class="note" style="margin-top:0">Todo lo que tienes que hacer tú, en un solo sitio. Lo que es de las profesoras (pasar lista, faltas, recuperaciones, cambios de clase) sigue en sus pestañas. Al resolver cada cosa, desaparece de aquí.</p>
+  ${nada?`<div class="panel"><div class="empty">✓ Todo al día.</div></div>`:""}
+  ${bloques}
+  ${P.length?`<h3 style="margin:14px 0 6px">Alumnos, altas y recibos</h3>${P.join("")}`:""}`}
+document.addEventListener("click",e=>{const t=e.target.closest&&e.target.closest("[data-pd]");if(!t||S.role!=="dir")return;e.preventDefault();const v=t.dataset.pd;
+  if(v==="atrasados"){S.view="recibos";S.recFil="atrasados"}
+  else if(v==="inf"){S.view="gastos";GB.inf=true;GB.rent=false;GB.verAse="";if(t.dataset.mes)GB.mes=t.dataset.mes}
+  else if(v==="fac"){S.view="tarifas";GT.fac=true}
+  else if(v==="gastos"){S.view="gastos";GB.inf=false;GB.rent=false}
+  else S.view=v;
+  PD.cache=null;render();scrollTo(0,0)});
+
+/* 14/11/2026: buscador de cursos en Tarifas. Filtra al escribir sin volver a pintar la página (no se pierde el cursor);
+   todas las palabras tienen que estar en el nombre, sin tildes ni espacios («prim 2h» → PRIMARIA 2H/SEMANA). */
+document.addEventListener("input",e=>{const t=e.target;if(!t||t.id!=="gt-q")return;GT.q=t.value;
+  const ws=nzC(String(t.value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"")).replace(/[^A-Z0-9 ]/g," ").split(/\s+/).filter(Boolean);
+  document.querySelectorAll("tr[data-gtn]").forEach(tr=>{const n=tr.dataset.gtn||"";tr.style.display=ws.every(w=>n.includes(w))?"":"none"})});
+
+/* 14/11/2026: clases de prueba de gente que no se apuntó (Bizum o transferencia marcados «Clase de prueba»). Si años después
+   se apunta alguien con ese nombre o ese teléfono, su ficha lo recuerda. */
+function pruebasDe(a){if(!a||!gbVer()||!GB.ok)return [];const np=new Set(NORM(a.nombre).split(/[^A-Z]+/).filter(w=>w.length>=3)),tels=new Set([a.tel,a.tel2,...((a.inscripciones||[]).map(i=>i&&i.tel))].map(x=>digitos(x||"").slice(-9)).filter(x=>x.length===9));
+  return movsTodos().filter(m=>m.enl&&m.enl.sinAl==="prueba").filter(m=>{const w=NORM(m.enl.nom).split(/[^A-Z]+/).filter(x=>x.length>=3);return (m.enl.tel&&tels.has(m.enl.tel))||(w.length>=2&&w.filter(x=>np.has(x)).length>=2)})}
+function vPruebasAl(a){const l=pdTry(()=>pruebasDe(a),[]);if(!l.length)return "";
+  return `<div class="aviso info" style="display:block;margin:6px 0">Hizo ${l.length===1?"una clase de prueba":l.length+" clases de prueba"} sin apuntarse: ${l.map(m=>`${fmtFecha(m.fv)} (${eur(m.importe)} por ${m.cat==="bizum"?"Bizum":"transferencia"}${m.enl.nom?", a nombre de "+esc(m.enl.nom):""})`).join(" · ")}.</div>`}
+
+/* ============================================================================================
+   Impuestos y retenciones del alquiler (14/11/2026, titular). Para ahorrar la llamada de la asesoría antes de cada trimestre:
+   1) Retenciones del alquiler (modelo 115): de cada pago del alquiler con retención se saca la base y la retención
+      (pagado = base + IVA − retención ⇒ base = pagado ÷ (1 + IVA − retención)); con su factura, para que la asesoría lo compruebe.
+      Qué pagos llevan retención y con qué % lo marca dirección (config/banco.alqRet = {<clave del concepto>: {iva, ret}}).
+   2) Cada trimestre, la asesoría pone en su pestaña, por modelo (115, 130, 303, 111): el importe a pagar, el día del cargo, si lo
+      domicilia ella o lo paga el centro, y el PDF del impuesto. impuestos/<AAAA-Tn>-<modelo>. Dirección lo ve en el informe y
+      en Pendientes; cuando llega el cargo al banco, el PDF se pone solo como documento de ese movimiento.
+   ============================================================================================ */
+const IMP_MODELOS=[["115","Retenciones del alquiler","modelo 115"],["130","Pago fraccionado del IRPF","modelo 130"],["303","IVA del trimestre","modelo 303"],["111","Retenciones de las nóminas","modelo 111"]];
+const IM={docs:[],ok:false,sub:null,err:"",enl:0};
+function imEscuchar(){if(IM.sub||!S.db)return;IM.sub=S.db.collection("impuestos").onSnapshot(s=>{IM.docs=s.docs.map(d=>({id:d.id,...d.data()}));IM.ok=true;IM.err="";imRefrescar()},
+  e=>{IM.ok=true;IM.err="No se pueden leer los impuestos: hay que publicar las reglas nuevas en Firebase.";imRefrescar()})}
+function imRefrescar(){if(S.role==="ase"){const ae=document.activeElement;if(ae&&/^im-/.test(ae.id||""))return;vAsePintar()}else if(S.role==="dir"&&(S.view==="gastos"||S.view==="pendientes"))gbRefrescar()}
+/* --- 1) alquiler --- */
+const alqCfg=()=>(GB.cfg&&GB.cfg.alqRet)||{};
+function alqRetMes(mes){const c=alqCfg();return movsTodos().filter(m=>m.mes===mes&&m.importe<0&&c[claveMov(m.concepto)]).map(m=>{const x=c[claveMov(m.concepto)],iva=+x.iva||0,ret=+x.ret||0,pag=r2(-m.importe),base=r2(pag/(1+iva/100-ret/100));
+  const {d}=docsMov(m);return {fv:m.fv,concepto:m.concepto,quien:m.ordenante?titulo(String(m.ordenante).toLowerCase()):"",pag,base,iva,cuotaIva:r2(base*iva/100),ret,retImp:r2(base*ret/100),doc:d?{id:d.id,n:d.n||""}:null}})}
+function vRetAlq(l,dir,mes,key){const cands=dir&&mes?movsTodos().filter(m=>m.mes===mes&&m.importe<0&&m.cat==="alquiler"&&!alqCfg()[claveMov(m.concepto)]):[];
+  if(!l.length&&!cands.length)return "";const T=k=>r2(l.reduce((s,x)=>s+x[k],0));
+  return `<div class="panel" style="padding:12px 14px;margin:12px 0"><b>Retenciones del alquiler (modelo 115)</b>
+    <p class="note" style="margin:2px 0 6px">De cada pago del alquiler se calcula la base y la retención que se ingresa a Hacienda: pagado = base + IVA − retención. ${dir?"":"Las facturas se pueden abrir para comprobarlo."}</p>
+    ${l.length?`<table class="ft" style="width:100%;min-width:0;font-size:13px"><thead><tr><th>Fecha</th><th>Pago</th><th style="text-align:right">Pagado</th><th style="text-align:right">Base</th><th style="text-align:right">IVA</th><th style="text-align:right">Retención</th><th>Factura</th></tr></thead><tbody>
+    ${l.map(x=>`<tr><td>${fmtFecha(x.fv)}</td><td>${esc(x.concepto)}${x.quien?`<br><span class="note">${esc(x.quien)}</span>`:""}</td><td style="text-align:right">${eur(x.pag)}</td><td style="text-align:right">${eur(x.base)}</td><td style="text-align:right">${eur(x.cuotaIva)} <span class="note">(${x.iva} %)</span></td><td style="text-align:right"><b>${eur(x.retImp)}</b> <span class="note">(${x.ret} %)</span></td><td>${x.doc?`<a href="#" data-blob="${esc(x.doc.id)}">📄 Ver</a>`:`<span class="badge b-pend">falta</span>`}${dir?` <button class="btn small" data-im="alqno" data-c="${esc(claveMov(x.concepto))}" title="Este pago no lleva retención">×</button>`:""}</td></tr>`).join("")}
+    <tr style="font-weight:700"><td colspan="2">Total</td><td style="text-align:right">${eur(T("pag"))}</td><td style="text-align:right">${eur(T("base"))}</td><td style="text-align:right">${eur(T("cuotaIva"))}</td><td style="text-align:right">${eur(T("retImp"))}</td><td></td></tr></tbody></table>`:""}
+    ${(()=>{/* acumulado del trimestre (lo que irá en el 115) cuando se mira un mes */const k=mes||key;if(!k||/-T\d$/.test(k)){if(!l.length)return "";const fin=k&&todayISO().slice(0,7)<=mesesTrim(k)[2];return `<p style="margin:6px 0 0"><b>Retención del trimestre (modelo 115)${fin?", hasta ahora":""}: ${eur(T("retImp"))}</b>${fin?` <span class="note">(el trimestre aún no ha terminado)</span>`:""}</p>`}
+      const tri=trimDe(k),ms=mesesTrim(tri),por=ms.map(m=>[m,dir?pdTry(()=>alqRetMes(m),[]):(((S.role==="ase"?AS.docs:aseDocsDir()).find(d=>d.id===m)||{}).D||{}).alq||[]]).filter(([,x])=>x.length);
+      if(!por.length)return "";const tot=r2(por.reduce((s,[,x])=>s+x.reduce((t,y)=>t+y.retImp,0),0));
+      return `<p style="margin:6px 0 0"><b>Retención del ${esc(periodoTxt(tri))} (modelo 115), hasta ahora: ${eur(tot)}</b> <span class="note">(${por.map(([m,x])=>`${mesTxt(m)} ${eur(r2(x.reduce((t,y)=>t+y.retImp,0)))}`).join(" + ")}${por.length<3?` · ${3-por.length===1?"falta 1 mes":`faltan ${3-por.length} meses`}`:""})</span></p>`})()}
+    ${cands.length?`<div class="noprint" style="margin-top:6px"><span class="note">¿Alguno de estos pagos del alquiler lleva retención?</span> ${cands.map(m=>`<button class="btn small" data-im="alqsi" data-c="${esc(claveMov(m.concepto))}">${esc(m.concepto.slice(0,40))} · ${eur(-m.importe)}</button>`).join(" ")}</div>`:""}</div>`}
+/* --- 2) impuestos del trimestre --- */
+const imId=(tri,mod)=>`${tri}-${mod}`;
+function imCargo(x){/* el cargo en el banco por ese importe, cerca del día indicado */if(!x||!(+x.importe>0)||typeof movsTodos!=="function"||S.role!=="dir")return null;const f=x.fecha||"";
+  return movsTodos().find(m=>m.importe<0&&Math.abs(-m.importe-(+x.importe))<0.005&&(m.cat==="impuestos"||/IMPUEST|AEAT|HACIENDA|TRIBUT|IRPF|\bIVA\b/i.test(m.concepto))&&(!f||(m.fv>=sumaDias(f,-6)&&m.fv<=sumaDias(f,12))))||null}
+function imInfo(tri,mod){const ms=mesesTrim(tri);
+  if(mod==="115"){/* la asesoría (y dirección en «Lo que ve la asesoría») miran lo enviado; dirección en su informe, los datos de ahora */
+    const l=S.role==="ase"?((aseVista(tri,AS.docs)||{}).D||{}).alq||[]:GB.verAse?((aseVista(tri,aseDocsDir())||{}).D||{}).alq||[]:ms.flatMap(m=>pdTry(()=>alqRetMes(m),[]));const v=r2(l.reduce((s,x)=>s+x.retImp,0));return l.length?{v,txt:`Según los pagos del alquiler del trimestre: ${eur(v)}`}:null}
+  if(mod==="303"||mod==="130"){const em=pdTry(()=>(faEscuchar(),FA.docs.filter(d=>d.estado==="emitida"&&ms.includes(String(d.fecha||"").slice(0,7)))),[]);if(!em.length)return null;
+    const S1=k=>r2(em.reduce((s,d)=>s+(+d[k]||0),0));return mod==="303"?{txt:`IVA repercutido en las facturas de talleres: ${eur(S1("cuotaIva"))} (base ${eur(S1("base"))}, ${em.length} factura${em.length===1?"":"s"})`}
+      :{txt:`Facturas de talleres: base ${eur(S1("base"))}${S1("ret")?` · retenciones que han practicado los clientes: ${eur(S1("ret"))}`:""}`}}
+  return null}
+function vImpuestos(tri){imEscuchar();if(!tri)return "";const ase=S.role==="ase";
+  if(IM.err)return `<div class="panel" style="padding:12px 14px;margin:12px 0"><b>Impuestos</b><p class="note" style="color:var(--bad)">${esc(IM.err)}</p></div>`;
+  const fila=([mod,tit,mm])=>{const x=IM.docs.find(d=>d.id===imId(tri,mod))||null,inf=imInfo(tri,mod),c=imCargo(x),ed=ase;
+    const cerrado=todayISO().slice(0,7)>mesesTrim(tri)[2],dif=cerrado&&mod==="115"&&inf&&x&&+x.importe>0&&Math.abs(inf.v-(+x.importe))>0.5;
+    const estado=!x||x.importe==null||x.importe===""?`<span class="badge b-off">pendiente de la asesoría</span>`
+      :`<b>${eur(+x.importe)}</b>${+x.importe>0?` · ${x.forma==="centro"?"lo paga el centro":"domiciliado, se carga en la cuenta"}${x.fecha?` el <b>${fmtFecha(x.fecha)}</b>`:""}`:" · sin nada que pagar"}${c?` · <span class="badge b-si">cargado el ${fmtFecha(c.fv)}</span>`:""}${x.pdf?` · <a href="#" data-blob="${esc(x.pdf.id)}">📄 ${esc(x.pdf.n||"PDF")}</a>`:""}${x.nota?`<br><span class="note">«${esc(x.nota)}»</span>`:""}`;
+    return `<div style="border-top:1px solid var(--line);padding:8px 0"><div class="row" style="flex-wrap:wrap;gap:6px;padding:0;border:0"><span class="grow"><b>${esc(tit)}</b> <span class="note">(${mm})</span></span><span>${estado}</span></div>
+      ${inf?`<p class="note" style="margin:2px 0 0">${esc(inf.txt)}${dif?` · <b style="color:var(--warn)">no coincide con el importe indicado</b>`:mod==="115"&&x&&+x.importe>0&&cerrado?" · ✓ coincide":mod==="115"&&!cerrado?" (el trimestre aún no ha terminado)":""}</p>`:""}
+      ${ed?`<div class="noprint" style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;margin-top:6px">
+        <label class="f" style="flex:0 1 110px;margin:0">Importe a pagar (€)<input id="im-${mod}-imp" inputmode="decimal" value="${x&&x.importe!=null?esc(String(x.importe).replace(".",",")):""}"></label>
+        <label class="f" style="flex:0 1 150px;margin:0">Día del cargo<input type="date" id="im-${mod}-f" value="${esc(x&&x.fecha||"")}"></label>
+        <label class="f" style="flex:0 1 230px;margin:0">Quién lo paga<select id="im-${mod}-fo"><option value="dom" ${!x||x.forma!=="centro"?"selected":""}>Domiciliado: se carga en la cuenta</option><option value="centro" ${x&&x.forma==="centro"?"selected":""}>Lo paga el centro</option></select></label>
+        <label class="f" style="flex:1 1 160px;margin:0">Nota<input id="im-${mod}-n" maxlength="160" value="${esc(x&&x.nota||"")}"></label>
+        <label class="btn small" style="cursor:pointer">${x&&x.pdf?"Cambiar PDF":"Subir PDF"}<input type="file" accept=".pdf,application/pdf" data-impdf="${mod}" data-tri="${esc(tri)}" hidden></label>
+        <button class="btn small primary" data-im="guardar" data-mod="${mod}" data-tri="${esc(tri)}">Guardar</button></div>`:""}</div>`};
+  return `<div class="panel" style="padding:12px 14px;margin:12px 0"><b>Impuestos del ${esc(periodoTxt(tri))}</b>
+    <p class="note" style="margin:2px 0 4px">${ase?"Indica en cada modelo el importe a pagar, el día del cargo y quién lo paga, y sube el PDF del impuesto. El centro lo ve al momento.":"Lo indica la asesoría desde su acceso. Cuando llega el cargo al banco, el PDF se adjunta solo a ese movimiento."}</p>
+    ${IMP_MODELOS.map(fila).join("")}</div>`}
+async function imGuardar(tri,mod,extra){const id=imId(tri,mod),x=IM.docs.find(d=>d.id===id)||{},v=k=>(document.getElementById(`im-${mod}-${k}`)||{}).value;
+  const s=String(v("imp")??"").trim(),n=s===""?null:+s.replace(/\s|€/g,"").replace(/\./g,"").replace(",",".");if(s!==""&&isNaN(n)){toast("El importe no es válido");return}
+  const d={tri,modelo:mod,importe:n,fecha:v("f")||"",forma:v("fo")==="centro"?"centro":"dom",nota:String(v("n")||"").trim().slice(0,160),pdf:x.pdf||null,...(extra||{}),t:nowISO(),por:quienSoy()};
+  try{await S.db.doc("impuestos/"+id).set(d);toast("Guardado")}catch(e){console.warn(e);toast(/perm/i.test(String(e&&((e.fb||"")+" "+e.message)))?"Faltan permisos: hay que publicar las reglas nuevas en Firebase.":"No se ha podido guardar.")}}
+document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.closest("[data-im]");if(!t)return;const act=t.dataset.im;
+  if(act==="guardar"&&S.role==="ase"){e.preventDefault();t.disabled=true;await imGuardar(t.dataset.tri,t.dataset.mod);t.disabled=false;return}
+  if((act==="alqsi"||act==="alqno")&&gbVer()){e.preventDefault();const c=t.dataset.c,o={...alqCfg()};
+    if(act==="alqsi"){const r=prompt("IVA % y retención % de este alquiler (separados por espacio):","21 19");if(r===null)return;const [iv,rt]=String(r).replace(/%/g,"").trim().split(/[\s,;]+/).map(Number);if(isNaN(iv)||isNaN(rt)){toast("Pon dos números, por ejemplo: 21 19");return}o[c]={iva:iv,ret:rt}}
+    else{if(!confirm("¿Este pago no lleva retención?"))return;delete o[c]}
+    try{await S.db.doc("config/banco").set({...(GB.cfg||{}),alqRet:o});GB.cfg={...(GB.cfg||{}),alqRet:o};render()}catch(_){toast("No se ha podido guardar.")}}});
+document.addEventListener("change",async e=>{const t=e.target;if(!t||!t.dataset||!t.dataset.impdf||S.role!=="ase")return;const f=t.files&&t.files[0];t.value="";if(!f)return;
+  try{toast("Subiendo…");const as=await window.claude.use("assets"),r=await as.upload(f,{clase:"impuesto"});await imGuardar(t.dataset.tri,t.dataset.impdf,{pdf:{id:r.id,n:f.name.slice(0,80)}})}
+  catch(x){console.warn(x);toast(/perm/i.test(String(x&&((x.fb||"")+" "+x.message)))?"Faltan permisos: hay que publicar las reglas nuevas en Firebase.":"No se ha podido subir el PDF.")}});
+/* dirección: cuando el cargo llega al banco, el PDF del impuesto pasa a ser el documento de ese movimiento */
+async function imEnlazar(){if(S.role!=="dir"||!GB.ok||!IM.ok||Date.now()-IM.enl<60000)return;IM.enl=Date.now();
+  for(const x of IM.docs){if(!x.pdf||!(+x.importe>0))continue;const m=imCargo(x);if(!m||docsMov(m).d)continue;
+    const o={id:x.pdf.id,n:x.pdf.n||"",t:nowISO(),tipo:"modelo"};try{await S.db.doc("banco/"+m.mes).update({["movs."+m.id+".doc"]:o});const dd=GB.docs.find(y=>y.id===m.mes);if(dd&&dd.movs[m.id])dd.movs[m.id].doc=o}catch(_){}}}

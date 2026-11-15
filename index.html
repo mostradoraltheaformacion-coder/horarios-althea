@@ -336,6 +336,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
   <div class="brand"><img id="hlogo" alt="Althea Formación" hidden><div class="bt"><b>Althea Formación</b><span id="sub">Horarios · Chiclana</span></div></div>
   <nav role="tablist">
     <button role="tab" id="t-semana" data-v="semana" aria-selected="true">Semana</button>
+    <button role="tab" id="t-pend" class="dironly" data-v="pendientes" aria-selected="false">Pendientes</button>
     <button role="tab" id="t-alumnos" data-v="alumnos" aria-selected="false">Alumnos</button>
     <button role="tab" id="t-faltas" data-v="faltas" aria-selected="false">Faltas</button>
     <button role="tab" id="t-cambios" data-v="cambios" aria-selected="false">Cambios</button>
@@ -349,6 +350,8 @@ details.fh{display:block}details.fh summary{cursor:pointer}
     <button role="tab" id="t-recibos" class="dironly" data-v="recibos" aria-selected="false">Recibos</button>
     <button role="tab" id="t-caja" class="dironly" data-v="caja" aria-selected="false">Caja</button>
     <button role="tab" id="t-gastos" class="dironly" data-v="gastos" aria-selected="false">Gastos</button>
+    <button role="tab" id="t-desc" class="dironly" data-v="descuadres" aria-selected="false">Descuadres</button>
+    <button role="tab" id="t-fact" class="dironly" data-v="facturacion" aria-selected="false">Facturación</button>
     <button role="tab" id="t-tarifas" class="dironly" data-v="tarifas" aria-selected="false">Tarifas</button>
     <button role="tab" id="t-fichajes" class="dironly" data-v="fichajes" aria-selected="false">Fichajes</button>
     <button role="tab" id="t-argos" class="dironly" data-v="argos" aria-selected="false">Cuadre Argos</button>
@@ -368,9 +371,11 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 <script type="module" src="fb.js"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
-const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9"];
-const HLABEL={"10-11":"10:00–11:00","11-12":"11:00–12:00","3-4":"15:00–16:00","4-5":"16:00–17:00","5-6":"17:00–18:00","6-7":"18:00–19:00","7-8":"19:00–20:00","8-9":"20:00–21:00"};
-const HSHORT={"10-11":"10–11 h","11-12":"11–12 h","3-4":"15–16 h","4-5":"16–17 h","5-6":"17–18 h","6-7":"18–19 h","7-8":"19–20 h","8-9":"20–21 h"};
+const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
+/* 10/11/2026: de 21:00 a 22:00 solo horas extra y cambios puntuales (Ainea y Laura), nunca clases fijas */
+const SOLO_EXTRA=new Set(["9-10"]);
+const HLABEL={"10-11":"10:00–11:00","11-12":"11:00–12:00","3-4":"15:00–16:00","4-5":"16:00–17:00","5-6":"17:00–18:00","6-7":"18:00–19:00","7-8":"19:00–20:00","8-9":"20:00–21:00","9-10":"21:00–22:00"};
+const HSHORT={"10-11":"10–11 h","11-12":"11–12 h","3-4":"15–16 h","4-5":"16–17 h","5-6":"17–18 h","6-7":"18–19 h","7-8":"19–20 h","8-9":"20–21 h","9-10":"21–22 h"};
 /* Equipo del curso 2026-27: solo estas profesoras aparecen en filtros, selectores y horario */
 const EQUIPO=["Ainea","Elena","Fani","Laura","Lorena","Rosa"];
 const CAP=8;
@@ -380,12 +385,19 @@ const L_V=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const tramos=(dias,t)=>Object.fromEntries(dias.map(d=>[d,[t]]));
 const unir=(...hs)=>{const o={};for(const h of hs)for(const [d,t] of Object.entries(h))(o[d]??=[]).push(...t);for(const d in o)o[d].sort();return o};
 const HORARIO_PROFE={
-  Ainea:unir(tramos(["Martes","Jueves"],"10:00-12:00"),tramos(L_V,"16:00-21:00")),
-  Laura:tramos(L_V,"16:00-21:00"),
+  Ainea:unir(tramos(["Martes","Jueves"],"10:00-12:00"),tramos(L_V,"16:00-22:00")),
+  Laura:tramos(L_V,"16:00-22:00"),
   Lorena:tramos(L_V,"16:00-20:00"),
   Elena:unir(tramos(["Lunes","Miércoles","Viernes"],"15:45-20:00"),tramos(["Martes","Jueves"],"16:00-20:00")),
   Rosa:tramos(L_V,"15:45-20:30"),
   Fani:unir(tramos(["Martes","Jueves"],"10:00-12:00"),tramos(["Lunes","Martes","Miércoles","Jueves"],"15:45-20:30"))};
+/* Horario de CONTRATO (10/11/2026): para horas extra y fichajes. Puede ser más corto que HORARIO_PROFE, que es donde se pueden
+   poner clases (Ainea y Laura pueden dar clase hasta las 21:00, pero su contrato acaba a las 20:00: lo de después es hora extra). */
+const CONTRATO_PROFE={...HORARIO_PROFE,
+  Ainea:unir(tramos(["Martes","Jueves"],"10:00-12:00"),tramos(L_V,"16:00-20:00")),
+  Laura:tramos(L_V,"16:00-20:00")};
+/* Elena (contrato fijo discontinuo, 20:45 h/semana desde el 10/09/2026): L, X y V de 15:45 a 20:00; M y J de 16:00 a 20:00 = su horario de la app */
+const tramosContrato=(p,dia)=>((CONTRATO_PROFE[p]||{})[dia]||[]).map(t=>t.split("-").map(minDe));
 const URL_APP="https://horarios.altheaformacion.com";
 /* Días sin clase del curso 2026-27 (calendario escolar de Cádiz y fiestas locales de Chiclana).
    Es solo el punto de partida: dirección los edita en la pestaña Calendario y se guardan en publico/datos. */
@@ -435,6 +447,7 @@ function trabaja(p,dia,h){
   const [a,b]=tramoHora(h);return (hp[dia]||[]).some(t=>{const [x,y]=t.split("-").map(minDe);return FLEX.has(p)?(a<y&&b>x):(a>=x&&b<=y)});
 }
 const horasDe=(p,dia)=>HORAS.filter(h=>trabaja(p,dia,h));
+const horasFijas=(p,dia)=>horasDe(p,dia).filter(h=>!SOLO_EXTRA.has(h));
 /* Alumnos de primaria (regla de la dueña, 25/10/2026): en clases de grupo, Ainea no da primaria y Laura solo de 16:00 a 18:00
    (lunes a viernes); el resto, a cualquier hora. En clases individuales (logopedia, terapias) no hay restricción. */
 const NIVELES=["Primaria","ESO","Bachillerato","Universidad","Adultos","Otro"];
@@ -470,7 +483,7 @@ function textoHorario(p){
 const GRUPOS={Lorena:{Lunes:["4-5"],Martes:["4-5"],Miércoles:["4-5"],Jueves:["4-5"]},Elena:{Martes:["4-5"],Jueves:["4-5"]}};
 const SOLO_IND=new Set(["Rosa","Fani"]);
 function esIndividual(p,dia,h){
-  if(h==="8-9")return true;
+  if(h==="8-9"||h==="9-10")return true;
   if(SOLO_IND.has(p))return true;
   if(GRUPOS[p])return !(GRUPOS[p][dia]||[]).includes(h);
   return false;
@@ -492,7 +505,7 @@ const FLEX=new Set(["Rosa","Fani","Elena","Lorena"]);
 const listaFlex=()=>{const l=[...FLEX];return l.slice(0,-1).join(", ")+" y "+l[l.length-1]};
 const TIPOS={"45":{t:"45 min",dur:45},"60":{t:"1 h",dur:60},teach:{t:"1H teach",dur:60},grupo:{t:"Grupo · 1 h",dur:60}};
 const TIPO_ORD=["45","60","teach","grupo"];
-const KEY_INI={"10-11":600,"11-12":660,"3-4":900,"4-5":960,"5-6":1020,"6-7":1080,"7-8":1140,"8-9":1200};
+const KEY_INI={"10-11":600,"11-12":660,"3-4":900,"4-5":960,"5-6":1020,"6-7":1080,"7-8":1140,"8-9":1200,"9-10":1260};
 const hm=m=>String(Math.floor(m/60)).padStart(2,"0")+":"+String(m%60).padStart(2,"0");
 const keyDeMin=m=>{let k=HORAS[0];for(const h of HORAS)if(KEY_INI[h]<=m)k=h;return k};
 const tramosDe=(p,dia)=>((HORARIO_PROFE[p]||{})[dia]||[]).map(t=>t.split("-").map(minDe));
@@ -697,6 +710,10 @@ function usuarioBase(nombre){
 const CL_L="abcdefghjkmnpqrstuvwxyz",CL_N="23456789";
 const nuevaClave=()=>{const a=new Uint32Array(6);crypto.getRandomValues(a);const t=CL_L+CL_N;let c=[...a].map(x=>t[x%t.length]);
   c[a[0]%6]=CL_N[a[1]%CL_N.length];let j=(a[0]+1+(a[2]%5))%6;c[j]=CL_L[a[3]%CL_L.length];return c.join("")};
+/* 14/11/2026 (seguridad): las claves del equipo (dirección, asesoría, mostrador, profesoras) son de 12 caracteres; las de
+   alumnos siguen de 6. Una clave del equipo de menos de 10 caracteres se marca como débil. */
+const nuevaClaveEquipo=()=>{let c="";while(c.length<12){const k=nuevaClave();c+=k}return c.slice(0,12)};
+const claveDebil=k=>!!k&&k.rol!=="alumno"&&String(k.clave||"").length<10;
 const normClave=c=>String(c||"").trim().toLowerCase().replace(/[^a-z0-9]/g,"");
 const claveVieja=c=>/^\d{4,5}$/.test(String(c||""));
 const claveValida=c=>/^(?=.*[a-z])(?=.*\d)[a-z0-9]{6,12}$/.test(c);
@@ -812,10 +829,10 @@ function vAP(key,a){
     h+=`<label class="f" style="flex:2 1 220px">Nombre y apellidos del alumno<input type="text" id="ap-nom" list="ap-dl" value="${esc(o.nombre||"")}" autocomplete="off" placeholder="Como lo tiene el centro"></label><datalist id="ap-dl">${mios.map(n=>`<option value="${esc(n)}">`).join("")}</datalist>`}
   if(!esP)h+=`<label class="f">Profesora<select id="ap-profe">${EQUIPO.map(p=>`<option ${p===P?"selected":""}>${esc(p)}</option>`).join("")}</select></label>`;
   if(modo==="extra")h+=`<label class="f">Fecha<input type="date" id="ap-fecha" value="${esc(o.fecha||"")}" min="${sumaDias(todayISO(),-31)}"></label>`;
-  else h+=`<label class="f">Día<select id="ap-dia">${DIAS.filter(d=>FLEX.has(P)?tramosDe(P,d).length:horasDe(P,d).length).map(d=>`<option ${d===dia?"selected":""}>${d}</option>`).join("")}</select></label>`;
+  else h+=`<label class="f">Día<select id="ap-dia">${DIAS.filter(d=>FLEX.has(P)?tramosDe(P,d).length:horasFijas(P,d).length).map(d=>`<option ${d===dia?"selected":""}>${d}</option>`).join("")}</select></label>`;
   if(!DIAS.includes(dia))h+=`<p class="note" style="color:var(--bad);margin:0">Elige un día de lunes a viernes.</p>`;
   else if(FLEX.has(P)){const ini=o.ini===""?null:+o.ini;h+=tramosDe(P,dia).length?`<label class="f">Empieza<select id="ap-ini"><option value="">Elige…</option>${opcionesHora(P,dia,ini)}</select></label><label class="f">Sesión<select id="ap-tipo">${opcionesTipo(o.tipo||"60")}</select></label>`:`<p class="note" style="color:var(--bad);margin:0">${esc(P)} no trabaja ese día.</p>`}
-  else{const hs=horasDe(P,dia);h+=hs.length?`<label class="f">Hora<select id="ap-hora"><option value="">Elige…</option>${hs.map(x=>`<option value="${x}" ${x===o.hora?"selected":""}>${HLABEL[x]} · ${esIndividual(P,dia,x)?"individual":"grupo"}</option>`).join("")}</select></label>`:`<p class="note" style="color:var(--bad);margin:0">${esc(P)} no trabaja ese día.</p>`}
+  else{const hs=modo==="extra"?horasDe(P,dia):horasFijas(P,dia);h+=hs.length?`<label class="f">Hora<select id="ap-hora"><option value="">Elige…</option>${hs.map(x=>`<option value="${x}" ${x===o.hora?"selected":""}>${HLABEL[x]} · ${esIndividual(P,dia,x)?"individual":"grupo"}</option>`).join("")}</select></label>`:`<p class="note" style="color:var(--bad);margin:0">${esc(P)} no trabaja ese día.</p>`}
   h+=`</div><label class="f">Nota (opcional)<input type="text" id="ap-nota" maxlength="300" value="${esc(o.nota||"")}" placeholder="${modo==="extra"?"Por ejemplo: repaso para el examen del viernes":"Por ejemplo: empieza la semana que viene"}"></label>${a?chkExc("ap-exc",a):""}`;
   h+=`<p class="note" style="margin:4px 0">${modo==="extra"?"Es una clase más ese día, sin quitarle ninguna. "+(esP?"Se avisa a dirección para cobrarla aparte.":"Sale en Recibos para cobrarla aparte con la tarifa de su nivel."):key==="nuevo"?"Se añade a tu horario fijo. Si el alumno no es tuyo todavía, dirección lo verá en cuanto abra la app y lo pasará a su ficha.":"Se añade a su horario fijo. Dirección revisará el recibo."}</p>`;
   h+=`<div class="row" style="gap:8px"><button class="btn primary small" data-act="apok" data-k="${esc(key)}">${modo==="extra"?"Apuntar la hora extra":"Añadir la clase"}</button><button class="btn small" data-act="apno">Cancelar</button></div></div>`;
@@ -913,10 +930,24 @@ async function pasarQuita(id,a,t,p){
   const r={clases,trasHechos:[...(a.trasHechos||[]),t.tid],...(i>=0?{addProf:[...(a.addProf||[]),{tid:t.tid,t:nowISO(),profe:p,clase:t.de,nota:t.nota||"",tipo:"quita"}]}:{})};
   if(await save(id,r)){Object.assign(a,r);return true}return false;
 }
+let exAutoOn=false;
+async function exAutoMarcar(l){if(exAutoOn||S.role!=="dir"||esMos()||S.pv)return;exAutoOn=true;let n=0;
+  try{for(const {id,a,e} of l){const extras=(a.extras||[]).map(x=>x&&x.id===e.id&&!x.cobro?{...x,cobro:{t:nowISO(),por:"Argos (automático)",auto:true}}:x);if(await save(id,{extras})){a.extras=extras;n++}}}
+  finally{exAutoOn=false}if(n){toast(n===1?"1 hora extra ya cobrada en Argos: quitada de «por cobrar»":n+" horas extra ya cobradas en Argos: quitadas de «por cobrar»");refrescar()}}
 async function pasarExtra(id,a,e,p){
   const x={...e,por:p};for(const k of ["tok","nombre","local","tid","tipo"])delete x[k];const extras=[...(a.extras||[]),x];
   if(await save(id,{extras})){a.extras=extras;return true}return false;
 }
+/* 10/11/2026: ¿la hora extra ya está cobrada en Argos? (al subir el listado de recibos, el aviso «por cobrar» se quita solo)
+   - hay un recibo de Argos de ese mes por el importe de la hora extra (recibo aparte), o con «extra/suelta» en el concepto; o
+   - lo de Argos de ese mes llega a la mensualidad de su tarifa + las horas extra de ese mes (se le sumó al recibo). */
+function exCobradaArgos(a,e){const imp=tarifaDe(a,e),mes=String(e.fecha||"").slice(0,7);if(!mes)return false;
+  const rs=(a.recibos||[]).filter(r=>r&&r.origen==="argos"&&String(r.emitido||"").startsWith(mes)&&r.importe!=null);if(!rs.length)return false;
+  if(rs.some(r=>/EXTRA|SUELTA|HORA ADICIONAL|CLASE ADICIONAL/i.test(String(r.concepto||"")+" "+String(r.curso||""))))return true;
+  if(imp!=null&&rs.some(r=>Math.abs(+r.importe-imp)<0.005&&String(r.emitido).slice(0,10)>=String(e.fecha).slice(0,10)))return true;
+  if(typeof calcMatriz!=="function"||typeof tfMapa!=="function")return false;const M=calcMatriz(a,tfMapa());if(!M.l.length||M.falta)return false;
+  const exMes=(a.extras||[]).filter(x=>x&&!x.anulada&&!(x.cobro&&x.cobro.no)&&String(x.fecha).startsWith(mes)).reduce((s,x)=>{const v=tarifaDe(a,x);return s+(v==null?NaN:v)},0);
+  if(isNaN(exMes))return false;return rs.reduce((s,r)=>s+(+r.importe||0),0)>=M.total+exMes-0.01}
 /* Recibos (dirección): horas extra por cobrar, clases añadidas por profesoras, peticiones sin alumno y tarifa */
 function cobroTxt(a,e,imp){
   const mes=String(e.fecha).slice(0,7),rs=(a.recibos||[]).filter(r=>String(r.emitido).startsWith(mes)),pen=rs.find(r=>r.estado!=="pagado"),m=+mes.slice(5,7)-1;
@@ -939,27 +970,44 @@ const pilotoHX=()=>{const c=(S.recCfg&&S.recCfg.pilotoHX)||null;return {profes:c
 function porClaseDe(a){const P=pilotoHX();for(const [id,v] of Object.entries(P.porClase))if(v&&S.alumnos.get(id)===a&&P.alumnos.includes(id))return {id,...v};return null}
 const hxActivo=(id,e)=>{const al=S.alumnos.get(id);if(al&&al.sueltas)return true;if(!cajaPrueba())return true;const P=pilotoHX();return P.alumnos.includes(id)&&P.profes.includes(e.profe)};
 let hxCorriendo=false;
+/* 14/11/2026 (titular): si el alumno ya tiene un recibo de la app (HX) pendiente, la nueva clase suelta u hora extra se añade a ese
+   recibo como una línea más (fecha, hora y profesora), en vez de hacer otro recibo. r.lineas = [{txt, imp, extra?, clase?}];
+   el importe es la suma y el concepto lista las líneas. Si se anula una línea, se quita del recibo (y el recibo, si se queda vacío). */
+const hxLineas=r=>Array.isArray(r.lineas)&&r.lineas.length?r.lineas:[{txt:r.concepto||"",imp:+r.importe||0,...(r.extra?{extra:r.extra}:{}),...(r.clase?{clase:r.clase}:{})}];
+const hxRehacer=(r0,l)=>{const {extra:_e,clase:_c,...r}=r0;if(l.length===1){if(l[0].extra)r.extra=l[0].extra;if(l[0].clase)r.clase=l[0].clase}else r.extra="varias";return {...r,lineas:l,importe:Math.round(l.reduce((s,x)=>s+(+x.imp||0),0)*100)/100,concepto:l.length===1?l[0].txt:`${l.length} clases: ${l.map(x=>x.txt).join(" · ")}`}};
+const hxPendiente=recibos=>recibos.filter(r=>r&&r.serie==="HX"&&r.origen==="app"&&r.estado!=="pagado").sort((x,y)=>String(x.emitido).localeCompare(String(y.emitido)))[0]||null;
+const hxTiene=(recibos,k,v)=>recibos.some(r=>r&&(r[k]===v||(Array.isArray(r.lineas)&&r.lineas.some(x=>x&&x[k]===v))));
+/* añade una línea: al recibo HX pendiente, o en un recibo nuevo. Devuelve {recibos, r, nuevo} */
+function hxAnadir(a,recibos,linea,f){const p=hxPendiente(recibos);
+  if(p){const r=hxRehacer(p,[...hxLineas(p),linea]);return {recibos:recibos.map(x=>x===p?r:x),r,nuevo:false}}
+  const y=+String(f||todayISO()).slice(0,4);let max=0;for(const [,x] of S.alumnos)for(const r of (x===a?recibos:x.recibos)||[])if(r&&r.serie==="HX"&&+r.anio===y)max=Math.max(max,+r.num||0);
+  const r={id:uid(),numero:`HX${String(y).slice(2)}-${String(max+1).padStart(4,"0")}`,serie:"HX",num:max+1,anio:y,emitido:f||todayISO(),concepto:linea.txt,importe:+linea.imp,estado:"pendiente",pagado:"",forma:"",origen:"app",...(linea.extra?{extra:linea.extra}:{}),...(linea.clase?{clase:linea.clase}:{})};
+  return {recibos:[...recibos,r],r,nuevo:true}}
+/* quita las líneas que cumplan f de los recibos HX pendientes; los recibos que se quedan sin líneas desaparecen */
+function hxQuitar(recibos,f){let cambia=false;const out=[];for(const r of recibos){
+    if(!(r&&r.serie==="HX"&&r.estado!=="pagado")){out.push(r);continue}const l=hxLineas(r),q=l.filter(x=>!f(x));
+    if(q.length===l.length){out.push(r);continue}cambia=true;if(q.length)out.push(hxRehacer(r,q))}
+  return cambia?out:null}
 async function recibosHX(){if(S.role!=="dir"||S.pv||S.ro||hxCorriendo||!S.alOk||!S.recCfg)return;hxCorriendo=true;const mos=esMos();if(mos)await new Promise(r=>setTimeout(r,8000));
   try{for(const [id,a] of S.alumnos){
       /* hora extra anulada con su recibo aún pendiente: se quita el recibo */
       const anul=new Set((a.extras||[]).filter(e=>e&&e.anulada).map(e=>e.id));
-      if(!mos&&(a.recibos||[]).some(r=>r&&r.extra&&anul.has(r.extra)&&r.estado!=="pagado")){const recibos=a.recibos.filter(r=>!(r&&r.extra&&anul.has(r.extra)&&r.estado!=="pagado"));if(await save(id,{recibos}))a.recibos=recibos}
+      if(!mos&&anul.size){const recibos=hxQuitar(a.recibos||[],x=>x.extra&&anul.has(x.extra));if(recibos&&await save(id,{recibos}))a.recibos=recibos}
       const pcl=porClaseDe(a);
       if(pcl&&+pcl.importe>0){const P=pilotoHX(),asis=a.asist||{};let recibos=[...(a.recibos||[])],cambia=false;const nuevos=[];
         for(const [k,v] of Object.entries(asis)){const [f,h]=k.split("|");if(!v||!f||f<(pcl.desde||"")||!P.profes.includes(v.p))continue;
-          const ya=recibos.find(r=>r&&r.clase===k);
-          if(v.e==="si"&&!ya){const y=+f.slice(0,4);let max=0;for(const [,x] of S.alumnos)for(const r of (x===a?recibos:x.recibos)||[])if(r&&r.serie==="HX"&&+r.anio===y)max=Math.max(max,+r.num||0);
-            const c=(a.clases.find(z=>z.dia===diaDe(f)&&z.hora===h)||{}),hr=c.ini?c.ini:(HSHORT[h]||h);
-            const r={id:uid(),numero:`HX${String(y).slice(2)}-${String(max+1).padStart(4,"0")}`,serie:"HX",num:max+1,anio:y,emitido:f,concepto:`Clase del ${fmtFecha(f)} · ${hr} con ${v.p}`,importe:+pcl.importe,estado:"pendiente",pagado:"",forma:"",origen:"app",clase:k};
-            recibos.push(r);nuevos.push(r);cambia=true}
-          else if(!mos&&v.e!=="si"&&ya&&ya.estado!=="pagado"){recibos=recibos.filter(r=>r!==ya);cambia=true}}
-        if(cambia&&await save(id,{recibos})){a.recibos=recibos;for(const r of nuevos)toast(`Recibo ${r.numero} creado: ${titulo(a.nombre)}, ${r.concepto} (${eur(r.importe)})`)}}
+          const ya=hxTiene(recibos,"clase",k);
+          if(v.e==="si"&&!ya){const c=(a.clases.find(z=>z.dia===diaDe(f)&&z.hora===h)||{}),hr=c.ini?c.ini:(HSHORT[h]||h);
+            const o=hxAnadir(a,recibos,{txt:`Clase del ${fmtFecha(f)} · ${hr} con ${v.p}`,imp:+pcl.importe,clase:k},f);recibos=o.recibos;nuevos.push(o.r);cambia=true}
+          else if(!mos&&v.e!=="si"&&ya){const q=hxQuitar(recibos,x=>x.clase===k);if(q){recibos=q;cambia=true}}}
+        if(cambia&&await save(id,{recibos})){a.recibos=recibos;for(const r of nuevos)toast(`Recibo ${r.numero}: ${titulo(a.nombre)}, ${eur(r.importe)}`)}}
+      /* 14/11/2026 (titular): el recibo se crea cuando la profesora confirma la clase («Asistió»), no al apuntarla */
       for(const e of a.extras||[]){if(!e||!e.id||e.anulada||e.cobro||!hxActivo(id,e))continue;
-        if((a.recibos||[]).some(r=>r&&r.extra===e.id))continue;const imp=tarifaDe(a,e);if(imp==null)continue;
-        const y=+todayISO().slice(0,4);let max=0;for(const [,x] of S.alumnos)for(const r of x.recibos||[])if(r&&r.serie==="HX"&&+r.anio===y)max=Math.max(max,+r.num||0);
-        const r={id:uid(),numero:`HX${String(y).slice(2)}-${String(max+1).padStart(4,"0")}`,serie:"HX",num:max+1,anio:y,emitido:todayISO(),concepto:`Hora extra · ${extraTxt(e)}`,importe:imp,estado:"pendiente",pagado:"",forma:"",origen:"app",extra:e.id};
-        const recibos=[...(a.recibos||[]),r],extras=(a.extras||[]).map(x=>x&&x.id===e.id?{...x,cobro:{recibo:r.numero,t:nowISO(),por:"app"}}:x);
-        if(await save(id,{recibos,extras})){a.recibos=recibos;a.extras=extras;toast(`Recibo ${r.numero} creado: ${titulo(a.nombre)}, hora extra ${extraTxt(e)} (${eur(imp)})`)}}}}
+        if(hxTiene(a.recibos||[],"extra",e.id))continue;const imp=tarifaDe(a,e);if(imp==null)continue;
+        if(asistDe(a,e.fecha,e.hora||keyDeMin(extraIni(e)),e.profe)!=="si")continue;
+        const o=hxAnadir(a,a.recibos||[],{txt:`${a.sueltas?"Clase":"Hora extra"} · ${extraTxt(e)}`,imp,extra:e.id},e.fecha),r=o.r;
+        const recibos=o.recibos,extras=(a.extras||[]).map(x=>x&&x.id===e.id?{...x,cobro:{recibo:r.numero,t:nowISO(),por:"app"}}:x);
+        if(await save(id,{recibos,extras})){a.recibos=recibos;a.extras=extras;toast(o.nuevo?`Recibo ${r.numero} creado: ${titulo(a.nombre)}, ${extraTxt(e)} (${eur(imp)})`:`Añadida al recibo ${r.numero} de ${titulo(a.nombre)}: ${extraTxt(e)} (total ${eur(r.importe)})`)}}}}
   finally{hxCorriendo=false}}
 function vPilotoHX(){if(!cajaPrueba())return "";const P=pilotoHX(),nom=id=>{const a=S.alumnos.get(id);return a?titulo(a.nombre):id};
   return `<details class="aviso info fh" style="display:block"><summary><b>Prueba: recibos en la app (horas extra y alumnos que pagan cada clase)</b> · ${P.profes.length?esc(P.profes.join(", ")):"ninguna profesora"} · ${P.alumnos.length} alumno${P.alumnos.length===1?"":"s"}</summary>
@@ -974,7 +1022,8 @@ function vPilotoHX(){if(!cajaPrueba())return "";const P=pilotoHX(),nom=id=>{cons
 async function guardarPilotoHX(P){const d={...(S.recCfg||{}),pilotoHX:P};try{await S.db.doc("config/recibos").set(d);S.recCfg=d;render();recibosHX()}catch(_){toast("No se ha podido guardar")}}
 function vExtrasDir(){
   if(S.role!=="dir"||esMos())return "";const out=[];
-  const ex=[],ap=[];for(const [id,a] of sortedAlumnos()){for(const e of a.extras||[])if(e&&!e.anulada&&!e.cobro)ex.push({id,a,e});for(const x of a.addProf||[])if(x&&!x.ok)ap.push({id,a,x})}
+  const ex=[],ap=[],auto=[];for(const [id,a] of sortedAlumnos()){for(const e of a.extras||[])if(e&&!e.anulada&&!e.cobro&&!hxActivo(id,e)){if(exCobradaArgos(a,e))auto.push({id,a,e});else ex.push({id,a,e})}for(const x of a.addProf||[])if(x&&!x.ok)ap.push({id,a,x})}
+  if(auto.length)setTimeout(()=>exAutoMarcar(auto),0);
   if(ex.length)out.push(`<details class="aviso pend fh" style="display:block" open><summary><b>${ex.length} hora${ex.length===1?"":"s"} extra por cobrar.</b> Clases de un día que han apuntado las profesoras, recepción o dirección. Cóbralas en Argos y pulsa «Hecho».</summary>
     <div class="fhl">${ex.sort((u,v)=>String(u.e.fecha).localeCompare(String(v.e.fecha))).map(({id,a,e})=>{const imp=tarifaDe(a,e);return `<div class="row" style="flex-wrap:wrap"><a href="#" class="grow" data-act="ir" data-id="${esc(id)}" style="color:inherit;text-decoration:none"><b>${esc(titulo(a.nombre))}</b> · ${esc(extraTxt(e))} · ${esc(nivelDe(a)||"sin nivel")}, ${extraInd(e)?"individual":"grupo"}</a><span class="note">${cobroTxt(a,e,imp)}${e.nota?` «${esc(e.nota)}»`:""}</span>
       <button class="btn small primary" data-act="excobro" data-id="${esc(id)}" data-e="${esc(e.id)}" data-v="si">Hecho</button><button class="btn small" data-act="excobro" data-id="${esc(id)}" data-e="${esc(e.id)}" data-v="no" title="No se le cobra (cortesía, recuperación…)">No se cobra</button></div>`}).join("")}</div></details>`);
@@ -1087,7 +1136,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="08nov-v34";
+const APP_VER="14nov-v97";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -1115,13 +1164,17 @@ function render0(){
   if(S.view==="nominas"){if(S.role==="profe"){app.innerHTML=vMisNominas();return}S.view="semana"}
   if(S.view==="misfich"){if(S.role==="profe"){app.innerHTML=vMisFichajes();return}S.view="semana"}
   if(S.view==="fichajes"){if(S.role==="dir"&&!S.pv){app.innerHTML=vFichajes();return}S.view="semana"}
-  if(S.role!=="dir"&&(S.view==="argos"||S.view==="accesos"||S.view==="calendario"||S.view==="recibos"||S.view==="tarifas"||S.view==="caja"||S.view==="gastos"))S.view="semana";
-  if(esMos()&&["argos","accesos","calendario","recibos","mensajes","tarifas","gastos"].includes(S.view))S.view="semana";
+  if(S.role!=="dir"&&(S.view==="argos"||S.view==="accesos"||S.view==="calendario"||S.view==="recibos"||S.view==="tarifas"||S.view==="caja"||S.view==="gastos"||S.view==="descuadres"||S.view==="facturacion"||S.view==="pendientes"))S.view="semana";
+  if(esMos()&&["argos","accesos","calendario","recibos","mensajes","tarifas","gastos","descuadres","facturacion","pendientes"].includes(S.view))S.view="semana";
   if(S.view==="recibos"){app.innerHTML=vRecibosDir();return}
   if(S.view==="tarifas"){app.innerHTML=vTarifas();return}
   if(S.view==="caja"){app.innerHTML=vCaja();return}
+  if(S.role==="dir"&&!esMos()){const tb=document.getElementById("t-desc");if(tb){const n=typeof descPend==="function"?descPend():0;tb.textContent="Descuadres"+(n?" · "+n:"")}const tp=document.getElementById("t-pend");if(tp){const n=typeof pdContar==="function"?(()=>{try{return pdContar()}catch(_){return 0}})():0;tp.textContent="Pendientes"+(n?" · "+n:"")}}
   if(S.view==="gastos"){app.innerHTML=vGastos();return}
+  if(S.view==="descuadres"){app.innerHTML=vDescuadres();return}
+  if(S.view==="facturacion"){app.innerHTML=vFactTalleres();return}
   rebuildOv();
+  if(S.view==="pendientes"){app.innerHTML=vPendientes();return}
   document.body.classList.toggle("flex",S.role==="dir"||(S.role==="profe"&&FLEX.has(S.myProfe)));
   if(S.view==="sesiones"){if(S.role==="dir"||FLEX.has(S.myProfe)){app.innerHTML=vSesiones();return}S.view="semana"}
   if(S.view==="asistencia"){app.innerHTML=vAsistencia();return}
@@ -1419,7 +1472,7 @@ function vRecibosDir(){
     <button class="stat" data-act="recfil" data-v="pendiente" aria-pressed="${f==="pendiente"}"><b>${eur(suma(pend))}</b><span>Pendiente de cobro · ${pend.length} recibo${pend.length===1?"":"s"}${pendB.length?` · sin contar ${pendB.length} de beca`:""}</span></button>
     <button class="stat" data-act="recfil" data-v="pagado" aria-pressed="${f==="pagado"}"><b>${eur(suma(pag))}</b><span>Cobrado · ${pag.length} recibo${pag.length===1?"":"s"}</span></button>
     <button class="stat" data-act="recfil" data-v="todos" aria-pressed="${f==="todos"}"><b>${eur(suma(l))}</b><span>Total de ${MESES[mm-1]} · ${l.length} recibo${l.length===1?"":"s"}</span></button>
-    <button class="stat" data-act="recfil" data-v="atrasados" aria-pressed="${f==="atrasados"}"><b>${nAtr}</b><span><b style="display:inline;font-size:inherit;font-weight:700">Atrasados</b> · alumno${nAtr===1?"":"s"} con recibos de meses anteriores sin pagar. Pulsa para ver la lista y avisar por WhatsApp</span></button>
+    <button class="stat" data-act="recfil" data-v="atrasados" aria-pressed="${f==="atrasados"}"><b>${nAtr}</b><span><b style="display:inline;font-size:inherit;font-weight:700">Atrasados</b> · alumno${nAtr===1?"":"s"} con recibos de meses anteriores sin pagar (desde ${MESES[+ATR_DESDE().slice(5)-1]} ${ATR_DESDE().slice(0,4)}). Pulsa para ver la lista y avisar por WhatsApp</span></button>
     <button class="stat" data-act="recfil" data-v="becas" aria-pressed="${f==="becas"}"><b>${eur(suma(bec))}</b><span><b style="display:inline;font-size:inherit;font-weight:700">Esperando beca</b> · ${bec.length} recibo${bec.length===1?"":"s"} de ${nBecAl} alumno${nBecAl===1?"":"s"}, de todos los meses. No se les reclama</span></button>
   </div>${vImport()}${vMensajesDir()}${vAltasArgos()}${vSinRecibo()}${vNoCuadran(S.recMes||todayISO().slice(0,7))}${vExtrasDir()}${vSinAlumno()}
   ${f==="atrasados"||f==="becas"?"":`<div class="bar"><input type="search" id="rq" placeholder="Buscar alumno o nº de recibo…" value="${esc(S.recQ||"")}" style="flex:1 1 240px" aria-label="Buscar recibo"></div>`}
@@ -1575,7 +1628,10 @@ function vSinAlumno(){
       <button class="btn small primary" data-act="recasig" data-i="${j}">Asignar</button><button class="btn small" data-act="recdescartar" data-i="${j}" title="Quitar de la lista sin asignarlo">Descartar</button></div>`).join("")}</div></details>`;
 }
 /* ---------- recibos atrasados: pendientes de un mes ya pasado ---------- */
-const atrasado=r=>r.estado!=="pagado"&&String(r.emitido||"").slice(0,7)<todayISO().slice(0,7);
+/* 14/11/2026 (titular): como atrasados solo cuentan los recibos desde que la app lleva las cuentas (1/10/2026, último trimestre);
+   los de antes siguen en la ficha de cada alumno, pero no se reclaman desde aquí ni cuentan en Pendientes */
+const ATR_DESDE=()=>String((typeof docDesde==="function"&&(()=>{try{return docDesde()}catch(_){return ""}})())||"2026-10-01").slice(0,7);
+const atrasado=r=>r.estado!=="pagado"&&String(r.emitido||"").slice(0,7)<todayISO().slice(0,7)&&String(r.emitido||"").slice(0,7)>=ATR_DESDE();
 const nombreMes=f=>{const [y,m]=String(f).split("-").map(Number);return m?MESES[m-1]+" "+y:""};
 function mensajeAtrasados(a,l){
   const meses=[...new Set(l.map(r=>nombreMes(r.emitido)))], tot=l.reduce((n,r)=>n+(+r.importe||0),0);
@@ -2065,9 +2121,26 @@ function aplicaAsis(a,f,h,p,e,t){
   const k=f+"|"+h, prev=a.faltas.find(z=>z.fecha===f&&(!z.hora||z.hora===h));
   const asist={...(a.asist||{}),[k]:{e,p,t}};
   const faltas=a.faltas.filter(z=>z!==prev);
+  if(e==="si"&&S.role==="dir"){const fx=recupDe(a,f,h);if(fx){const i=faltas.findIndex(z=>z.id===fx);if(i>=0&&faltas[i].recuperada!=="si")faltas[i]={...faltas[i],recuperada:"si",fechaRecup:f,festT:nowISO(),festPor:"Asistencia"}}}
   if(e!=="si")faltas.push({id:prev?prev.id:uid(),fecha:f,hora:h,profe:p,recuperada:e==="norec"?"no":(prev&&prev.recuperada==="si"?"si":"pendiente"),fechaRecup:prev&&e!=="norec"?prev.fechaRecup||"":"",motivo:e==="norec"?"No vino sin avisar":"Cambia de día"});
   return {asist,faltas};
 }
+/* 09/11/2026: si el alumno «Asistió» a una clase que era la recuperación programada de una falta (cambio con recup = id de la falta),
+   esa falta pasa sola a recuperada «Sí» (antes se quedaba «Sin confirmar» y la profesora no puede tocar Faltas). */
+function recupDe(a,f,h){if(!a||!a.token)return "";const r=todasRes().find(r=>r&&r.recup&&r.estado==="aceptada"&&r.tok===a.token&&r.a&&r.a.fecha===f&&(!r.a.hora||r.a.hora===h));return r?r.recup:""}
+/* Barrido: recuperaciones ya pasadas con asistencia «Asistió» y la falta aún sin confirmar (dirección, al cargar) */
+let recupBarrido=0;
+async function recupPendientes(){if(S.role!=="dir"||S.pv||!S.alOk||!S.cfgOk||Date.now()-recupBarrido<55000)return;recupBarrido=Date.now();
+  const hoy=todayISO();let n=0;
+  for(const [id,a] of S.alumnos){if(!a.token||!(a.faltas||[]).some(z=>z.recuperada==="pendiente"))continue;let faltas=a.faltas,cambia=false;
+    for(const r of todasRes()){if(!r||!r.recup||r.estado!=="aceptada"||r.tok!==a.token||!r.a||!r.a.fecha||r.a.fecha>hoy)continue;
+      const z=faltas.find(z=>z.id===r.recup);if(!z||z.recuperada!=="pendiente")continue;
+      if(asistDe(a,r.a.fecha,r.a.hora,r.a.profe||r.profe)!=="si")continue;
+      faltas=faltas.map(y=>y.id===z.id?{...y,recuperada:"si",fechaRecup:r.a.fecha,festT:nowISO(),festPor:"Asistencia"}:y);cambia=true}
+    if(cambia&&await save(id,{faltas})){a.faltas=faltas;n++}}
+  if(n){refrescar();toast(n===1?"1 falta marcada como recuperada (vino a su recuperación)":n+" faltas marcadas como recuperadas (vinieron a su recuperación)")}}
+/* Por si al arrancar aún no estaba todo cargado cuando se pasó la asistencia: se repasa también cada minuto (y a los 8 s de entrar) */
+setTimeout(()=>{try{recupPendientes()}catch(_){}},8000);setInterval(()=>{if(S.role==="dir"&&!document.hidden){try{recupPendientes();aplicarFestProfes()}catch(_){}}},60000);
 /* Sesiones de una profesora en una fecha concreta (con cambios aceptados y días sin clase) */
 function sesionesFecha(p,f){
   const out=[],res=resAceptadas(p);
@@ -2201,6 +2274,7 @@ async function aplicarAsisProfes(){
       if(await save(id,cur)){a.asist=cur.asist;a.faltas=cur.faltas}}
     if(por.size)refrescar();
   }finally{aplicandoAs=false}
+  try{await recupPendientes()}catch(e){console.warn("recup",e)}
 }
 
 
@@ -2581,7 +2655,11 @@ async function hacerCopia(){
   const dl=await window.claude.use("downloads");if(!dl){toast("Desde aquí no se pueden descargar archivos");return}
   setStatus("Preparando copia…");
   try{const out={app:"Horarios Althea",fecha:nowISO(),colecciones:{}};
-    for(const c of ["alumnos","config","buzon","mensajes","publico","claves"]){const q=await S.db.collection(c).limit(2000).get();out.colecciones[c]={};q.docs.forEach(d=>{out.colecciones[c][d.id]=d.data()})}
+    /* 14/11/2026: también todo lo de la fase 2 (banco, caja, recibos y facturas, nóminas, fichajes, impuestos, asesoría…).
+       Los PDF y fotos (archivos) no van: ocuparían cientos de MB. Si una colección no se puede leer, se apunta y se sigue. */
+    out.errores=[];
+    for(const c of ["alumnos","privado","config","publico","claves","buzon","buzonProf","buzonAl","mensajes","preins","eventos","citas","caja","banco","ventas","facturas","facturasPrueba","facturasTaller","nominas","fichajes","impuestos","asesoria"]){
+      try{setStatus("Copia: "+c+"…");const q=await S.db.collection(c).limit(5000).get();out.colecciones[c]={};q.docs.forEach(d=>{out.colecciones[c][d.id]=d.data()})}catch(e){out.errores.push(c)}}
     setStatus("Al día");
     await dl.save({filename:`copia-althea-${todayISO()}.json`,data:new Blob([JSON.stringify(out,null,1)],{type:"application/json"})});
     const c={ultima:nowISO()};await S.db.doc("config/copias").set(c);S.copias=c;render();toast("Copia descargada")}
@@ -2755,7 +2833,9 @@ function vInscripcion(){
     body=`${I.modo==="pre"?`<h2>Preinscripción por enlace</h2><p class="note">Pon al menos el nombre. La familia recibe un enlace por WhatsApp: ve el horario, la mensualidad y el primer recibo, completa sus datos y firma. Después tú la das de alta.</p>
     <div class="r2"><label class="f">Nombre y apellidos del alumno<input type="text" data-ins="pnombre" value="${esc(I.d.pnombre||"")}" autocomplete="off"></label>
     <label class="f">Teléfono para el WhatsApp<input type="tel" data-ins="ptel" inputmode="tel" value="${esc(I.d.ptel||"")}" placeholder="6xx xxx xxx"></label></div>
-    <div class="r2"><label class="f">Curso (tarifa)<select data-ins="pcurso"><option value="">Elige…</option>${pc0.map(c=>`<option value="${esc(c.nombre)}" ${c.nombre===I.d.pcurso?"selected":""}>${esc(titulo(c.nombre))} · ${eur(c.precio)}</option>`).join("")}</select></label>
+    <div class="r2"><label class="f">Curso (tarifa)<select data-ins="pcurso"><option value="">Elige…</option>${pc0.map(c=>`<option value="${esc(c.nombre)}" ${c.nombre===I.d.pcurso?"selected":""}>${esc(titulo(c.nombre))} · ${eur(c.precio)}</option>`).join("")}</select>
+      ${["pcurso2","pcurso3"].filter((k,i)=>i===0?I.d.pcurso:I.d.pcurso2).map((k,i)=>`<select data-ins="${k}" style="margin-top:6px"><option value="">${i===0?"+ Otro curso (opcional)…":"+ Un tercer curso (opcional)…"}</option>${pc0.map(c=>`<option value="${esc(c.nombre)}" ${c.nombre===I.d[k]?"selected":""}>${esc(titulo(c.nombre))} · ${eur(c.precio)}</option>`).join("")}</select>`).join("")}
+      ${I.d.pcurso2?`<span class="note">Mensualidad sugerida: suma de los cursos.</span>`:""}</label>
     <label class="f">Empieza el<input type="date" data-ins="pinicio" value="${esc(I.d.pinicio||"")}" min="${todayISO()}"></label></div>`
     :`<h2>Horario e importe</h2><p class="note">Lo rellena el personal del centro antes de pasar la tablet. Solo salen los días y horas en que la profesora trabaja y tiene hueco. Si aún no hay horario, se puede dejar vacío y añadir después en la ficha.</p>`}
     <label class="f">Nivel del alumno<select data-ins="nivel"><option value="">Elige…</option>${NIVELES.map(n=>`<option ${n===I.d.nivel?"selected":""}>${n}</option>`).join("")}</select></label>
@@ -2820,7 +2900,7 @@ function insClaseTxt(c){return `${c.dia} ${c.ini?`${c.ini} (${(TIPOS[c.tipo]||{}
 const insDias=p=>HORARIO_PROFE[p]?DIAS.filter(d=>(HORARIO_PROFE[p][d]||[]).length):DIAS;
 function insLibres(p,dia,tipo){
   const I=S.ins;
-  if(!FLEX.has(p))return horasDe(p,dia).map(h=>{const ind=esIndividual(p,dia,h),cap=capDe(p,dia,h),occ=ocupadas(p,dia,h)+I.clases.filter(c=>c.profe===p&&c.dia===dia&&c.hora===h).length,l=cap-occ;
+  if(!FLEX.has(p))return horasFijas(p,dia).map(h=>{const ind=esIndividual(p,dia,h),cap=capDe(p,dia,h),occ=ocupadas(p,dia,h)+I.clases.filter(c=>c.profe===p&&c.dia===dia&&c.hora===h).length,l=cap-occ;
     return {v:h,l,ind,t:`${HLABEL[h]} · ${ind?"individual, libre":`grupo, ${l} plaza${l===1?"":"s"} libre${l===1?"":"s"}`}`}}).filter(x=>x.l>0&&(I.exc||!primariaMal(I.d.nivel,p,dia,x.v,x.ind)));
   const dur=(TIPOS[tipo]||TIPOS["60"]).dur,out=[];
   for(const [x,y] of tramosDe(p,dia))for(let t=x;t+dur<=y;t+=15){
@@ -3023,13 +3103,14 @@ function preEscuchar(){if(PR.sub||!S.db||S.role!=="dir"||S.pv)return;if(!PR.yo)P
     if(S.view==="alumnos"||S.view==="semana")refrescar();preAuto()},()=>{PR.err=true;if(S.view==="alumnos")refrescar()})}
 /* Dirección: abrir el formulario (mismo paso 0 que la tablet, con nombre, teléfono, curso e inicio) */
 function preNueva(){S.ins={...insNuevo(),modo:"pre",d:{pinicio:sumaDias(todayISO(),1)}};S.preEd=true;render();scrollTo(0,0)}
+const preCursosSel=d=>[...new Set([d.pcurso,d.pcurso2,d.pcurso3].filter(Boolean))];
 function preCursos(){try{return typeof tfCursos==="function"?tfCursos().filter(c=>c.precio!=null):[]}catch(_){return []}}
 async function preCrear(){const I=S.ins,d=I.d,nombre=String(d.pnombre||"").replace(/\s+/g," ").trim(),tel=digitos(d.ptel).slice(-9),imp=preNum(I.importe);
   if(!nombre){toast("Escribe al menos el nombre del alumno");return}
   if(!I.clases.length){toast("Añade al menos una clase al horario");return}
   if(!imp){toast("Pon el importe mensual");return}
   if(d.ptel&&tel.length!==9){toast("El teléfono tiene que tener 9 cifras");return}
-  const tok=preTok(),p={tok,estado:"enviada",nombre,tel,nivel:d.nivel||"",curso:d.pcurso||"",importe:imp,clases:I.clases.map(c=>({...c})),inicio:d.pinicio||todayISO(),
+  const tok=preTok(),p={tok,estado:"enviada",nombre,tel,nivel:d.nivel||"",curso:preCursosSel(d).join(" + "),cursos:preCursosSel(d),importe:imp,clases:I.clases.map(c=>({...c})),inicio:d.pinicio||todayISO(),
     caducaMs:Date.now()+PRE_HORAS*3600e3,fest:festivos(),datos:null,cons:null,firma:"",completada:"",primer:null,bizum:"",t:nowISO(),por:quienSoy()};
   try{await S.db.doc("preins/"+tok).set(p)}catch(e){toast(/perm/i.test(String((e&&e.fb)||"")+" "+(e&&e.message))?"Faltan permisos: hay que publicar las reglas nuevas en Firebase.":"No se ha podido guardar la preinscripción");return}
   PR.docs=[...PR.docs.filter(x=>x.id!==tok),{id:tok,...p}];PR.ver++;SESC.al=null;S.preEd=false;S.ins=null;S.view="alumnos";PR.abiertas=true;render();
@@ -3040,15 +3121,36 @@ async function preRenovar(id){const p=PR.docs.find(x=>x.id===id);if(!p)return;S.
   if(mal.length){toast(`Ya no está libre: ${mal.map(([c,m])=>`${insClaseTxt(c)} (${m})`).join("; ")}. Anúlala y prepara otra.`);return}
   const caducaMs=Date.now()+PRE_HORAS*3600e3;try{await S.db.doc("preins/"+id).update({caducaMs});p.caducaMs=caducaMs;PR.ver++;SESC.al=null;render();toast("Reservada otras 48 h. Vuelve a enviar el WhatsApp.")}catch(_){toast("No se ha podido renovar")}}
 /* Dirección: lista en Alumnos */
+/* 09/11/2026: el primer recibo ya está en Argos si, tras subir el listado de recibos, el alumno tiene un recibo de Argos emitido
+   desde (dos días antes de) la fecha de alta. Entonces el aviso desaparece solo; si además no hay Bizum que comprobar, sale de la lista. */
+/* La ficha de la preinscripción: la del alta; si se juntó con otra ficha, se busca por teléfono o por nombre */
+function preFicha(p){if(p.alumno&&S.alumnos.has(p.alumno))return S.alumnos.get(p.alumno);
+  const tel=digitos((p.datos&&p.datos.tel)||p.tel||"").slice(-9);
+  if(tel.length===9){const l=[...S.alumnos.values()].filter(a=>(a.telefonos||[]).some(t=>digitos(typeof t==="string"?t:(t&&t.num)||"").slice(-9)===tel));
+    const n=nzN((p.datos&&p.datos.nombre)?insNombre(p.datos):p.nombre||"").split(" ")[0];const m=l.filter(a=>!n||nzN(a.nombre).startsWith(n));if(m.length===1)return m[0];if(l.length===1)return l[0]}
+  const nom=(p.datos&&p.datos.nombre)?insNombre(p.datos):p.nombre||"",x=alumnoPorNombre(nom);if(x)return x.a;
+  /* nombre y primer apellido iguales y una sola ficha así (p. ej. «MARTA PINTADO ROMERO» / «MARTA PINTADO ROMER») */
+  const w=nzN(nom).split(" ").slice(0,2).join(" ");if(w.split(" ").length<2)return null;const l=[...S.alumnos.values()].filter(a=>(nzN(a.nombre)+" ").startsWith(w+" "));return l.length===1?l[0]:null}
+function preRecibo(p){const a=preFicha(p);if(!a||!p.alta)return null;const d=sumaDias(String(p.alta).slice(0,10),-2);
+  /* también vale un recibo de Argos del mes de inicio (o del alta) por el importe del primer recibo, aunque Argos le ponga fecha anterior */
+  /* 09/11/2026 (Marta Pintado): el recibo de Argos puede ser de antes del alta en la app (empezó el 05/11 y pagó ese día) y por otro importe */
+  const d0=sumaDias([String(p.inicio||"").slice(0,10),String(p.alta).slice(0,10)].filter(Boolean).sort()[0],-7);
+  const ok=r=>r&&r.origen==="argos"&&(String(r.emitido||"").slice(0,10)>=d||String(r.emitido||"").slice(0,10)>=d0);
+  return (a.recibos||[]).filter(ok).sort((x,y)=>String(y.emitido).localeCompare(String(x.emitido)))[0]||null}
+function preArgosHecho(p){return !!p.argos||!!preRecibo(p)}
+/* el Bizum ya no hay que comprobarlo si ese primer recibo figura como pagado (en Argos o en la Caja) */
+const preBizumOk=p=>{const r=preRecibo(p);return !!r&&r.estado==="pagado"&&/bizum/i.test(r.forma||"")};
+/* pagado en Argos por otra vía (tarjeta, efectivo…) y la familia dice que también hizo Bizum: puede haber pagado dos veces */
+const preDoble=p=>{if(!p.bizum)return null;const r=preRecibo(p);return r&&r.estado==="pagado"&&!/bizum/i.test(r.forma||"")?r:null};
 function vPreLista(){if(!preDir())return "";preEscuchar();if(PR.err)return `<div class="aviso pend"><span>No se pueden leer las preinscripciones: hay que publicar las reglas nuevas en Firebase.</span></div>`;
-  const hace=sumaDias(todayISO(),-14),pend=p=>p.estado==="alta"&&!p.visto&&String(p.alta||"").slice(0,10)>=hace;
+  const hace=sumaDias(todayISO(),-14),pend=p=>p.estado==="alta"&&!p.visto&&String(p.alta||"").slice(0,10)>=hace&&!(preArgosHecho(p)&&(!p.bizum||preBizumOk(p)));
   const l=PR.docs.filter(p=>p.estado==="enviada"||p.estado==="completada"||p.estado==="procesando"||pend(p)).sort((a,b)=>(b.alta||b.completada||b.t||"").localeCompare(a.alta||a.completada||a.t||""));if(!l.length)return "";
   const nAl=l.filter(pend).length,nEs=l.filter(p=>p.estado==="enviada"&&!preCaducada(p)).length,nCa=l.filter(preCaducada).length;
   const fila=p=>{const pr=p.primer||preProrrateo(p.importe,p.clases,p.inicio),dd=p.datos||{},ca=preCaducada(p);
     const est=p.estado==="alta"?`<span class="badge b-si">Dado de alta ${fmtFecha(String(p.alta).slice(0,10))}</span>`:p.estado==="enviada"?(ca?`<span class="badge b-no">Reserva caducada</span>`:`<span class="badge b-pend">Reservado hasta el ${preHasta(p.caducaMs)}</span>`):`<span class="badge b-pend">Dándose de alta…</span>`;
-    const avisos=p.estado==="alta"?[p.argos||!cajaPrueba()?"":`Haz en Argos el primer recibo: <b>${pr?eur(pr.total):"—"}</b>`,p.bizum?`La familia dice que ha pagado <b>${pr?eur(pr.total):""}</b> por Bizum el ${fmtFecha(String(p.bizum).slice(0,10))}: compruébalo en el banco${cajaPrueba()?"":" y cóbralo en Caja con «Bizum»"}`:""].filter(Boolean):[];
-    const btns=p.estado==="alta"?`${cajaPrueba()&&!p.argos?`<button class="btn small" data-act="preargos" data-id="${esc(p.id)}">Recibo hecho en Argos</button>`:""}${p.alumno&&S.alumnos.has(p.alumno)?`<button class="btn small" data-act="ir" data-id="${esc(p.alumno)}">Ver ficha</button>`:""}<button class="btn small" data-act="previsto" data-id="${esc(p.id)}">Visto</button>`
-      :p.estado==="enviada"?`${ca?`<button class="btn small" data-act="prerenovar" data-id="${esc(p.id)}">Reservar otras 48 h</button>`:""}${p.tel&&!ca?`<a class="btn small" href="https://wa.me/34${p.tel}?text=${encodeURIComponent(preMsg(p))}" target="_blank" rel="noopener">Enviar por WhatsApp</a>`:""}${!ca?`<button class="btn small" data-act="precopiar" data-id="${esc(p.id)}">Copiar enlace</button>`:""}<button class="btn small" data-act="preanular" data-id="${esc(p.id)}">Anular</button>`
+    const avisos=p.estado==="alta"?[preArgosHecho(p)||!cajaPrueba()?"":`Haz en Argos el primer recibo: <b>${pr?eur(pr.total):"—"}</b>`,preDoble(p)?(r=>`Ojo: en Argos ya consta pagado el recibo ${esc(r.numero||"")} (<b>${eur(+r.importe)}</b>, ${esc(r.forma||"otra forma de pago")}, ${fmtFecha(String(r.emitido).slice(0,10))}), y la familia dice que <b>también</b> ha hecho un Bizum de <b>${pr?eur(pr.total):""}</b> el ${fmtFecha(String(p.bizum).slice(0,10))}. Mira en el banco si ha llegado: si es así, ha pagado dos veces (devolverlo o descontarlo del siguiente recibo).`)(preDoble(p)):p.bizum&&!preBizumOk(p)?`La familia dice que ha pagado <b>${pr?eur(pr.total):""}</b> por Bizum el ${fmtFecha(String(p.bizum).slice(0,10))}: compruébalo en el banco${cajaPrueba()?"":" y cóbralo en Caja con «Bizum»"}`:""].filter(Boolean):[];
+    const btns=p.estado==="alta"?`${cajaPrueba()&&!preArgosHecho(p)?`<button class="btn small" data-act="preargos" data-id="${esc(p.id)}">Recibo hecho en Argos</button>`:""}${p.alumno&&S.alumnos.has(p.alumno)?`<button class="btn small" data-act="ir" data-id="${esc(p.alumno)}">Ver ficha</button>`:""}<button class="btn small" data-act="previsto" data-id="${esc(p.id)}">Visto</button>`
+      :p.estado==="enviada"?`${ca?`<button class="btn small" data-act="prerenovar" data-id="${esc(p.id)}">Reservar otras 48 h</button>`:""}${p.tel&&!ca?`<button class="btn small" data-act="prewa" data-id="${esc(p.id)}" title="Copia el mensaje y abre el chat de WhatsApp con ese número">Enviar por WhatsApp</button>`:""}${!ca?`<button class="btn small" data-act="precopiar" data-id="${esc(p.id)}">Copiar enlace</button>`:""}<button class="btn small" data-act="preanular" data-id="${esc(p.id)}">Anular</button>`
       :p.estado==="completada"?`<button class="btn small primary" data-act="prealta" data-id="${esc(p.id)}">Dar de alta ahora</button>`:"";
     return `<div class="row" style="flex-wrap:wrap;gap:6px"><span class="grow" style="white-space:normal"><b>${esc(titulo(dd.nombre?insNombre(dd):p.nombre))}</b> ${est}<br>
       <span class="note">${(p.clases||[]).map(insClaseTxt).map(esc).join(" · ")} · ${eur(p.importe)}/mes · empieza ${fmtFecha(p.inicio)}${pr?` · primer recibo ${preProrrTxt(pr)}`:""}${dd.tel?` · tel. ${esc(fmtTel(dd.tel))}`:""}</span>
@@ -3071,13 +3173,16 @@ async function preAlta(id,auto){const p=PR.docs.find(x=>x.id===id);if(!p||!p.dat
   const dd=p.datos,f=insFirmante(dd),nombre=insNombre(dd).toUpperCase(),tel=digitos(dd.tel||p.tel).slice(-9);setStatus("Dando de alta…");
   S.resExcl=id;SESC.al=null;const mal=(p.clases||[]).map(c=>[c,preSinHueco(c)]).filter(x=>x[1]);S.resExcl="";SESC.al=null;
   try{const rec={v:NORMA_V,fecha:p.completada||nowISO(),firmante:f.n,parentesco:f.p,menor:f.menor,nac:dd.nac||"",tel,email:String(dd.email||"").trim(),
-      ...insExtra(dd),curso:p.curso||"",nivel:p.nivel||"",importe:String(p.importe),clases:(p.clases||[]).map(c=>({...c})),cons:{norma:!!(p.cons||{}).norma,priv:!!(p.cons||{}).priv,whats:!!(p.cons||{}).whats,imagen:!!(p.cons||{}).imagen},privV:PRIV_V,origen:"enlace"};
+      ...insExtra(dd),curso:p.curso||"",nivel:p.nivel||"",importe:String(p.importe),...(p.inicio?{inicio:p.inicio}:{}),clases:(p.clases||[]).map(c=>({...c})),cons:{norma:!!(p.cons||{}).norma,priv:!!(p.cons||{}).priv,whats:!!(p.cons||{}).whats,imagen:!!(p.cons||{}).imagen},privV:PRIV_V,origen:"enlace"};
     const aid=await crearAlumno(nombre);if(!aid)throw new Error("alta");const a=S.alumnos.get(aid);
     let pdfId="";try{const pdf=pdfDeCanvas(await paginasInscripcion({...rec,firmaImg:p.firma},titulo(nombre)));const as=await window.claude.use("assets");if(as){const r=await as.upload(new File([pdf],"inscripcion.pdf",{type:"application/pdf"}),{alumno:aid,clase:"pdf"});if(idOk(r.id))pdfId=r.id}}catch(e){console.warn(e)}
     rec.pdf=pdfId;
     const clases=[...a.clases];for(const c of rec.clases)if(!clases.some(x=>x.dia===c.dia&&x.hora===c.hora&&x.profe===c.profe))clases.push(c);
     const patch={nivel:rec.nivel||a.nivel||"",clases,telefonos:[...new Set([...(a.telefonos||[]),tel].filter(Boolean))],inscripciones:[...(a.inscripciones||[]),rec].slice(-10)};
-    if(p.curso){const c=preCursos().find(x=>x.nombre===p.curso),aj=c&&c.precio!=null&&Math.abs(c.precio-p.importe)>0.005;patch.matriz={l:[{curso:p.curso,...(aj?{aj:p.importe,mot:"Precio acordado en la preinscripción"}:{})}],t:nowISO(),por:quienSoy()}}
+    /* 10/11/2026: puede llevar varios cursos (p.cursos); si la mensualidad acordada no es la suma, la diferencia se ajusta en el primero */
+    const cl=Array.isArray(p.cursos)&&p.cursos.length?p.cursos:(p.curso?[p.curso]:[]);
+    if(cl.length){const cs=cl.map(n=>preCursos().find(x=>x.nombre===n)),suma=r2(cs.reduce((s,c)=>s+(c&&c.precio!=null?+c.precio:0),0)),dif=cs.every(c=>c&&c.precio!=null)?r2(p.importe-suma):0;
+      patch.matriz={l:cl.map((n,i)=>({curso:n,...(i===0&&Math.abs(dif)>0.005?{aj:r2((+(cs[0]||{}).precio||0)+dif),mot:"Precio acordado en la preinscripción"}:{})})),t:nowISO(),por:quienSoy()}}
     if(!await save(aid,patch))throw new Error("save");Object.assign(a,patch);
     const pr=p.primer||preProrrateo(p.importe,p.clases,p.inicio);let nota="",recibo="";
     if(pr&&pr.total>0){const mes=nombreMes(pr.desde),concepto=pr.completo?`Mensualidad ${mes}`:`Primer mes (${mes}): ${pr.n} clase${pr.n===1?"":"s"} desde el ${fmtFecha(pr.desde)}`;
@@ -3141,6 +3246,10 @@ async function compartirPdf({blob,pdf,tel,nombre,fecha}){
   if(file)toast("Se ha descargado el PDF: adjúntalo en el chat de WhatsApp");
 }
 /* Condiciones aceptadas: alumno (pestaña Condiciones) y dirección (ficha) */
+/* Día de alta si cae en ese mes (alta de la matrícula en Argos, inscripción en la app o alta en la app) y prorrateo de ese mes */
+function prorrMesAlta(a,mes){const iso=v=>typeof isoFlex==="function"?isoFlex(v):String(v||"").slice(0,10);
+  const ins=ultimaIns(a),c=[...(a.matriculas||[]).map(m=>iso(m&&m.alta)),ins?iso(ins.inicio||ins.fecha):"",a.altaApp&&a.altaApp.t?String(a.altaApp.t).slice(0,10):""].filter(d=>d&&d.startsWith(mes)).sort();
+  if(!c.length||typeof prorrateo!=="function")return null;return prorrateo(a,mes,c[0])}
 const ultimaIns=a=>(a&&a.inscripciones&&a.inscripciones.length)?a.inscripciones[a.inscripciones.length-1]:null;
 function vCondiciones(a){
   const r=ultimaIns(a), nb=S.miBuzon&&S.miBuzon.norma, pv=S.miBuzon&&S.miBuzon.priv;
@@ -3181,15 +3290,21 @@ function noCuadra(a,mes,todo){
   const r0=noCuadra0(a,mes);if(todo)return r0;const v=cuadreVal(a,mes);return r0.filter(x=>!v.has(x.k));
 }
 function noCuadra0(a,mes){
-  if(!a||a.baja)return [];const rs=(a.recibos||[]).filter(r=>r&&!r.extra&&!r.clase&&String(r.emitido).startsWith(mes));if(!rs.length)return [];
+  if(!a||a.baja||a.sueltas)return [];/* clases sueltas: paga cada clase, no hay horas ni tarifa mensual que cuadrar */const rs=(a.recibos||[]).filter(r=>r&&!r.extra&&!r.clase&&String(r.emitido).startsWith(mes)&&!esReciboExtra(a,r));if(!rs.length)return [];
   const out=[];let hr=0,ok=true;for(const r of rs){const h=horasDeCurso(r.curso);if(h==null){ok=false;break}hr+=h}
   const hh=a.clases.length;
   if(ok&&hr!==hh)out.push({t:"horas",k:`horas|${hr}|${hh}`,txt:`Se le cobran ${hr} h/semana y tiene ${hh} ${hh===1?"clase":"clases"} en el horario`});
+  /* 14/11/2026: el mes en que empieza paga la parte proporcional (prorrateo): si el recibo coincide con esa parte, cuadra */
+  const pr=prorrMesAlta(a,mes),nS=a.clases.length;
+  /* si no se sabe el día de alta pero es su primer mes con recibo, vale cualquier parte proporcional exacta (precio × clases ÷ (4 × clases/semana)) */
+  const primer=!(a.recibos||[]).some(r=>r&&!r.extra&&!r.clase&&!esReciboExtra(a,r)&&String(r.emitido||"").slice(0,7)<mes);
+  const okPr=(imp,precio)=>{imp=+imp;if(pr&&Math.abs(imp-Math.round(precio*pr.f*100)/100)<=0.5)return true;
+    if(!primer||!nS||!(imp<precio))return false;for(let q=1;q<4*nS;q++)if(Math.abs(imp-Math.round(precio*q/(4*nS)*100)/100)<=0.05)return true;return false};
   const cursos=(S.argos&&S.argos.cursos)||[];
-  for(const r of rs){const c=cursos.find(x=>x.nombre===r.curso);if(c&&c.cuota&&r.importe!=null&&Math.abs(+r.importe-c.cuota)>0.5)
+  for(const r of rs){const c=cursos.find(x=>x.nombre===r.curso);if(c&&c.cuota&&r.importe!=null&&Math.abs(+r.importe-c.cuota)>0.5&&!okPr(r.importe,c.cuota))
     out.push({t:"tarifa",k:`tarifa|${r.curso}|${(+r.importe).toFixed(2)}`,txt:`Recibo ${r.numero||""} de ${eur(+r.importe)}; la tarifa de «${r.curso}» es ${eur(c.cuota)}`})}
   const ins=ultimaIns(a);if(ins&&ins.importe){const tot=rs.reduce((s,r)=>s+(+r.importe||0),0),p=+ins.importe;
-    if(Math.abs(tot-p)>0.5)out.push({t:"pactado",k:`pactado|${p.toFixed(2)}|${tot.toFixed(2)}`,txt:`Pactado en la inscripción: ${eur(p)}/mes; recibos del mes: ${eur(tot)}`})}
+    if(Math.abs(tot-p)>0.5&&!okPr(tot,p))out.push({t:"pactado",k:`pactado|${p.toFixed(2)}|${tot.toFixed(2)}`,txt:`Pactado en la inscripción: ${eur(p)}/mes; recibos del mes: ${eur(tot)}`})}
   return out;
 }
 const noCuadranLista=mes=>sortedAlumnos().map(([id,a])=>[id,a,noCuadra(a,mes)]).filter(x=>x[2].length);
@@ -3224,7 +3339,7 @@ function sugerirHueco(id,a,c){
         if(!dentroTramo(p,dia,t,t+dur)||chocaSes(p,dia,t,tipo,c)||!libreAl(t,t+dur))continue;
         if(tipo==="grupo"&&primariaMal(niv,p,dia,keyDeMin(t),false))continue;
         return {dia,ini:t,fin:t+dur,tipo,hora:keyDeMin(t)}}}
-    else for(const h of horasDe(p,dia)){
+    else for(const h of horasFijas(p,dia)){
       if(dia===c.dia&&h===c.hora)continue;const i=KEY_INI[h];if(!franja(i))continue;
       if(ocupadas(p,dia,h,id)>=capDe(p,dia,h)||!libreAl(i,i+60)||primariaMal(niv,p,dia,h,esIndividual(p,dia,h)))continue;
       if(a.clases.some(o=>o!==c&&o.dia===dia&&o.hora===h))continue;
@@ -3240,7 +3355,7 @@ function libresPara(id,a,c,dia,tipo){
       if(!dentroTramo(p,dia,t,t+dur)||chocaSes(p,dia,t,tp,c)||!libreAl(t,t+dur))continue;
       if(tp==="grupo"&&primariaMal(niv,p,dia,keyDeMin(t),false))continue;
       out.push({dia,ini:t,fin:t+dur,tipo:tp,hora:keyDeMin(t),t:`${hm(t)}–${hm(t+dur)}`})}}
-  else for(const h of horasDe(p,dia)){
+  else for(const h of horasFijas(p,dia)){
     if(dia===c.dia&&h===c.hora)continue;const i=KEY_INI[h],cap=capDe(p,dia,h),n=ocupadas(p,dia,h,id),ind=esIndividual(p,dia,h);
     if(n>=cap||!libreAl(i,i+60)||a.clases.some(o=>o!==c&&o.dia===dia&&o.hora===h)||primariaMal(niv,p,dia,h,ind))continue;
     out.push({dia,ini:i,fin:i+60,hora:h,t:`${HLABEL[h]} · ${ind?"individual":`grupo, ${cap-n} plaza${cap-n===1?"":"s"} libre${cap-n===1?"":"s"}`}`})}
@@ -3470,7 +3585,7 @@ function vSemana(){
   const filtro=S.role==="profe"?"":`<div class="bar"><button class="chip" data-act="fprofe" data-p="" aria-pressed="${!S.profe}">Todas</button>`+
     ps.map(p=>`<button class="chip" data-act="fprofe" data-p="${esc(p)}" aria-pressed="${S.profe===p}" style="--pc:${pc(p)}"><span class="dot"></span>${esc(p)}</button>`).join("")+`</div>`;
   let rows="";
-  const filas=HORAS.filter(h=>h!=="3-4"||(S.profe?FLEX.has(S.profe):true));
+  const filas=HORAS.filter(h=>(h!=="3-4"||(S.profe?FLEX.has(S.profe):true))&&(h!=="9-10"||(S.profe?DIAS.some(d=>trabaja(S.profe,d,h)):true)));
   filas.forEach((h,i)=>{
     rows+=`<tr class="${i===2?"sep":""}"><td class="h">${HSHORT[h]}<small>${i<2?"mañana":"tarde"}</small></td>`;
     for(const d of DIAS){
@@ -3612,13 +3727,22 @@ function vCambiosFicha(a){
   if(!l.length)return "";
   return `<div><b style="font-size:14px">Cambios de clase</b>${l.map(r=>`<div class="row"><span class="ruta grow">${ruta(r)}</span><span class="note">${esc(r.profe)}${r.origen==="direccion"?" · dirección":""}</span>${estBadge(r.estado)}${S.role==="dir"&&!S.pv&&r.origen==="direccion"&&r.estado==="aceptada"&&String(r.a.fecha)>=todayISO()?`<button class="btn small" data-act="anularpunt" data-id="${esc(idPorToken(a.token))}" data-rid="${esc(r.rid)}">Anular</button>`:""}</div>`).join("")}</div>`;
 }
-function horasRecibos(a){const ms=[...new Set((a.recibos||[]).filter(r=>r.curso).map(r=>String(r.emitido).slice(0,7)))].sort();const mes=ms.pop();if(!mes)return null;
-  let t=0;for(const r of a.recibos.filter(r=>String(r.emitido).startsWith(mes))){const h=horasDeCurso(r.curso);if(h==null)return null;t+=h}return {h:t,mes}}
+/* 14/11/2026: un recibo es de una hora extra (no de la mensualidad) si lo creó la app para una hora extra (serie HX), si una hora
+   extra apunta a él como cobrada, o si en ese mes hay otro recibo del mismo curso más caro y este es pequeño (≤ 25 €, como una
+   hora suelta: Aaron Aguiar, noviembre 2026, 45 € de la mensualidad + 8 € de una hora extra con el mismo concepto). Esos no cuentan
+   para las horas contratadas, la tarifa propuesta ni «lo que paga en Argos». */
+function esReciboExtra(a,r){if(!r)return false;if(r.serie==="HX"||r.extra)return true;
+  if(r.numero&&((a&&a.extras)||[]).some(e=>e&&e.cobro&&e.cobro.recibo===r.numero))return true;
+  const imp=+r.importe||0,mes=String(r.emitido||"").slice(0,7),cur=String(r.curso||"").trim().toUpperCase();if(!cur||!mes||imp>25||imp<=0)return false;
+  return ((a&&a.recibos)||[]).some(o=>o&&o!==r&&o.id!==r.id&&String(o.emitido||"").startsWith(mes)&&String(o.curso||"").trim().toUpperCase()===cur&&(+o.importe||0)>imp*1.5)}
+function horasRecibos(a){const ms=[...new Set((a.recibos||[]).filter(r=>r.curso&&!esReciboExtra(a,r)).map(r=>String(r.emitido).slice(0,7)))].sort();const mes=ms.pop();if(!mes)return null;
+  let t=0;for(const r of a.recibos.filter(r=>String(r.emitido).startsWith(mes)&&!esReciboExtra(a,r))){const h=horasDeCurso(r.curso);if(h==null)return null;t+=h}return {h:t,mes}}
 function horasContratadas(a){const hr=horasRecibos(a);if(hr)return hr.h;if(!a.matriculas.length)return null;let t=0;for(const m of a.matriculas){if(m.horasSemana==null)return null;t+=m.horasSemana}return t}
 function vMatricula(a){
   const est=a.argos==="activo"?`<span class="badge b-si">Activo en Argos</span>`:a.argos==="baja"?`<span class="badge b-no">De baja en Argos</span>`:a.argos==="no_encontrado"?`<span class="badge b-pend">No aparece en Argos</span>`:`<span class="badge b-off">Sin cruzar con Argos</span>`;
   const hc=horasContratadas(a), hh=a.clases.length;
-  const aviso=hc!=null&&hc!==hh?`<p class="note" style="color:var(--warn)">Tiene contratadas ${hc} h/semana y en el horario hay ${hh} h.</p>`:"";
+  const prueba=S.role==="dir"&&typeof vPruebasAl==="function"?(()=>{try{return vPruebasAl(a)}catch(_){return ""}})():"";
+  const aviso=prueba+(hc!=null&&hc!==hh&&!a.sueltas?`<p class="note" style="color:var(--warn)">Tiene contratadas ${hc} h/semana y en el horario hay ${hh} h.</p>`:"");
   const mats=a.matriculas.map(m=>`<div class="row"><span class="grow">${esc(m.curso)}</span><span class="note">desde ${fmtFecha(m.alta)}</span><b style="font-variant-numeric:tabular-nums">${eur(m.cuota)}${m.cobro==="MENSUAL"?"/mes":m.cobro?" "+esc(m.cobro.toLowerCase()):""}</b></div>`).join("");
   const desf=a.baja&&a.argos==="activo"?`<p class="note" style="color:var(--warn)">En la app está de baja, pero en el último listado de cursos de Argos seguía activo. Si ya lo has dado de baja en Argos, sube el listado de cursos actualizado (Cuadre Argos).</p>`:"";
   return `<div><div class="bar" style="margin-bottom:4px"><b style="font-size:14px;margin-right:auto">Matrícula</b>${est}</div>${mats||`<p class="note">Sin cursos activos en Argos.</p>`}${aviso}${desf}</div>`;
@@ -3667,8 +3791,25 @@ function vRecProg(id,a,f){
 document.addEventListener("change",e=>{const t=e.target;if(!t||!t.id||!t.id.startsWith("rf-")||!S.recF)return;const r=S.recF;
   if(t.id==="rf-f")r.f=t.value;if(t.id==="rf-p")r.p=t.value;if(t.id==="rf-h")r.h=t.value;if(t.id==="rf-ini")r.ini=+t.value;if(t.id==="rf-tipo")r.tipo=t.value;
   if(t.id==="rf-f"||t.id==="rf-p")render()});
+/* 09/11/2026 (titular): el estado de cada falta (¿recuperada? Sí / No / Sin confirmar) lo marca la profesora de esa clase;
+   dirección solo lo ve. La profesora lo guarda en su buzón (campo fest, clave token|id de la falta = {e, t, p}) y dirección lo pasa
+   a la ficha (falta.recuperada + falta.festT). Dirección solo puede marcarlo en las faltas de una profesora sin cuenta (p. ej. Fani). */
+function festOvDe(lista){const o={};for(const {p,fe} of lista)for(const [k,v] of Object.entries(fe||{})){if(!v||!["si","no","pendiente"].includes(v.e)||v.p!==p)continue;if(!o[k]||String(v.t)>String(o[k].t))o[k]=v}return o}
+function festOv(){if(S.role==="profe")return festOvDe(S.myProfe&&S.miBuzon?[{p:S.myProfe,fe:S.miBuzon.fest}]:[]);
+  if(S.role==="dir")return festOvDe([...S.buzon].filter(([u])=>S.cuentas[u]).map(([u,d])=>({p:S.cuentas[u],fe:d.fest})));return {}}
+function festEf(a,f,ov){const o=(ov||festOv())[(a.token||"")+"|"+f.id];return o&&String(o.t)>String(f.festT||"")?{...f,recuperada:o.e}:f}
+const profeConCuenta=p=>Object.values(S.cuentas||{}).includes(p);
+function puedeFalta(f){if(S.pv)return false;if(S.role==="profe")return !!S.myProfe&&f.profe===S.myProfe;return S.role==="dir"&&!esMos()&&!S.ro&&!profeConCuenta(f.profe)}
+let aplicandoFe=false;const feHechas=new Set();
+async function aplicarFestProfes(){if(S.role!=="dir"||aplicandoFe||!S.alOk||!S.cfgOk||S.pv)return;aplicandoFe=true;
+  try{const ov=festOv();let n=0;
+    for(const [k,v] of Object.entries(ov)){if(feHechas.has(k+"@"+v.t))continue;const [tok,fid]=k.split("|"),al=alumnoPorToken(tok);if(!al)continue;
+      const z=(al.a.faltas||[]).find(z=>z.id===fid);feHechas.add(k+"@"+v.t);if(!z||String(z.festT||"")>=String(v.t))continue;
+      const faltas=al.a.faltas.map(y=>y.id===fid?{...y,recuperada:v.e,festT:v.t,festPor:v.p}:y);if(await save(al.id,{faltas})){al.a.faltas=faltas;n++}}
+    if(n)refrescar()}finally{aplicandoFe=false}}
 function filaFalta(id,a,f,conNombre){
-  const seg=["si","no","pendiente"].map(v=>`<button class="${v} ${f.recuperada===v?"on":""}" data-act="estado" data-id="${id}" data-f="${f.id}" data-v="${v}" ${dis()}>${v==="si"?"Sí":v==="no"?"No":"Sin confirmar"}</button>`).join("");
+  f=festEf(a,f);const pf=puedeFalta(f);
+  const seg=["si","no","pendiente"].map(v=>`<button class="${v} ${f.recuperada===v?"on":""}" data-act="estado" data-id="${id}" data-f="${f.id}" data-v="${v}" ${pf?"":"disabled"} ${pf?"":`title="${S.role==="dir"?"Lo marca "+esc(f.profe||"la profesora"):"Solo la profesora de esa clase"}"`}>${v==="si"?"Sí":v==="no"?"No":"Sin confirmar"}</button>`).join("");
   return `<tr>
     <td>${fmtFecha(f.fecha)} <span class="note">${diaDe(f.fecha).slice(0,3)}</span></td>
     ${conNombre?`<td><a href="#" data-act="ir" data-id="${id}" style="color:inherit">${esc(a.nombre)}</a></td>`:""}
@@ -3680,7 +3821,7 @@ function filaFalta(id,a,f,conNombre){
   </tr>`;
 }
 function vFaltas(){
-  const all=[];for(const [id,a] of S.alumnos) for(const f of a.faltas) all.push({id,a,f});
+  const all=[],fov=festOv();for(const [id,a] of S.alumnos) for(const f of a.faltas) all.push({id,a,f:festEf(a,f,fov)});
   const cnt={no:0,pendiente:0,si:0};all.forEach(x=>cnt[x.f.recuperada]=(cnt[x.f.recuperada]||0)+1);
   const meses=[...new Set(all.map(x=>x.f.fecha.slice(0,7)))].sort().reverse();
   let l=all.filter(x=>S.fEstado==="todas"||(S.fEstado==="pendiente_no"?x.f.recuperada!=="si":x.f.recuperada===S.fEstado));
@@ -3878,7 +4019,7 @@ function proximaFecha(dia){const t=new Date();for(let i=0;i<7;i++){const x=new D
 
 
 /* ---------- acciones ---------- */
-const EDITA=new Set(["recnum","excobro","exanular","addprofok","psasig","psdesc","tarifaok","reactbaja","juntar","juntarok","quitarrepe","argosok","argosno","exento","sinrecok","confok","confquitar","renombrar","cuadreok","cuadrequitar","fotoquitar","reactivar","msgresp","msgcerrar","recsubir","recaplicar","recasig","recdescartar","bajapend","guardaracc","recadd","recest","recdel","addfest","delfest","copiarmsg","nuevo","crear","addclase","quitarclase","borrar","borrarok","estado","delfalta","addfalta","faltahoy","quitarde","addacelda","vincular","rechazar","quitar","quitarok","sincronizar"]);
+const EDITA=new Set(["borrarpre","bajapend","recnum","excobro","exanular","addprofok","psasig","psdesc","tarifaok","reactbaja","juntar","juntarok","quitarrepe","argosok","argosno","exento","sinrecok","confok","confquitar","renombrar","cuadreok","cuadrequitar","fotoquitar","reactivar","msgresp","msgcerrar","recsubir","recaplicar","recasig","recdescartar","bajapend","guardaracc","recadd","recest","recdel","addfest","delfest","copiarmsg","nuevo","crear","addclase","quitarclase","borrar","borrarok","delfalta","addfalta","faltahoy","quitarde","addacelda","vincular","rechazar","quitar","quitarok","sincronizar"]);
 document.addEventListener("click",async e=>{
   const t=e.target.closest("[data-act],nav button");if(!t)return;
   if(t.matches("nav button")){S.view=t.dataset.v;render();return}
@@ -3910,6 +4051,14 @@ document.addEventListener("click",async e=>{
       aObj={hora:keyDeMin(ini),profe:B,ini:hm(ini),dur:TIPOS[tp].dur,tipo:tp}}
     else{const h=($("#rf-h")||{}).value||r.h;if(!h||!trabaja(B,dia,h)){toast(`${B} no trabaja ese día a esa hora`);return}
       if(ocupadas(B,dia,h)>=capDe(B,dia,h)&&!confirm("Ese grupo ya está completo. ¿Programarla igualmente?"))return;aObj={hora:h,profe:B}}
+    /* 09/11/2026: aviso si la recuperación se pisa con una clase normal del propio alumno ese día (hay que pulsar otra vez para aceptarla) */
+    {const i0=aObj.ini?minDe(aObj.ini):(KEY_INI[aObj.hora]??960),i1=i0+(+aObj.dur||60);
+      const pisa=clasesDia(a,r.f,(S.role==="dir"?todasRes():resAceptadas(B)).filter(x=>x&&x.tok===a.token&&x.estado==="aceptada"&&x.recup!==f.id)).filter(o=>(o.t==="normal"||o.t==="extra")&&o.ini<i1&&o.fin>i0)[0];
+      const clave=r.f+"|"+i0;
+      if(pisa&&S.recPisaOk!==clave){S.recPisaOk=clave;const txt=`Se pisa con su clase de ${hm(pisa.ini)} a ${hm(pisa.fin)} con ${pisa.profe}. Pulsa otra vez si de verdad hará las dos.`;
+        t.textContent="Se pisa: pulsa otra vez para aceptar";t.classList.add("danger");toast(txt);
+        setTimeout(()=>{if(t.isConnected){t.textContent="Guardar recuperación";t.classList.remove("danger")}if(S.recPisaOk===clave)S.recPisaOk=null},8000);return}
+      S.recPisaOk=null}
     if(S.role==="profe"){if(B!==S.myProfe||f.profe!==S.myProfe)return;if(!a.token){toast("Este alumno aún no se puede mover. Avisa a dirección.");return}
       const rp={rid:nuevoId("p"),tok:a.token,profe:B,de:{fecha:f.fecha,hora:f.hora,profe:B},a:{fecha:r.f,...aObj},estado:"aceptada",fecha:hoy,origen:"profe",nota:"Recuperación de la clase del "+fCorta(f.fecha),recup:f.id};
       t.disabled=true;if(await guardarRes(rp)){S.recF=null;render();toast(`Recuperación el ${fCorta(r.f)}`)}else t.disabled=false;return}
@@ -4022,7 +4171,7 @@ document.addEventListener("click",async e=>{
   else if(act==="recdescartar"){const cfg=S.recCfg||{},j=+t.dataset.i,x=(cfg.sinAlumno||[])[j];await guardarRecCfg({...cfg,ignorar:[...new Set([...(cfg.ignorar||[]),...(x?[x.numero]:[])])],sinAlumno:(cfg.sinAlumno||[]).filter((_,k)=>k!==j)});render();toast("Recibo descartado: no se volverá a preguntar")}
   else if(act==="copiaraviso"){const a2=S.alumnos.get(t.dataset.id);if(!a2)return;const msg=mensajeAtrasados(a2,(a2.recibos||[]).filter(atrasadoMes));
     try{await navigator.clipboard.writeText(msg);toast("Mensaje copiado")}catch(_){prompt("Copia el mensaje:",msg)}}
-  else if(act==="bajapend"){if(await save(id,{baja:todayISO(),clases:[]})){a.baja=todayISO();a.clases=[];render();toast("Baja apuntada: conserva el acceso hasta pagar")}}
+  else if(act==="bajapend"){const n=pendTodos(a);if(await save(id,{baja:todayISO(),clases:[],...(a.clases&&a.clases.length?{clasesBaja:a.clases}:{})})){a.baja=todayISO();a.clases=[];render();toast(n?"Baja apuntada: la ficha se guarda y conserva el acceso hasta pagar":"Baja apuntada: la ficha se guarda por si vuelve")}}
   else if(act==="asprofe"){S.asP=t.dataset.p;render()}
   else if(act==="relojmodo"){setRelojModo(t.dataset.v);render()}
   else if(act==="hxprofe"&&S.role==="dir"&&!esMos()){const P=pilotoHX(),p=t.dataset.p;P.profes=P.profes.includes(p)?P.profes.filter(x=>x!==p):[...P.profes,p];await guardarPilotoHX(P)}
@@ -4068,6 +4217,11 @@ document.addEventListener("click",async e=>{
   else if(act==="prenueva"&&preDir()){preNueva()}
   else if(act==="precancelar"){S.preEd=false;S.ins=null;render()}
   else if(act==="precrear"&&preDir()&&S.ins){t.disabled=true;await preCrear();t.disabled=false}
+  /* 10/11/2026: «Enviar por WhatsApp» no siempre metía el texto (WhatsApp de escritorio a veces abre el chat vacío).
+     Ahora copia el mensaje antes de abrir el chat: si sale vacío, se pega con Ctrl+V y se envía. */
+  else if(act==="prewa"&&preDir()){const p=PR.docs.find(x=>x.id===t.dataset.id);if(!p||!p.tel)return;const msg=preMsg(p);let cop=false;try{await navigator.clipboard.writeText(msg);cop=true}catch(_){}
+    window.open(`https://wa.me/34${digitos(p.tel).slice(-9)}?text=${encodeURIComponent(msg)}`,"_blank","noopener");
+    toast(cop?"Abriendo WhatsApp. El mensaje ya está copiado: si el chat sale vacío, pulsa Ctrl+V y envía":"Abriendo WhatsApp…")}
   else if(act==="precopiar"&&preDir()){const p=PR.docs.find(x=>x.id===t.dataset.id);if(p){try{await navigator.clipboard.writeText(preMsg(p));toast("Mensaje con el enlace copiado")}catch(_){prompt("Copia el mensaje:",preMsg(p))}}}
   else if(act==="preanular"&&preDir()){if(confirm("¿Anular esta preinscripción? El enlace dejará de funcionar.")){try{await S.db.doc("preins/"+t.dataset.id).update({estado:"anulada",anulada:nowISO()});render();toast("Preinscripción anulada")}catch(_){toast("No se ha podido anular")}}}
   else if(act==="prealta"&&preDir()){t.disabled=true;await preAlta(t.dataset.id);t.disabled=false}
@@ -4183,10 +4337,20 @@ document.addEventListener("click",async e=>{
     if(a.clases.some(x=>x.dia===c.dia&&x.hora===c.hora)){toast("Ya tiene clase ese día a esa hora");return}
     const clases=[...a.clases,c]; if(await save(id,{clases})){a.clases=clases;render();toast(necesitaRecibo(a)?"Clase añadida. Ojo: no tiene recibo de este mes; hazlo en Argos":"Clase añadida")}}
   else if(act==="quitarclase"){const clases=a.clases.filter((_,i)=>i!=+t.dataset.i);if(await save(id,{clases})){a.clases=clases;render()}}
-  else if(act==="borrar"){const n=pendTodos(a);$("#delbox").innerHTML=n&&!a.baja?`<span class="confirm">Tiene ${n} recibo${n===1?"":"s"} pendiente${n===1?"":"s"}. <button class="btn danger small" data-act="bajapend" data-id="${id}">Dar de baja (conserva el acceso hasta pagar)</button><button class="btn small" data-act="borrarok" data-id="${id}">Borrar del todo</button><button class="btn small" data-act="sel" data-id="${id}">No</button></span>`
-      :`<span class="confirm">¿Borrar ficha y faltas? <button class="btn danger small" data-act="borrarok" data-id="${id}">Sí, borrar</button><button class="btn small" data-act="sel" data-id="${id}">No</button></span>`}
-  else if(act==="borrarok"){try{await S.db.collection("alumnos").doc(id).delete();S.alumnos.delete(id);syncAlumno(id,null);S.sel=null;render();toast("Alumno dado de baja")}catch(_){toast("No se ha podido borrar")}}
-  else if(act==="estado"){const faltas=a.faltas.map(f=>f.id===t.dataset.f?{...f,recuperada:t.dataset.v}:f);if(await save(id,{faltas})){a.faltas=faltas;render()}}
+  /* 09/11/2026 (titular): dar de baja NO borra la ficha: se queda con sus recibos (los pendientes se pueden reclamar), sus faltas y sus
+     consentimientos firmados, por si vuelve (botón «Reactivar»). Solo se le quitan las clases; el acceso se cierra solo cuando no debe nada.
+     «Borrar del todo» queda para fichas creadas por error o repetidas. */
+  else if(act==="borrar"){const n=pendTodos(a);$("#delbox").innerHTML=`<span class="confirm" style="white-space:normal">${n?`Tiene ${n} recibo${n===1?"":"s"} pendiente${n===1?"":"s"}: seguirá${n===1?"":"n"} en su ficha para reclamarlo${n===1?"":"s"}. `:""}La ficha se guarda (recibos, faltas y consentimientos) por si vuelve.
+      <button class="btn danger small" data-act="bajapend" data-id="${id}">Dar de baja</button><button class="btn small" data-act="sel" data-id="${id}">No</button>
+      <br><a href="#" data-act="borrarpre" data-id="${id}" class="note" style="color:var(--bad)">Borrar la ficha del todo (solo si se creó por error o está repetida)</a></span>`}
+  else if(act==="borrarpre"){$("#delbox").innerHTML=`<span class="confirm">¿Borrar la ficha <b>del todo</b>, con sus recibos, faltas y consentimientos? No se puede deshacer. <button class="btn danger small" data-act="borrarok" data-id="${id}">Sí, borrar del todo</button><button class="btn small" data-act="sel" data-id="${id}">No</button></span>`}
+  else if(act==="borrarok"){try{await S.db.collection("alumnos").doc(id).delete();S.alumnos.delete(id);syncAlumno(id,null);S.sel=null;render();toast("Ficha borrada")}catch(_){toast("No se ha podido borrar")}}
+  else if(act==="estado"){const f0=a.faltas.find(f=>f.id===t.dataset.f);if(!f0||!puedeFalta(f0))return;
+    if(S.role==="profe"){if(!a.token){toast("Este alumno aún no se puede marcar. Avisa a dirección.");return}
+      const lim=sumaDias(todayISO(),-200),fest={};for(const [k,v] of Object.entries((S.miBuzon&&S.miBuzon.fest)||{}))if(v&&String(v.t).slice(0,10)>=lim)fest[k]=v;
+      fest[a.token+"|"+f0.id]={e:t.dataset.v,t:nowISO(),p:S.myProfe};const d={...(S.miBuzon||{}),profe:S.myProfe,fest};
+      try{await S.db.doc("buzon/"+S.me).set(d);S.miBuzon=d;render();toast("Guardado")}catch(_){toast("No se ha podido guardar. Inténtalo de nuevo.")}return}
+    const faltas=a.faltas.map(f=>f.id===t.dataset.f?{...f,recuperada:t.dataset.v,festT:nowISO(),festPor:"Dirección"}:f);if(await save(id,{faltas})){a.faltas=faltas;render()}}
   else if(act==="delfalta"){const faltas=a.faltas.filter(f=>f.id!==t.dataset.f);if(await save(id,{faltas})){a.faltas=faltas;render();toast("Falta borrada")}}
   else if(act==="addfalta"){
     const nombre=$("#nf-al").value;const aid=idPorNombre(nombre);
@@ -4235,7 +4399,10 @@ document.addEventListener("change",async e=>{
   if(t.id==="f-profe"){S.fProfe=t.value;render()}
   if(t.id==="f-mes"){S.fMes=t.value;render()}
   if(t.id==="f-desde"){S.fDesde=t.value;render()}
-  if(t.dataset&&t.dataset.ins&&S.ins&&(t.dataset.ins==="pcurso"||t.dataset.ins==="pinicio")){S.ins.d[t.dataset.ins]=t.value;if(t.dataset.ins==="pcurso"){const c=preCursos().find(x=>x.nombre===t.value);if(c)S.ins.importe=String(c.precio).replace(".",",")}render()}
+  if(t.dataset&&t.dataset.ins&&S.ins&&["pcurso","pcurso2","pcurso3","pinicio"].includes(t.dataset.ins)){const d=S.ins.d;d[t.dataset.ins]=t.value;
+    /* 10/11/2026: hasta tres cursos; si se quita uno, se quitan los de después. La mensualidad sugerida es la suma */
+    if(t.dataset.ins==="pcurso"&&!t.value){d.pcurso2="";d.pcurso3=""}if(t.dataset.ins==="pcurso2"&&!t.value)d.pcurso3="";
+    if(t.dataset.ins!=="pinicio"){const l=preCursosSel(d).map(n=>preCursos().find(x=>x.nombre===n)).filter(Boolean);if(l.length)S.ins.importe=String(r2(l.reduce((s,c)=>s+(+c.precio||0),0))).replace(".",",")}render()}
   if(t.dataset&&t.dataset.ins&&S.ins&&(t.dataset.ins==="nac"||t.dataset.ins==="parentesco"||t.dataset.ins==="nivel")){S.ins.d[t.dataset.ins]=t.value;
     if(t.dataset.ins==="nivel"){const antes=S.ins.clases.length;S.ins.clases=S.ins.clases.filter(c=>c.excPrim||!primariaMal(t.value,c.profe,c.dia,c.hora,indDe(c.profe,c.dia,c.hora,c.tipo)));if(S.ins.clases.length<antes)toast("Se han quitado clases que no valen para primaria")}
     render()}
@@ -4265,7 +4432,7 @@ document.addEventListener("change",async e=>{
   if(t.id==="rec-file"&&t.files&&t.files[0]&&S.role==="dir"&&!S.pv){await leerArchivoArgos(t.files[0])}
   if(t.id==="as-fecha"&&t.value){const hoy=todayISO();S.asF=t.value>hoy?hoy:t.value;render()}
   if(t.id==="cb-fecha"&&S.cb){S.cb.selF=t.value;S.cb.selH="";drawCambio()}
-  if(t.dataset.act==="frecup"&&!S.ro){const a=S.alumnos.get(t.dataset.id);const faltas=a.faltas.map(f=>f.id===t.dataset.f?{...f,fechaRecup:t.value,recuperada:t.value?"si":f.recuperada}:f);if(await save(t.dataset.id,{faltas})){a.faltas=faltas;render()}}
+  if(t.dataset.act==="frecup"&&!S.ro){const a=S.alumnos.get(t.dataset.id);const faltas=a.faltas.map(f=>f.id===t.dataset.f?{...f,fechaRecup:t.value,recuperada:t.value?"si":f.recuperada,...(t.value?{festT:nowISO(),festPor:"Dirección"}:{})}:f);if(await save(t.dataset.id,{faltas})){a.faltas=faltas;render()}}
 });
 document.addEventListener("keydown",e=>{if(e.key!=="Escape")return;if(S.cb){S.cb=null;drawCambio()}else if(S.cell){S.cell=null;drawCell()}});
 document.addEventListener("submit",e=>{if(e.target.id==="flogin"){e.preventDefault();enviarLogin()}if(e.target.id==="fpin"){e.preventDefault();comprobarPinDir()}});
@@ -4378,7 +4545,13 @@ function pintarDatos(snap){
   if(!keep){render(); if(S.cell) drawCell(); else if(S.cb) drawCambio()}
   setStatus(snap.metadata.fromCache?"Sincronizando…":"Al día");
 }
-function refrescar(){if(S.screen!=="app"||!S.ready)return;const ae=document.activeElement;if(ae&&ae.id&&ae.matches("input,select,textarea"))return;render();if(S.cb)drawCambio()}
+/* 09/11/2026: no repintar mientras se escribe en cualquier cuadro (antes solo se respetaban los que tenían id: el formulario de
+   preinscripción se repintaba con cada cambio de la base de datos y no dejaba escribir), ni con el formulario de preinscripción abierto.
+   Lo pendiente se pinta al salir del cuadro o al cerrar el formulario. */
+function refrescar(){if(S.screen!=="app"||!S.ready)return;const ae=document.activeElement;
+  if((ae&&ae.matches&&ae.matches("input:not([type=checkbox]):not([type=radio]):not([type=button]),select,textarea"))||(S.preEd&&S.ins)){S.refPend=true;return}
+  S.refPend=false;render();if(S.cb)drawCambio()}
+document.addEventListener("focusout",()=>{if(!S.refPend)return;setTimeout(()=>{const ae=document.activeElement;if(S.refPend&&!(ae&&ae.matches&&ae.matches("input,select,textarea")))refrescar()},400)});
 function quizasSync(){if(!S.synced&&S.alOk&&S.cfgOk&&S.cfgAlOk){S.synced=true;syncTodo()}}
 function arrancarDireccion(db){
   S.role="dir";S.ro=false;document.body.classList.add("dir");setTimeout(()=>{try{preEscuchar()}catch(_){}},2500);
@@ -4386,7 +4559,7 @@ function arrancarDireccion(db){
     const m=new Map();snap.docs.forEach(d=>m.set(d.id,norm(d.id,d.data())));
     S.alumnos=m;S.alOk=true;
     if(!S.completando){S.completando=true;completarUsuarios().finally(()=>{S.completando=false})}
-    quizasPublicar();revisarSolicitudes();aplicarSesProfes();aplicarAsisProfes();aplicarTraspasos();aplicarAnadidos();aplicarFotosAlumnos();revisarBajas();setTimeout(()=>{try{recibosHX()}catch(_){}},1500);
+    quizasPublicar();revisarSolicitudes();aplicarSesProfes();aplicarAsisProfes();aplicarFestProfes();aplicarTraspasos();aplicarAnadidos();aplicarFotosAlumnos();revisarBajas();setTimeout(()=>{try{recibosHX()}catch(_){}},1500);
     if(!S.argosSub){S.argosSub=db.doc("config/argos").onSnapshot(d=>{S.argos=d.exists?d.data():null;if(S.ready&&S.screen==="app"&&(S.view==="argos"||S.view==="tarifas"))render()},()=>{})}
     if(snap.empty&&S.view!=="accesos"){S.ready=true;if(S.screen==="app")$("#app").innerHTML=`<div class="empty">Todavía no hay alumnos. Si vienes de la app anterior, ve a <b>Accesos</b> y carga su copia de seguridad. Si empiezas de cero, ve a <b>Alumnos → Nuevo alumno</b>.</div>`;setStatus("Al día");quizasSync();return}
     pintarDatos(snap);quizasSync();
@@ -4403,7 +4576,7 @@ function arrancarDireccion(db){
   if(!esMos())db.doc("config/sinficha").onSnapshot(d=>{S.sinFicha=d.exists?d.data():null;if(S.view==="gastos")refrescar()},()=>{});
   db.doc("config/intentos").onSnapshot(d=>{S.intentos=(d.exists&&d.data().cuentas)||{};S.intOk=true;revisarSolicitudes()},()=>{S.intOk=true});
   db.doc("publico/datos").onSnapshot(d=>{S.pub=d.exists?d.data():null;S.pubOk=true;quizasPublicar();if(S.view==="calendario")refrescar()},()=>{});
-  db.collection("buzon").limit(1000).onSnapshot(snap=>{S.buzon=new Map(snap.docs.map(d=>[d.id,d.data()||{}]));rebuildOv();aplicarSesProfes();aplicarAsisProfes();aplicarTraspasos();aplicarAnadidos();aplicarFotosAlumnos();quizasPublicar();refrescar()},()=>{});
+  db.collection("buzon").limit(1000).onSnapshot(snap=>{S.buzon=new Map(snap.docs.map(d=>[d.id,d.data()||{}]));rebuildOv();aplicarSesProfes();aplicarAsisProfes();aplicarFestProfes();aplicarTraspasos();aplicarAnadidos();aplicarFotosAlumnos();quizasPublicar();refrescar()},()=>{});
   db.collection("solicitudes").limit(200).onSnapshot(snap=>{S.solic=snap.docs.map(d=>{const x=d.data()||{};return {id:d.id,fecha:x.fecha||"",rol:x.rol==="alumno"?"alumno":"profe",usuario:x.usuario||"",clave:x.clave||"",alta:typeof x.alta==="string"?x.alta:"",tel4:digitos(x.tel4).slice(0,4),revisada:!!x.revisada,error:x.error||""}});revisarSolicitudes();if(enAccesos())render()},()=>{});
 }
 
@@ -4416,7 +4589,7 @@ function arrancarDireccion(db){
 window.nuevaClave=nuevaClave;
 /* Mostrador: como dirección, sin recibos, Argos, calendario, accesos ni mensajes de dirección */
 const esMos=()=>!!(window.__fb&&window.__fb.CU&&window.__fb.CU.rol==="mos");
-document.head.insertAdjacentHTML("beforeend",'<style>body.mos #t-recibos,body.mos #t-tarifas,body.mos #t-gastos,body.mos #t-argos,body.mos #t-accesos,body.mos #t-calendario,body.mos #t-mensajes,body.mos #delbox{display:none!important}</style>');
+document.head.insertAdjacentHTML("beforeend",'<style>body.mos #t-recibos,body.mos #t-tarifas,body.mos #t-gastos,body.mos #t-desc,body.mos #t-pend,body.mos #t-fact,body.mos #t-argos,body.mos #t-accesos,body.mos #t-calendario,body.mos #t-mensajes,body.mos #delbox{display:none!important}</style>');
 let derT=null,derCorriendo=false;
 function syncDerivados(ya){
   if(S.role!=="dir"||S.pv||!S.alOk||!window.__fb)return;
@@ -4471,9 +4644,9 @@ function vEquipoAcc(){
   const l=F.claves().filter(([,k])=>k.rol==="dir"||k.rol==="profe"||k.rol==="mos"||k.rol==="ase").sort((a,b)=>(a[1].rol+nom(a[1])+a[0]).localeCompare(b[1].rol+nom(b[1])+b[0],"es"));
   const yo=F.CU.usuario;
   const fila=([u,k])=>`<div class="row" style="flex-wrap:wrap"><span class="grow"><b>${esc(nom(k))}</b> <span class="note">${k.rol==="dir"?"Dirección":k.rol==="mos"?"Mostrador":k.rol==="ase"?"Asesoría · solo lectura":"Profesora"}${u===yo?" · tú":""}</span></span>
-    <span class="cred">${esc(u)}</span>${u===yo?"":`<span class="cred">${esc(k.clave||"—")}</span>`}
+    <span class="cred">${esc(u)}</span>${u===yo?"":`<span class="cred">${esc(k.clave||"—")}</span>`}${claveDebil(k)?` <span class="badge b-pend" title="Menos de 10 caracteres: pulsa «${u===yo?"Cambiar mi clave":"Nueva clave"}» para ponerle una de 12">clave débil</span>`:""}
     ${k.bloqueado?`<span class="badge b-off">Bloqueado</span>`:F.usuarioActivo(u)?`<span class="badge b-si">Ha entrado</span>`:`<span class="badge b-off">Sin entrar</span>`}
-    ${u===yo?"":`<button class="btn small" data-act="eq-msg" data-u="${esc(u)}">Copiar mensaje</button>
+    ${u===yo?`<button class="btn small" data-act="eq-miclave" title="Te da una clave nueva de 12 caracteres">Cambiar mi clave</button>`:""}${u===yo?"":`<button class="btn small" data-act="eq-msg" data-u="${esc(u)}">Copiar mensaje</button>
     <button class="btn small" data-act="eq-clave" data-u="${esc(u)}">Nueva clave</button>
     <button class="btn small" data-act="eq-bloq" data-u="${esc(u)}">${k.bloqueado?"Desbloquear":"Bloquear"}</button>
     <button class="btn small danger" data-act="eq-borrar" data-u="${esc(u)}">Borrar</button>`}</div>`;
@@ -4524,10 +4697,14 @@ document.addEventListener("click",async e=>{
   try{
     if(act==="eq-add"){const r=$("#eq-rol").value,nu=normUsuario($("#eq-u").value)||(r.startsWith("profe:")?normUsuario(r.slice(6)):r==="mos"?"mostrador":r==="ase"?"asesoria":"");const n=String($("#eq-n").value||"").trim().slice(0,60);
       if(!nu){toast("Escribe el usuario");return}if(F.clave(nu)){toast("Ese usuario ya existe. Elige otro.");return}
-      await F.setClave(nu,{...(r==="dir"?{rol:"dir",nombre:n||"Dirección"}:r==="mos"?{rol:"mos",nombre:n||"Mostrador"}:r==="ase"?{rol:"ase",nombre:n||"Asesoría"}:{rol:"profe",profe:r.slice(6)}),clave:nuevaClave(),bloqueado:false});
+      await F.setClave(nu,{...(r==="dir"?{rol:"dir",nombre:n||"Dirección"}:r==="mos"?{rol:"mos",nombre:n||"Mostrador"}:r==="ase"?{rol:"ase",nombre:n||"Asesoría"}:{rol:"profe",profe:r.slice(6)}),clave:nuevaClaveEquipo(),bloqueado:false});
       toast("Usuario creado. Pulsa «Copiar mensaje» y envíaselo.")}
     else if(act==="eq-msg"){const txt=mensajeEquipo(u,k);try{await navigator.clipboard.writeText(txt);toast("Mensaje copiado: pégalo en un WhatsApp")}catch(_){prompt("Copia este mensaje:",txt)}}
-    else if(act==="eq-clave"){await F.setClave(u,{clave:nuevaClave()});toast("Clave nueva. Envíale el mensaje otra vez.")}
+    else if(act==="eq-clave"){await F.setClave(u,{clave:nuevaClaveEquipo()});toast("Clave nueva. Envíale el mensaje otra vez.")}
+    else if(act==="eq-miclave"){const c=nuevaClaveEquipo();
+      if(prompt("Tu clave nueva es la de abajo. CÓPIALA y guárdala en un sitio seguro (no en el ordenador del mostrador) antes de aceptar: con la antigua ya no podrás entrar.",c)===null)return;
+      if(!confirm("¿Has guardado la clave nueva "+c+" ? Al aceptar, se cambia ya."))return;
+      await F.reclave(c);toast("Clave cambiada. La próxima vez entra con la nueva.");render()}
     else if(act==="eq-bloq"){await F.setClave(u,{bloqueado:!k.bloqueado});toast(k.bloqueado?"Desbloqueado":"Bloqueado: ya no puede entrar")}
     else if(act==="eq-borrar"){if(!confirm(`¿Borrar el usuario ${u}? Dejará de poder entrar.`))return;await F.delClave(u);for(const uid of F.cuentasDeUsuario(u)){try{await F.borrarCuenta(uid)}catch(_){}}toast("Usuario borrado")}
   }catch(x){console.warn(x);toast("No se ha podido guardar. Inténtalo de nuevo.")}

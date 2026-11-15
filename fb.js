@@ -302,6 +302,8 @@ const F={
   clave:u=>KV.claves.get(nU(u))||null,
   claves:()=>[...KV.claves.entries()],
   setClave:async(u,d)=>{await setDoc(doc(fs,"claves/"+nU(u)),limpio(d),{merge:true})},
+  /* 14/11/2026: cambiar la propia clave sin quedarse fuera: primero la clave, luego la cuenta de esta sesión (las reglas lo permiten) */
+  reclave:async c=>{await setDoc(doc(fs,"claves/"+CU.usuario),{clave:c},{merge:true});await setDoc(doc(fs,"cuentas/"+auth.currentUser.uid),{usuario:CU.usuario,clave:c,t:ahora()})},
   delClave:async u=>{await deleteDoc(doc(fs,"claves/"+nU(u)))},
   usuarioActivo:u=>{u=nU(u);const k=KV.claves.get(u);if(!k)return false;for(const c of KV.cuentas.values())if(c.usuario===u&&c.clave===k.clave)return true;return false},
   cuentasDeUsuario:u=>[...KV.cuentas].filter(([,c])=>c.usuario===nU(u)).map(([uid])=>uid),

@@ -825,6 +825,7 @@ function vGastos(){
     <button class="stat" data-gb="vercat" data-v="pend"><b style="${pend.length?"color:var(--warn)":""}">${pend.length}</b><span>Pendientes de clasificar</span></button>
     <button class="stat" data-gb="vercat" data-v="sinjust"><b style="${sinJ.length?"color:var(--warn)":"color:var(--ok)"}">${sinJ.length}</b><span>Les falta la factura o el justificante</span></button>
   </div>
+  ${vHorasExtraRes(mes)}
   <div class="split" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));align-items:start">
     <div class="panel tbl"><table class="ft" style="min-width:0;width:100%"><thead><tr><th>Ingresos de la actividad</th><th style="text-align:right">${eur(IA?IA.total:0)}</th></tr></thead><tbody>
       <tr><td colspan="2" class="note" style="padding-top:6px">${IA&&IA.banco?"Cobrado a alumnos según el banco (no hay listado de Argos de este mes)":"Cobrado a alumnos según Argos (por fecha de pago)"}</td></tr>
@@ -1420,6 +1421,29 @@ function vMisNominas(){nmEscuchar();if(!NM.ok)return `<div class="empty">Cargand
   <div class="panel">${l.map(n=>`<div class="row" style="padding:8px 12px"><span class="grow"><b>${esc(mesTxt(n.mes))}</b>${n.bruto!=null?`<br><span class="note">Bruto ${eur(n.bruto)} · deducciones ${eur(n.ded||0)}</span>`:""}</span><b style="font-variant-numeric:tabular-nums">${eur(n.liq)}</b><a href="#" class="btn small" data-blob="${esc(n.arch.id)}">📄 Ver la nómina</a></div>`).join("")||`<div class="empty">Todavía no hay nóminas.</div>`}</div>
   <p class="note">Las sube dirección cuando llegan de la asesoría. Solo tú (y dirección) puedes verlas.</p>`}
 
+/* 15/11/2026 (titular): total de horas extra (producción que antes se perdía), en Gastos */
+function hxEstadoDe(a,e){const c=e.cobro;if(c&&c.no)return "no";
+  if(c&&c.recibo){const r=(a.recibos||[]).find(x=>x&&x.numero===c.recibo);return r&&r.estado==="pagado"?"cob":"pend"}
+  if(c)return "cob";if(typeof exCobradaArgos==="function"&&exCobradaArgos(a,e))return "cob";return "pend"}
+function hxProduccion(desde,hasta){const hoy=todayISO(),o={n:0,imp:0,cob:0,pend:0,no:0,sin:0,su:0,prof:{}};
+  for(const [,a] of S.alumnos){for(const e of a.extras||[]){if(!e||e.anulada||!e.fecha)continue;const m=String(e.fecha).slice(0,7);if(m<desde||m>hasta||e.fecha>hoy)continue;
+    try{if(asistDe(a,e.fecha,e.hora||keyDeMin(extraIni(e)),e.profe)==="no")continue}catch(_){}
+    const v=tarifaDe(a,e),st=hxEstadoDe(a,e);if(v==null){o.sin++;continue}
+    if(st==="no"){o.no+=v;continue}o.n++;if(a.sueltas)o.su++;o.imp+=v;o[st]+=v;const p=e.profe||"—";(o.prof[p]=o.prof[p]||{n:0,imp:0}).n++;o.prof[p].imp+=v}}
+  for(const k of ["imp","cob","pend","no"])o[k]=r2(o[k]);return o}
+function vHorasExtraRes(mes){if(!mes)return "";const y=+mes.slice(0,4),cur=+mes.slice(5,7)>=9?`${y}-09`:`${y-1}-09`;
+  const M=hxProduccion(mes,mes),C=hxProduccion(cur,mes),A=hxProduccion(`${y}-01`,mes);
+  const lin=(t,X)=>`<tr><td>${t}</td><td style="text-align:right">${X.n}</td><td style="text-align:right;font-variant-numeric:tabular-nums"><b>${eur(X.imp)}</b></td><td style="text-align:right;color:var(--ok)">${eur(X.cob)}</td><td style="text-align:right;color:${X.pend?"var(--warn)":"inherit"}">${eur(X.pend)}</td></tr>`;
+  const pr=Object.entries(C.prof).sort((x,y)=>y[1].imp-x[1].imp);
+  return `<details class="panel" style="padding:10px 14px;margin:10px 0" ${GB.hxRes?"open":""} data-gb-tog="hxRes"><summary><b>Horas extra</b> · ${esc(mesTxt(mes))}: <b>${M.n}</b> clase${M.n===1?"":"s"} · <b>${eur(M.imp)}</b> <span class="note">(cobrado ${eur(M.cob)} · pendiente ${eur(M.pend)}) · curso: ${eur(C.imp)}</span></summary>
+    <p class="note" style="margin:6px 0">Horas extra y clases sueltas que se dieron (las que la profesora marcó «No vino» no cuentan), valoradas con su tarifa. Es producción que antes no se controlaba.</p>
+    <div class="tbl"><table class="ft" style="min-width:0;width:100%"><thead><tr><th></th><th style="text-align:right">Clases</th><th style="text-align:right">Importe</th><th style="text-align:right">Cobrado</th><th style="text-align:right">Pendiente</th></tr></thead><tbody>
+      ${lin(esc(mesTxt(mes)),M)}${lin(`Curso ${cur.slice(0,4)}-${+cur.slice(0,4)+1-2000} (desde septiembre)`,C)}${lin(`Año ${y}`,A)}</tbody></table></div>
+    ${pr.length?`<p class="note" style="margin:8px 0 2px"><b>Por profesora, en el curso:</b> ${pr.map(([p,v])=>`${esc(p)} ${v.n} (${eur(r2(v.imp))})`).join(" · ")}</p>`:""}
+    ${C.su?`<p class="note" style="margin:2px 0">De ellas, ${C.su} son clases sueltas en el curso.</p>`:""}
+    ${C.no?`<p class="note" style="margin:2px 0">Marcadas «no se cobra» en el curso: ${eur(C.no)} (no se suman).</p>`:""}
+    ${C.sin?`<p class="note" style="margin:2px 0;color:var(--warn)">${C.sin} sin tarifa de hora extra: no se pueden valorar.</p>`:""}</details>`}
+try{document.addEventListener("toggle",ev=>{const t=ev.target;if(t&&t.dataset&&t.dataset.gbTog)GB[t.dataset.gbTog]=t.open},true)}catch(_){}
 function vJustRes(){const J=GB.just;if(!J)return "";const lista=(l,t,col)=>l.length?`<details ${col?"open":""} style="margin-top:4px"><summary>${t} (${l.length})</summary><ul style="margin:4px 0 0 18px;padding:0">${l.map(x=>`<li class="note"${col?` style="color:var(${col})"`:""}>${esc(x)}</li>`).join("")}</ul></details>`:"";
   return `<div class="panel" style="padding:12px 14px;margin-bottom:12px"><b>Justificantes del banco</b> ${J.hecho<J.n?`<span class="note">leyendo ${J.hecho} de ${J.n}…</span>`:""}
     ${J.fix?`<p class="note" style="margin:4px 0 0">${J.fix} justificante${J.fix===1?"":"s"} que estaba${J.fix===1?"":"n"} en un movimiento equivocado se ha${J.fix===1?"":"n"} recolocado.</p>`:""}${lista(J.ok,"Adjuntados a su movimiento","")}${lista(J.ya,"Ya estaban subidos: no se han duplicado","")}${lista(J.sin,"Sin movimiento en los extractos subidos (sube antes el extracto de ese mes)","--warn")}${lista(J.err,"No se han podido leer","--bad")}

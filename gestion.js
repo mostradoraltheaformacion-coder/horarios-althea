@@ -1762,11 +1762,14 @@ function generarRecibos(mes){
       const pr=prorrateo(a,mes,ini);
       lin.push(pr&&p!=null?{concepto:`${nombreMes} · ${l.curso} (desde el ${fmtFecha(ini)})`,importe:r2(p*pr.f),nota:[nb,`proporcional: ${pr.q} de ${pr.tot} clases de ${eur(p)}`].filter(Boolean).join(" · ")}
         :{concepto:`${nombreMes} · ${l.curso}`,importe:p,nota:nb})}
-    for(const e of a.extras||[]){if(!e||e.anulada||e.cobro||!e.fecha||e.fecha>=mes+"-01")continue;const imp=tarifaDe(a,e);lin.push({concepto:`Hora extra ${fmtFecha(e.fecha)} con ${e.profe}`,importe:imp,nota:imp==null?"sin tarifa de hora extra":"",extra:true})}
+    for(const e of a.extras||[]){if(!e||e.anulada||e.cobro||!e.fecha||e.fecha>=mes+"-01")continue;if(typeof hxActivo==="function"&&e.id&&hxActivo(id,e))continue;const imp=tarifaDe(a,e);lin.push({concepto:`Hora extra ${fmtFecha(e.fecha)} con ${e.profe}`,importe:imp,nota:imp==null?"sin tarifa de hora extra":"",extra:true})}
+    /* 15/11/2026 (titular, opción B): los recibos HX pendientes pasan al recibo del mes como líneas y el HX se anula («incluido en …») */
+    const hx=lin.some(l=>!l.extra)?(a.recibos||[]).filter(r=>r&&r.serie==="HX"&&r.estado!=="pagado"&&r.estado!=="anulado"&&!r.anulado&&String(r.emitido||"")<=finM):[];
+    for(const r of hx)for(const x of hxLineas(r))lin.push({concepto:x.txt,importe:+x.imp||0,nota:`viene del recibo ${r.numero}, que se anulará`,extra:true,hx:r.numero});
     if(!lin.length){if(a.clases.length&&!salt)avisos.push({id,a,txt:"Tiene clases pero no tiene tarifa: no saldría recibo"});continue}
     const falta=lin.some(l=>l.importe==null),tot=r2(lin.reduce((s,l)=>s+(+l.importe||0),0));
     const arg=(a.recibos||[]).filter(r=>r&&String(r.emitido||"").startsWith(mes)),ta=arg.length?r2(arg.reduce((s,r)=>s+(+r.importe||0),0)):null;
-    out.push({id,a,lin,tot,falta,guardada:M.guardada,argos:ta,argosN:arg.map(r=>r.numero).filter(Boolean)})}
+    out.push({id,a,lin,tot,falta,hx:hx.map(r=>r.numero),guardada:M.guardada,argos:ta,argosN:arg.map(r=>r.numero).filter(Boolean)})}
   out.forEach((x,i)=>x.num=`ENSAYO-${mes.replace("-","")}-${String(i+1).padStart(4,"0")}`);
   return {mes,l:out,avisos,tot:r2(out.reduce((s,x)=>s+x.tot,0)),totArg:r2(out.reduce((s,x)=>s+(x.argos||0),0)),conArg:out.filter(x=>x.argos!=null).length};
 }
@@ -1776,7 +1779,7 @@ function vGenerar(){
   const dif=x=>x.argos==null?`<span class="note">sin recibo en Argos</span>`:Math.abs(x.argos-x.tot)<0.005?`<span class="note" style="color:var(--ok)">= Argos</span>`:`<span class="note" style="color:var(--warn)">Argos ${eur(x.argos)} (${eurS(r2(x.tot-x.argos))})</span>`;
   const vis=GT.genSolo?G.l.filter(x=>x.falta||(x.argos!=null&&Math.abs(x.argos-x.tot)>0.005)):G.l;
   return `<div class="bar"><h2>Recibos del mes · ensayo</h2><span class="legend"><button class="btn small" data-tf="genno">← Volver a Tarifas</button></span></div>
-  <div class="aviso info" style="display:block"><b>Ensayo: no se crea ningún recibo.</b> Así saldrían los recibos con la tarifa de cada alumno y las horas extra anteriores que siguen sin cobrar. Compáralos con los de Argos. Desde el 1/1/2027 este botón los creará de verdad (serie R27).</div>
+  <div class="aviso info" style="display:block"><b>Ensayo: no se crea ningún recibo.</b> Así saldrían los recibos con la tarifa de cada alumno. Si el alumno tiene un recibo de horas extra (HX) <b>pendiente</b>, sus líneas pasan a este recibo y el HX se anulará con la nota «incluido en…»; los HX ya pagados no se tocan. También se suman las horas extra antiguas sin recibo ni cobradas en Argos. Compáralos con los de Argos. Desde el 1/1/2027 este botón los creará de verdad (serie R27).</div>
   <div class="bar" style="gap:8px;flex-wrap:wrap;margin-top:8px"><label class="f" style="flex:0 1 180px">Mes<select id="gt-genmes">${ms.map(m=>`<option value="${m}" ${m===GT.genMes?"selected":""}>${mesTxt(m)}</option>`).join("")}</select></label>
     <label class="chk" style="margin:0"><input type="checkbox" id="gt-gensolo" ${GT.genSolo?"checked":""}><span>Solo los que no cuadran</span></label>
     <button class="btn" data-tf="genxls" style="margin-left:auto">Descargar Excel</button></div>

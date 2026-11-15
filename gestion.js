@@ -1487,6 +1487,7 @@ function vAseDir(){const docs=aseDocsDir(),key=GB.verAse,V=aseVista(key,docs);
   if(!V){GB.verAse="";return vInforme()}
   return `<div class="bar noprint"><h2>Lo que ve la asesoría</h2><span class="legend"><button class="btn small" data-gb="veraseno">← Volver al informe</button></span></div>
   <div class="aviso info noprint" style="display:block">Es exactamente lo que ve la asesoría al entrar: la copia que se envió, no los datos de ahora. Si cambias algo de un mes, vuelve a enviarlo.</div>
+  ${vAyudaAse(false)}
   ${(/-T\d$/.test(key)?mesesTrim(key):[key]).map(aseAvisoCambios).join("")}
   <div class="bar noprint" style="gap:8px;flex-wrap:wrap"><label class="f" style="flex:0 1 210px">Periodo<select id="gb-asep">${opcionesPeriodo(docs,key)}</select></label>
     <button class="btn primary" data-gb="infprint">Imprimir o guardar en PDF</button><button class="btn" data-gb="asexls">Descargar su Excel</button><span class="note">${V.info}</span></div>
@@ -1836,12 +1837,13 @@ function aseMovs(D){const movs=D.movs||[],falt=movs.filter(m=>m.falta).length;
 function vAsePintar(){const app=document.getElementById("app");if(app)app.innerHTML=vAsesoria()}
 function vAsesoria(){
   if(!AS.ok)return `<div class="empty">Cargando…</div>`;if(AS.err)return `<div class="empty">${esc(AS.err)}</div>`;
-  if(!AS.docs.length)return `<div class="empty">Todavía no hay ningún mes enviado por el centro.</div>`;
+  if(!AS.docs.length)return vAyudaAse(true)+`<div class="empty">Todavía no hay ningún mes enviado por el centro.</div>`;
   if(!AS.mes||!aseVista(AS.mes,AS.docs))AS.mes=trimDe(AS.docs[0].id);const V=aseVista(AS.mes,AS.docs),D=V.D,mes=AS.mes;
   return `<div class="bar noprint"><h2>Althea Formación · informes para la asesoría</h2><span class="legend">Solo lectura</span></div>
   <div class="bar noprint" style="gap:8px;flex-wrap:wrap"><label class="f" style="flex:0 1 210px">Periodo<select id="as-mes">${opcionesPeriodo(AS.docs,mes)}</select></label>
     <button class="btn primary" data-as="print">Imprimir o guardar en PDF</button><button class="btn" data-as="xls">Descargar Excel</button>
     <span class="note">${V.info}</span></div>
+  ${vAyudaAse(false)}
   ${vImpuestos(/-T\d$/.test(mes)?mes:trimDe(mes))}
 ${vRetAlq(D.alq||[],false,null,mes)}
   ${informeCuerpo(D,mes)}
@@ -3410,3 +3412,11 @@ document.addEventListener("change",async e=>{const t=e.target;if(!t||!t.dataset|
 async function imEnlazar(){if(S.role!=="dir"||!GB.ok||!IM.ok||Date.now()-IM.enl<60000)return;IM.enl=Date.now();
   for(const x of IM.docs){if(!x.pdf||!(+x.importe>0))continue;const m=imCargo(x);if(!m||docsMov(m).d)continue;
     const o={id:x.pdf.id,n:x.pdf.n||"",t:nowISO(),tipo:"modelo"};try{await S.db.doc("banco/"+m.mes).update({["movs."+m.id+".doc"]:o});const dd=GB.docs.find(y=>y.id===m.mes);if(dd&&dd.movs[m.id])dd.movs[m.id].doc=o}catch(_){}}}
+
+/* 15/11/2026 (titular): vídeo de ayuda para la asesoría dentro de su apartado (entran una vez al trimestre y no se acuerdan).
+   El archivo ayuda-asesoria.mp4 va junto a la app (datos de ejemplo). Se recuerda si lo dejan abierto o cerrado. */
+function vAyudaAse(abierto){let o=abierto;try{const v=localStorage.getItem("althea.ayudaAse");if(v!==null)o=v==="1"}catch(_){}
+  return `<details class="panel noprint" style="padding:10px 14px;margin:0 0 12px" ${o?"open":""} ontoggle="try{localStorage.setItem('althea.ayudaAse',this.open?'1':'0')}catch(_){}">
+  <summary style="cursor:pointer"><b>▶ Vídeo: cómo funciona este apartado</b> <span class="note">(1 minuto, sin sonido)</span></summary>
+  <video src="ayuda-asesoria.mp4" controls playsinline preload="metadata" style="width:100%;max-width:860px;display:block;margin-top:10px;border-radius:10px;background:#000"></video>
+  <p class="note" style="margin-top:6px">Entrar · elegir el mes o el trimestre · rellenar los impuestos y subir el PDF · retenciones del alquiler · informe · movimientos con sus documentos · facturas emitidas y Excel. <a href="ayuda-asesoria.mp4" download>Descargar el vídeo</a></p></details>`}

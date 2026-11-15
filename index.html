@@ -133,10 +133,10 @@ table.week{border-collapse:collapse;width:100%;min-width:760px;table-layout:fixe
 .slot button{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:0 2px}
 .empty{color:var(--muted);font-size:14px;padding:24px;text-align:center}
 /* Faltas */
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:14px}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;cursor:pointer;text-align:left;color:var(--ink)}
 .stat[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
-.stat b{display:block;font-family:var(--body);font-weight:700;font-size:28px;font-variant-numeric:tabular-nums;line-height:1.1}
+.stat{min-width:0;overflow:hidden;container-type:inline-size}.stat b{display:block;font-family:var(--body);font-weight:700;font-size:24px;font-size:min(28px,17cqi);font-variant-numeric:tabular-nums;line-height:1.1;white-space:nowrap;letter-spacing:-.01em}
 .stat span{font-size:12.5px;color:var(--muted)}
 .form{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;padding:14px;margin-bottom:14px}
 .form>label{flex:1 1 140px}
@@ -1139,7 +1139,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="15nov-v99";
+const APP_VER="15nov-v100";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};

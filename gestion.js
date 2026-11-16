@@ -3012,7 +3012,7 @@ function descItems(){const out=[],add=x=>{x.k=hashTxt(x.src);out.push(x)},desde=
   const G=descGuardados();for(const x of out)x.res=G[x.k]||null;
   return out.sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||Math.abs(b.imp)-Math.abs(a.imp))}
 const descPend=()=>{try{return gbVer()&&GB.ok?descItems().filter(x=>!x.res).length:0}catch(_){return 0}};
-const descVer=()=>gbVer()||(typeof esPlus==="function"&&esPlus());
+const descVer=()=>gbVer()||(typeof esPlus==="function"&&esPlus())||!!(S.pv&&S.pv.rol==="profe"&&typeof PROFE_PLUS!=="undefined"&&PROFE_PLUS.includes(S.pv.profe));
 function vDescuadres(){if(!descVer())return `<div class="empty">Solo dirección.</div>`;if(!gbVer()&&typeof PLUS!=="undefined"&&!PLUS.m)return `<div class="empty">${PLUS.err?esc(PLUS.err):"Cargando…"}</div>`;return conTodos(vDescuadres0)}
 function vDescuadres0(){gbEscuchar();cajaEscuchar();
   if(!GB.ok)return `<div class="empty">Cargando…</div>`;
@@ -3046,7 +3046,7 @@ function vDescAsignar(x){const q=nzC(DQ.aq||"");const l=q.length>=2?sortedAlumno
     <p class="note" style="margin:6px 0 0">Asignar no cambia el recibo en Argos: sirve para saber de quién es. Marca allí el recibo como pagado y vuelve a subir el listado.</p></div>`}
 async function descGuardar(k,dia,v){const mes=String(dia).slice(0,7),ref=S.db.doc("banco/"+mes);
   try{const sn=await ref.get();if(sn.exists)await ref.update({["desc."+k]:v});else await ref.set({mes,desc:{[k]:v}});return true}catch(e){console.error(e);toast("No se ha podido guardar.");return false}}
-document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.closest("[data-dq]");if(!t||!descVer())return;e.preventDefault();const act=t.dataset.dq,k=t.dataset.k;
+document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.closest("[data-dq]");if(!t||!descVer())return;if(S.pv){e.preventDefault();toast("Vista previa: es solo para mirar");return}e.preventDefault();const act=t.dataset.dq,k=t.dataset.k;
   if(act==="abrir"){DQ.abre=k;DQ.aq="";render();setTimeout(()=>{const i=$("#dq-aq");if(i)i.focus()},0)}
   else if(act==="cerrar"){DQ.abre=null;render()}
   else if(act==="asignar"){const a=conTodos(()=>S.alumnos.get(t.dataset.al));if(!a)return;const nota=String(($("#dq-nota")||{}).value||"").trim().slice(0,200);

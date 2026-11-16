@@ -3001,6 +3001,10 @@ function descItems(){const out=[],add=x=>{x.k=hashTxt(x.src);out.push(x)},desde=
         pista:(o.pistas||[]).map(g=>g.map(r=>`${titulo(r.tit)} (${r.fp})`).join(" + ")).join(" o ")});
       for(const r of x.soloArgos)add({src:`tpva|${x.d}|${r.num}|${r.imp}|${r.tit}`,tipo:"Tarjeta",fecha:x.d,imp:-r.imp,det:`Cobrado con tarjeta en Argos (${titulo(r.tit)}${r.num?", "+r.num:""}) y no aparece en el banco`})}
     else if(x.modo==="total"&&x.ok===false)add({src:`tpvt|${x.fv}`,tipo:"Tarjeta",fecha:x.fv,imp:r2(x.tB-x.tAw),det:`Liquidación del TPV del ${fmtFecha(x.fv)}: banco ${eur(x.tB)} y Argos ${eur(x.tAw)}. Sube su PDF para ver qué operación es`})}
+  /* 16/11/2026 (titular): descuadres apuntados a mano en la caja de Argos («DESCUADRE CAJA −25 €») */
+  {const AC=argosCajaDias();for(const d of Object.keys(AC).sort()){if(d<desde)continue;(AC[d].f||[]).forEach((x,i)=>{if(!/DESCUADRE/i.test(String(x.c||"")+" "+String(x.o||"")))return;
+    add({src:`acjd|${d}|${i}|${x.imp}`,tipo:esTarj(x.fp)?"Tarjeta":/bizum/i.test(x.fp||"")?"Bizum":/transf/i.test(x.fp||"")?"Transferencia":"Efectivo",fecha:d,imp:+x.imp||0,
+      det:`Descuadre apuntado en la caja de Argos: «${x.c||"Descuadre"}»${x.h?" a las "+x.h:""}. ${(+x.imp||0)<0?"Falta ese dinero en la caja: busca qué cobro no se apuntó o se apuntó con otra forma de pago":"Sobra ese dinero en la caja: busca qué cobro falta por apuntar"}`})})}}
   /* bizum y transferencias sin alumno */
   for(const m of movsTodos())if(["bizum","transf"].includes(m.cat)&&m.importe>0&&String(m.fv||"")>=desde&&!m.enl&&!enlaceCobro(m).length)
     add({src:`mov|${m.mes}|${m.id}`,tipo:m.cat==="bizum"?"Bizum":"Transferencia",fecha:m.fv,imp:m.importe,det:`${m.concepto}${m.ordenante?" · "+titulo(String(m.ordenante).toLowerCase()):""}${m.obs?" · «"+m.obs+"»":""}`,mov:m});
@@ -3024,7 +3028,7 @@ function vDescuadres0(){gbEscuchar();cajaEscuchar();
   const fila=x=>{const fi=typeof fpInfo==="function"?fpInfo(x.tipo):null;return `<div class="row" style="flex-wrap:wrap;gap:6px;align-items:flex-start;${fi?`border-left:4px solid ${fi.c};padding-left:10px;`:""}${x.res?"opacity:.7":""}">
       <span style="min-width:96px"><b>${fmtFecha(x.fecha)}</b><br>${typeof fpChip==="function"?fpChip(x.tipo):`<span class="note">${x.tipo}</span>`}</span>
       <span class="grow" style="white-space:normal;flex-basis:260px">${esc(x.det)}${x.pista?`<br><span class="note" style="color:var(--warn)">¿Será ${esc(x.pista)}?</span>`:""}
-        ${x.res?`<br><span class="badge ${x.res.estado==="asignado"?"b-si":"b-off"}">${x.res.estado==="asignado"?"Asignado a "+esc(titulo(x.res.nombre||"")):"Justificado"}</span>${x.res.nota?` <span class="note">«${esc(x.res.nota)}»</span>`:""} <span class="note">· ${esc(x.res.por||"")} ${fmtFecha(String(x.res.t||"").slice(0,10))}</span>`:""}
+        ${x.res?`<br><span class="badge ${x.res.estado==="asignado"?"b-si":"b-off"}">${x.res.estado==="asignado"?"Asignado a "+esc(titulo(x.res.nombre||""))+(x.res.recibo?" · recibo "+esc(x.res.recibo)+" pagado":""):"Justificado"}</span>${x.res.nota?` <span class="note">«${esc(x.res.nota)}»</span>`:""} <span class="note">· ${esc(x.res.por||"")} ${fmtFecha(String(x.res.t||"").slice(0,10))}</span>`:""}
         ${DQ.abre===x.k?vDescAsignar(x):""}</span>
       <b style="min-width:80px;text-align:right;color:var(${x.imp>=0?"--ok":"--bad"})">${x.imp>=0?"+":"−"}${eur(Math.abs(x.imp))}</b>
       <span style="display:flex;gap:4px;flex-wrap:wrap">${x.res?`<button class="btn small" data-dq="reabrir" data-k="${x.k}" data-d="${esc(x.fecha)}">Reabrir</button>`
@@ -3042,8 +3046,9 @@ function vDescAsignar(x){const q=nzC(DQ.aq||"");const l=q.length>=2?sortedAlumno
   return `<div style="margin-top:6px;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)">
     <div style="display:flex;gap:6px"><input type="search" id="dq-aq" placeholder="Nombre del alumno" value="${esc(DQ.aq||"")}" style="flex:1"><button class="btn small" data-dq="cerrar">Cancelar</button></div>
     <input type="text" id="dq-nota" placeholder="Nota (opcional): p. ej. «lo dijo la madre; se le marca el recibo de noviembre»" style="width:100%;margin-top:6px">
-    <div id="dq-ares">${l.map(([id,a])=>`<button class="btn small" style="margin:4px 4px 0 0" data-dq="asignar" data-k="${x.k}" data-d="${esc(x.fecha)}" data-al="${esc(id)}">${esc(titulo(a.nombre))}</button>`).join("")||(q.length>=2?`<span class="note">Ningún alumno con ese nombre.</span>`:"")}</div>
-    <p class="note" style="margin:6px 0 0">Asignar no cambia el recibo en Argos: sirve para saber de quién es. Marca allí el recibo como pagado y vuelve a subir el listado.</p></div>`}
+    <div id="dq-ares">${l.map(([id,a])=>{const pr=gbVer()?pendientesDe(a,id):[];return `<div style="margin-top:6px"><button class="btn small" data-dq="asignar" data-k="${x.k}" data-d="${esc(x.fecha)}" data-al="${esc(id)}">${esc(titulo(a.nombre))}</button>
+      ${pr.map(r=>`<button class="btn small primary" style="margin:4px 4px 0 0" data-dq="asignarrec" data-k="${x.k}" data-d="${esc(x.fecha)}" data-al="${esc(id)}" data-r="${esc(r.id)}" data-tipo="${esc(x.tipo)}">Pagado: ${esc(r.numero||r.concepto||"recibo")} · ${eur(+r.importe)}</button>`).join("")}</div>`}).join("")||(q.length>=2?`<span class="note">Ningún alumno con ese nombre.</span>`:"")}</div>
+    <p class="note" style="margin:6px 0 0">Pulsa el nombre para asignarlo sin más, o el botón rojo de un recibo pendiente para asignarlo y marcar ese recibo como <b>pagado</b> en la app (con esa forma de pago y ese día; se mantiene aunque vuelvas a subir el listado). Márcalo también en Argos.</p></div>`}
 async function descGuardar(k,dia,v){const mes=String(dia).slice(0,7),ref=S.db.doc("banco/"+mes);
   try{const sn=await ref.get();if(sn.exists)await ref.update({["desc."+k]:v});else await ref.set({mes,desc:{[k]:v}});return true}catch(e){console.error(e);toast("No se ha podido guardar.");return false}}
 document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.closest("[data-dq]");if(!t||!descVer())return;if(S.pv){e.preventDefault();toast("Vista previa: es solo para mirar");return}e.preventDefault();const act=t.dataset.dq,k=t.dataset.k;
@@ -3051,9 +3056,16 @@ document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.c
   else if(act==="cerrar"){DQ.abre=null;render()}
   else if(act==="asignar"){const a=conTodos(()=>S.alumnos.get(t.dataset.al));if(!a)return;const nota=String(($("#dq-nota")||{}).value||"").trim().slice(0,200);
     if(await descGuardar(k,t.dataset.d,{estado:"asignado",alumno:t.dataset.al,nombre:a.nombre,nota,t:nowISO(),por:quienSoy()})){DQ.abre=null;toast("Asignado a "+titulo(a.nombre));render()}}
+  else if(act==="asignarrec"){if(!gbVer())return;const id=t.dataset.al,a=S.alumnos.get(id);if(!a)return;const r=(a.recibos||[]).find(y=>y&&y.id===t.dataset.r);if(!r)return;
+    const nota=String(($("#dq-nota")||{}).value||"").trim().slice(0,200),tp=t.dataset.tipo||"",forma=tp==="Tarjeta"?"TARJETA":tp==="Bizum"?"BIZUM":tp==="Transferencia"?"TRANSFERENCIA":"CONTADO",d=t.dataset.d||todayISO();
+    t.disabled=true;const recibos=(a.recibos||[]).map(y=>y===r?{...y,estado:"pagado",pagado:d,forma,caja:{id:"desc|"+k,t:nowISO(),por:quienSoy()}}:y);
+    if(!await save(id,{recibos})){t.disabled=false;return}a.recibos=recibos;
+    if(await descGuardar(k,d,{estado:"asignado",alumno:id,nombre:a.nombre,recibo:r.numero||r.id,nota,t:nowISO(),por:quienSoy()})){DQ.abre=null;toast(`Asignado a ${titulo(a.nombre)} y recibo ${r.numero||""} marcado como pagado`);render()}}
   else if(act==="just"){if(!t.dataset.ok){t.dataset.ok="1";t.textContent="¿Seguro? Pulsa otra vez";setTimeout(()=>{if(t.isConnected){delete t.dataset.ok;t.textContent="Justificado"}},4000);return}
     if(await descGuardar(k,t.dataset.d,{estado:"justificado",t:nowISO(),por:quienSoy()})){toast("Marcado como justificado");render()}}
-  else if(act==="reabrir"){if(await descGuardar(k,t.dataset.d,null)){toast("Vuelve a pendientes");render()}}});
+  else if(act==="reabrir"){const x=conTodos(descItems).find(y=>y.k===k),al=x&&x.res&&x.res.recibo&&x.res.alumno;
+    if(al&&gbVer()){const a=S.alumnos.get(al);if(a&&(a.recibos||[]).some(r=>r&&r.caja&&r.caja.id==="desc|"+k)){const recibos=a.recibos.map(r=>r&&r.caja&&r.caja.id==="desc|"+k?(({caja,...y})=>({...y,estado:"pendiente",pagado:"",forma:""}))(r):r);if(await save(al,{recibos}))a.recibos=recibos}}
+    if(await descGuardar(k,t.dataset.d,null)){toast(al?"Vuelve a pendientes y el recibo vuelve a estar pendiente":"Vuelve a pendientes");render()}}});
 document.addEventListener("input",e=>{const t=e.target;if(!t||!descVer())return;
   if(t.id==="dq-aq"){DQ.aq=t.value;const x=conTodos(descItems).find(y=>y.k===DQ.abre),r=$("#dq-ares");if(x&&r){const tmp=document.createElement("div");tmp.innerHTML=conTodos(()=>vDescAsignar(x));const n=tmp.querySelector("#dq-ares");if(n)r.innerHTML=n.innerHTML}}
   else if(t.id==="dq-q"){DQ.q=t.value;clearTimeout(DQ.tq);DQ.tq=setTimeout(()=>{render();const i=$("#dq-q");if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},350)}});

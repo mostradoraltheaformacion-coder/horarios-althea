@@ -168,6 +168,12 @@ function vPrevia(TM){
 }
 
 /* ---------------- ficha: tarifa del alumno ---------------- */
+/* 16/11/2026 (titular): si cambia el horario, la tarifa no cambia sola: se propone el mismo curso con las horas del horario */
+const cursoSinHoras=c=>nzC(c).toUpperCase().replace(/\d+\s*H\s*\/?\s*SEMANA/,"#H").replace(/LOGOPEDIA\s*\d+/,"LOGOPEDIA #");
+function cursoParaHoras(curso,hh,TM){if(!hh)return null;const b=cursoSinHoras(curso);if(b===nzC(curso).toUpperCase())return null;
+  for(const [k,c] of TM)if(nzC(k)!==nzC(curso)&&cursoSinHoras(k)===b&&horasDeCurso(k)===hh&&c&&c.precio!=null)return c;return null}
+function horasDescuadre(a,M,TM){if(!a||a.baja||a.sueltas||a.exento)return null;const hh=(a.clases||[]).length;if(M.horas==null||!hh||M.horas===hh)return null;
+  const sug=M.l.length===1?cursoParaHoras(M.l[0].curso,hh,TM):null;return {tar:M.horas,hor:hh,sug}}
 function vTarifaAl(id,a){
   if(!gtVer())return "";const TM=tfMapa(),dl=`<datalist id="gt-dl">${[...TM.values()].map(c=>`<option value="${esc(c.nombre)}">${c.precio!=null?eur(c.precio):""}</option>`).join("")}</datalist>`;
   if(GT.edit&&GT.edit.id===id){const l=GT.edit.l;
@@ -191,7 +197,7 @@ function vTarifaAl(id,a){
       ${cA?` Coincide con el precio de antiguos alumnos de ${esc(cA.nombre)}. <button class="btn small primary" data-tf="antok" data-id="${esc(id)}">Antiguo alumno (${eur(cA.ant)})</button>`:M.l.length===1&&ar.n===1&&!ajF?` <button class="btn small" data-tf="ajabrir" data-id="${esc(id)}">Mantener ${eur(ar.total)} (precio especial)</button>`:" Ajústalo con «Cambiar»."}
       ${ajF?`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:6px"><label class="f" style="flex:1 1 220px">Motivo del precio especial de ${eur(ar.total)}<input type="text" id="gt-ajm" maxlength="120" placeholder="Ej.: hermanos, acuerdo con la familia"></label><button class="btn small primary" data-tf="ajok" data-id="${esc(id)}" data-v="${ar.total}">Guardar</button><button class="btn small" data-tf="ajno">Cancelar</button></div>`:""}</div>`:"";
   const est=M.guardada?`<span class="badge b-si">Guardada</span>`:`<span class="badge b-off">Propuesta según Argos${M.mes?" ("+MESES[+M.mes.slice(5)-1]+")":""}</span>`;
-  const hh=a.clases.length,av=M.horas!=null&&M.horas!==hh&&!a.baja&&!a.sueltas?`<p class="note" style="color:var(--warn)">Se cobran ${fmtNum(M.horas)} h/semana y en el horario ${hh===1?"hay 1 clase":`hay ${hh} clases`}.</p>`:"";
+  const hh=a.clases.length,av=M.horas!=null&&M.horas!==hh&&!a.baja&&!a.sueltas?`<p class="note" style="color:var(--warn)">Se cobran ${fmtNum(M.horas)} h/semana y en el horario ${hh===1?"hay 1 clase":`hay ${hh} clases`}.${(()=>{const D=horasDescuadre(a,M,TM);return D&&D.sug?` <button class="btn small primary" data-tf="hcambia" data-id="${esc(id)}" data-c="${esc(D.sug.nombre)}">Cambiar a ${esc(D.sug.nombre)} (${eur(D.sug.precio)})</button>`:""})()}</p>`:"";
   return `<div><div class="bar" style="margin-bottom:4px"><b style="font-size:14px;margin-right:auto">Tarifa del alumno</b>${est}</div>
     ${a.exento?`<p class="note">No paga (familiar, beca…): no se le generarán recibos.</p>`:""}
     ${filas||`<p class="note">Sin cursos: no se le generarían recibos.</p>`}
@@ -250,6 +256,8 @@ document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.c
   else if(act==="ajok"){const id=t.dataset.id,a=S.alumnos.get(id),v=+t.dataset.v,mot=String(($("#gt-ajm")||{}).value||"").trim();if(!a)return;
     if(!mot){toast("Escribe el motivo del precio especial");return}const M=matrizDe(a);if(M.l.length!==1)return;
     t.disabled=true;if(await guardarMatriz(id,[{curso:nzC(M.l[0].curso),aj:v,mot:mot.slice(0,120)}])){GT.aj=null;render();toast(`${titulo(a.nombre)}: precio especial de ${eur(v)} guardado`)}else t.disabled=false}
+  else if(act==="hcambia"){const id=t.dataset.id,a=S.alumnos.get(id),cu=t.dataset.c;if(!a||!cu)return;const M=matrizDe(a),y=M.l[0]||{},TM2=tfMapa(),cc=TM2.get(cu)||{};
+    t.disabled=true;if(await guardarMatriz(id,[{curso:nzC(cu),...(y.ant&&cc.ant!=null?{ant:true}:{}),...(y.ini?{ini:y.ini}:{})}])){render();toast(`${titulo(a.nombre)}: tarifa cambiada a ${cu}`)}else t.disabled=false}
   else if(act==="antok"){const id=t.dataset.id,a=S.alumnos.get(id);if(!a)return;const M=matrizDe(a);if(M.l.length!==1)return;
     t.disabled=true;if(await guardarMatriz(id,[{curso:nzC(M.l[0].curso),ant:true}])){render();toast(`${titulo(a.nombre)}: antiguo alumno`)}else t.disabled=false}
   else if(act==="antodos"){const ls=[];for(const [id,a] of S.alumnos){if(a.baja||a.bloqueado||a.exento)continue;const ar=argosMes(a,GT.mes);if(!ar)continue;
@@ -1792,6 +1800,7 @@ function generarRecibos(mes){
     if(a.baja||a.bloqueado)continue;if(!a.clases.length&&a.argos!=="activo"&&!(a.matriz&&(a.matriz.l||[]).length))continue;
     if(a.exento){avisos.push({id,a,txt:"No paga (familiar, beca…): sin recibo"});continue}
     const M=calcMatriz(a,TM),lin=[];
+    const HD=horasDescuadre(a,M,TM);if(HD)avisos.push({id,a,txt:`Horario de ${HD.hor} h/semana y tarifa de ${fmtNum(HD.tar)} h: revisa la tarifa${HD.sug?` (¿${HD.sug.nombre}?)`:""}`});
     const finM=isoDe(new Date(+mes.slice(0,4),+mes.slice(5,7),0));let salt=0;
     for(const l of M.l){const p=precioLinea(l,TM),ini=inicioLinea(a,l),nb=l.aj!=null&&l.aj!==""?`precio especial: ${l.mot||""}`:l.ant?"antiguo alumno":"";
       if(ini&&ini>finM){avisos.push({id,a,txt:`${l.curso}: empieza el ${fmtFecha(ini)}, este mes no se le cobra`});salt++;continue}
@@ -1805,7 +1814,7 @@ function generarRecibos(mes){
     if(!lin.length){if(a.clases.length&&!salt)avisos.push({id,a,txt:"Tiene clases pero no tiene tarifa: no saldría recibo"});continue}
     const falta=lin.some(l=>l.importe==null),tot=r2(lin.reduce((s,l)=>s+(+l.importe||0),0));
     const arg=(a.recibos||[]).filter(r=>r&&String(r.emitido||"").startsWith(mes)),ta=arg.length?r2(arg.reduce((s,r)=>s+(+r.importe||0),0)):null;
-    out.push({id,a,lin,tot,falta,hx:hx.map(r=>r.numero),guardada:M.guardada,argos:ta,argosN:arg.map(r=>r.numero).filter(Boolean)})}
+    out.push({id,a,lin,tot,falta,hd:HD,hx:hx.map(r=>r.numero),guardada:M.guardada,argos:ta,argosN:arg.map(r=>r.numero).filter(Boolean)})}
   out.forEach((x,i)=>x.num=`ENSAYO-${mes.replace("-","")}-${String(i+1).padStart(4,"0")}`);
   return {mes,l:out,avisos,tot:r2(out.reduce((s,x)=>s+x.tot,0)),totArg:r2(out.reduce((s,x)=>s+(x.argos||0),0)),conArg:out.filter(x=>x.argos!=null).length};
 }
@@ -1813,7 +1822,7 @@ function vGenerar(){
   const ms=[todayISO().slice(0,7),mesSig(todayISO().slice(0,7)),...mesesConRecibos()].filter((v,i,l)=>l.indexOf(v)===i).sort().reverse();
   if(!GT.genMes)GT.genMes=mesSig(todayISO().slice(0,7));const G=generarRecibos(GT.genMes);
   const dif=x=>x.argos==null?`<span class="note">sin recibo en Argos</span>`:Math.abs(x.argos-x.tot)<0.005?`<span class="note" style="color:var(--ok)">= Argos</span>`:`<span class="note" style="color:var(--warn)">Argos ${eur(x.argos)} (${eurS(r2(x.tot-x.argos))})</span>`;
-  const vis=GT.genSolo?G.l.filter(x=>x.falta||(x.argos!=null&&Math.abs(x.argos-x.tot)>0.005)):G.l;
+  const vis=GT.genSolo?G.l.filter(x=>x.falta||x.hd||(x.argos!=null&&Math.abs(x.argos-x.tot)>0.005)):G.l;
   return `<div class="bar"><h2>Recibos del mes · ensayo</h2><span class="legend"><button class="btn small" data-tf="genno">← Volver a Tarifas</button></span></div>
   <div class="aviso info" style="display:block"><b>Ensayo: no se crea ningún recibo.</b> Así saldrían los recibos con la tarifa de cada alumno. Si el alumno tiene un recibo de horas extra (HX) <b>pendiente</b>, sus líneas pasan a este recibo y el HX se anulará con la nota «incluido en…»; los HX ya pagados no se tocan. También se suman las horas extra antiguas sin recibo ni cobradas en Argos. Compáralos con los de Argos. Desde el 1/1/2027 este botón los creará de verdad (serie R27).</div>
   <div class="bar" style="gap:8px;flex-wrap:wrap;margin-top:8px"><label class="f" style="flex:0 1 180px">Mes<select id="gt-genmes">${ms.map(m=>`<option value="${m}" ${m===GT.genMes?"selected":""}>${mesTxt(m)}</option>`).join("")}</select></label>
@@ -1825,7 +1834,7 @@ function vGenerar(){
   ${G.avisos.length?`<details class="aviso pend fh" style="display:block"><summary><b>${G.avisos.length} aviso${G.avisos.length===1?"":"s"}</b></summary><div class="fhl">${G.avisos.map(v=>`<div class="row"><a href="#" class="grow" data-act="ir" data-id="${esc(v.id)}" style="color:inherit">${esc(titulo(v.a.nombre))}</a><span class="note">${esc(v.txt)}</span></div>`).join("")}</div></details>`:""}
   <div class="panel">${vis.map(x=>`<div class="row" style="flex-wrap:wrap;align-items:flex-start;padding:8px 12px">
     <span class="note" style="min-width:150px;font-variant-numeric:tabular-nums">${x.num}</span>
-    <span class="grow" style="white-space:normal;flex-basis:240px"><a href="#" data-act="ir" data-id="${esc(x.id)}" style="color:inherit"><b>${esc(titulo(x.a.nombre))}</b></a>${x.guardada?"":` <span class="badge b-off" title="Tarifa propuesta según Argos, aún sin guardar">propuesta</span>`}
+    <span class="grow" style="white-space:normal;flex-basis:240px"><a href="#" data-act="ir" data-id="${esc(x.id)}" style="color:inherit"><b>${esc(titulo(x.a.nombre))}</b></a>${x.guardada?"":` <span class="badge b-off" title="Tarifa propuesta según Argos, aún sin guardar">propuesta</span>`}${x.hd?`<br><span class="note" style="color:var(--warn)">Horario de ${x.hd.hor} h/semana y tarifa de ${fmtNum(x.hd.tar)} h.</span>${x.hd.sug?` <button class="btn small primary" data-tf="hcambia" data-id="${esc(x.id)}" data-c="${esc(x.hd.sug.nombre)}">Cambiar a ${esc(x.hd.sug.nombre)} (${eur(x.hd.sug.precio)})</button>`:` <a href="#" class="note" data-act="ir" data-id="${esc(x.id)}">Revisar en su ficha</a>`}`:""}
       ${x.lin.map(l=>`<br><span class="note">${esc(l.concepto)} · ${l.importe==null?`<span style="color:var(--bad)">sin precio</span>`:eur(l.importe)}${l.nota?` · ${esc(l.nota)}`:""}</span>`).join("")}</span>
     <span style="text-align:right;min-width:140px"><b>${x.falta?"—":eur(x.tot)}</b><br>${dif(x)}</span></div>`).join("")||`<div class="empty">Todo cuadra.</div>`}</div>`;
 }

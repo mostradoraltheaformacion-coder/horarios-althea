@@ -3060,8 +3060,16 @@ function vDescuadres0(){gbEscuchar();cajaEscuchar();
    o del mes en que suele pagar y la forma de pago que suele usar. */
 function descCoinc(x){const A=Math.abs(+x.imp||0),f=x.fecha;if(!A||!f)return [];const c2=v=>Math.round(v*100),dS=diaDe(f),dM=+f.slice(8,10),fk=(fpInfo(x.tipo)||{}).k;
   const hm2=x.h?minDe(x.h):null,TM=typeof tfMapa==="function"?tfMapa():null,out=[];
+  /* cobros de ese día en la caja de Argos por ese importe (aunque aún no se haya subido el listado de recibos) */
+  const cajaHoy=new Map();try{const AC=argosCajaDias()[f];for(const y of (AC&&AC.f)||[]){if(/DESCUADRE/i.test(String(y.c||""))||c2(+y.imp||0)!==c2(A))continue;
+    const id=typeof idDeTitular==="function"?idDeTitular(y.tit,[]):null;if(id&&!cajaHoy.has(id))cajaHoy.set(id,{numero:y.num,forma:y.fp,h:y.h})}}catch(_){}
   for(const [id,a] of S.alumnos){if(!a)continue;const why=[];let sc=0,rec=[];
     const pend=(a.recibos||[]).filter(r=>r&&r.estado!=="pagado"&&r.estado!=="anulado"&&r.importe!=null);
+    /* cobrado ese mismo día por ese importe: si falta dinero, puede que no se cobrara de verdad o que se pagara con otra forma; si es un cobro del banco, puede que en Argos se apuntara con otra forma de pago */
+    const hoyP=(a.recibos||[]).filter(r=>r&&r.estado==="pagado"&&String(r.pagado||"").slice(0,10)===f&&c2(+r.importe||0)===c2(A));
+    if(!hoyP.length&&cajaHoy.has(id))hoyP.push(cajaHoy.get(id));
+    if(hoyP.length){const r=hoyP[0],fr=(fpInfo(r.forma)||{}),mismo=fr.k&&fr.k===fk;sc+=mismo&&x.imp<0?6:5;
+      why.push(`cobrado ese día ${eur(A)}${fr.l?" en "+fr.l.toLowerCase():""}${r.h?" a las "+r.h:""}${r.numero?" ("+r.numero+")":""}: ${x.imp<0?(mismo?"¿se cobró de verdad o se pagó de otra forma?":"¿se apuntó con la forma de pago equivocada?"):(mismo?"¿se cobró dos veces?":"¿se apuntó con la forma de pago equivocada?")}`)}
     rec=pend.filter(r=>c2(+r.importe)===c2(A));if(rec.length){sc+=5;why.push(`recibo pendiente de ${eur(A)}${rec[0].numero?" ("+rec[0].numero+")":""}`)}
     else if(pend.length>1&&c2(pend.reduce((s,r)=>s+(+r.importe||0),0))===c2(A)){sc+=4;rec=[];why.push(`sus ${pend.length} recibos pendientes suman ${eur(A)}`)}
     else{let t=null;try{if(TM&&!a.baja){const M=calcMatriz(a,TM);if(M.l.length&&!M.falta)t=M.total}}catch(_){}
@@ -3075,8 +3083,8 @@ function descCoinc(x){const A=Math.abs(+x.imp||0),f=x.fecha;if(!A||!f)return [];
       if((ws[dS]||0)>=2&&ws[dS]/pag.length>=0.5){sc+=1;why.push(`suele pagar los ${dS.toLowerCase()}`)}
       const dm=pag.map(r=>+String(r.pagado).slice(8,10));if(dm.filter(d=>Math.abs(d-dM)<=2).length/dm.length>=0.6){sc+=1;why.push(`suele pagar hacia el día ${dM}`)}
       if(fk&&(fs[fk]||0)/pag.length>=0.6){sc+=1;why.push(fk==="efectivo"?"suele pagar en contado":`suele pagar con ${(fpInfo(x.tipo)||{}).l.toLowerCase()}`)}}
-    const fuerte=why.some(w=>/recibo|suman|mensualidad|suelta/.test(w));
-    if(fuerte?sc>=3:sc>=4)out.push({id,a,sc,why,rec})}
+    const fuerte=why.some(w=>/recibo pendiente|suman|mensualidad|suelta|cobrado ese día/.test(w));
+    if(fuerte)out.push({id,a,sc,why,rec})}
   return out.sort((u,v)=>v.sc-u.sc||u.a.nombre.localeCompare(v.a.nombre,"es")).slice(0,6)}
 function vDescCoinc(x){if(x.res)return "";let l=[];try{l=descCoinc(x)}catch(e){console.warn(e);return ""}if(!l.length)return `<br><span class="note">Sin coincidencias claras.</span>`;
   return `<details style="margin-top:4px"${DQ.coin===x.k?" open":""} data-dqcoin="${x.k}"><summary class="note" style="cursor:pointer"><b>Posibles coincidencias (${l.length})</b></summary>

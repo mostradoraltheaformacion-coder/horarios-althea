@@ -3001,6 +3001,9 @@ function descItems(){const out=[],add=x=>{x.k=hashTxt(x.src);out.push(x)},desde=
         pista:(o.pistas||[]).map(g=>g.map(r=>`${titulo(r.tit)} (${r.fp})`).join(" + ")).join(" o ")});
       for(const r of x.soloArgos)add({src:`tpva|${x.d}|${r.num}|${r.imp}|${r.tit}`,tipo:"Tarjeta",fecha:x.d,imp:-r.imp,det:`Cobrado con tarjeta en Argos (${titulo(r.tit)}${r.num?", "+r.num:""}) y no aparece en el banco`})}
     else if(x.modo==="total"&&x.ok===false)add({src:`tpvt|${x.fv}`,tipo:"Tarjeta",fecha:x.fv,imp:r2(x.tB-x.tAw),det:`Liquidación del TPV del ${fmtFecha(x.fv)}: banco ${eur(x.tB)} y Argos ${eur(x.tAw)}. Sube su PDF para ver qué operación es`})}
+  /* 16/11/2026 (titular): descuadres apuntados a mano en la app (el Excel de la caja de Argos no trae aperturas, retiradas ni descuadres) */
+  for(const d of GB.docs)for(const [mk,v] of Object.entries(d.desc||{})){const m=v&&v.manual;if(!m||!m.fecha||m.fecha<desde)continue;
+    add({src:`man|${mk}`,tipo:m.tipo||"Efectivo",fecha:m.fecha,imp:+m.imp||0,mk,mes:d.id,det:`Descuadre apuntado a mano${m.nota?": «"+m.nota+"»":""} · ${m.por||""}. ${(+m.imp||0)<0?"Falta ese dinero":"Sobra ese dinero"}: busca qué cobro no se apuntó o se apuntó con otra forma de pago`})}
   /* 16/11/2026 (titular): descuadres apuntados a mano en la caja de Argos («DESCUADRE CAJA −25 €») */
   {const AC=argosCajaDias();for(const d of Object.keys(AC).sort()){if(d<desde)continue;(AC[d].f||[]).forEach((x,i)=>{if(!/DESCUADRE/i.test(String(x.c||"")+" "+String(x.o||"")))return;
     add({src:`acjd|${d}|${i}|${x.imp}`,tipo:esTarj(x.fp)?"Tarjeta":/bizum/i.test(x.fp||"")?"Bizum":/transf/i.test(x.fp||"")?"Transferencia":"Efectivo",fecha:d,imp:+x.imp||0,
@@ -3015,7 +3018,7 @@ function descItems(){const out=[],add=x=>{x.k=hashTxt(x.src);out.push(x)},desde=
     if(d.tipo==="apunte"&&d.cc==="descuadre")add({src:`apu|${d.id}`,tipo:"Efectivo",fecha:d.dia,imp:(+d.signo<0?-1:1)*(+d.importe||0),det:`Apunte «Descuadre sin justificar»${d.nota?" · «"+d.nota+"»":""} · ${d.quien||""}`})}}
   const G=descGuardados();for(const x of out)x.res=G[x.k]||null;
   return out.sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||Math.abs(b.imp)-Math.abs(a.imp))}
-const descPend=()=>{try{return gbVer()&&GB.ok?descItems().filter(x=>!x.res).length:0}catch(_){return 0}};
+const descPend=()=>{try{return descVer()&&GB.ok?descItems().filter(x=>!x.res).length:0}catch(_){return 0}};
 const descVer=()=>gbVer()||(typeof esPlus==="function"&&esPlus())||!!(S.pv&&S.pv.rol==="profe"&&typeof PROFE_PLUS!=="undefined"&&PROFE_PLUS.includes(S.pv.profe));
 function vDescuadres(){if(!descVer())return `<div class="empty">Solo dirección.</div>`;if(!gbVer()&&typeof PLUS!=="undefined"&&!PLUS.m)return `<div class="empty">${PLUS.err?esc(PLUS.err):"Cargando…"}</div>`;return conTodos(vDescuadres0)}
 function vDescuadres0(){gbEscuchar();cajaEscuchar();
@@ -3032,10 +3035,19 @@ function vDescuadres0(){gbEscuchar();cajaEscuchar();
         ${DQ.abre===x.k?vDescAsignar(x):""}</span>
       <b style="min-width:80px;text-align:right;color:var(${x.imp>=0?"--ok":"--bad"})">${x.imp>=0?"+":"−"}${eur(Math.abs(x.imp))}</b>
       <span style="display:flex;gap:4px;flex-wrap:wrap">${x.res?`<button class="btn small" data-dq="reabrir" data-k="${x.k}" data-d="${esc(x.fecha)}">Reabrir</button>`
-        :`<button class="btn small primary" data-dq="abrir" data-k="${x.k}">Asignar a alumno</button><button class="btn small" data-dq="just" data-k="${x.k}" data-d="${esc(x.fecha)}">Justificado</button>`}</span></div>`};
+        :`<button class="btn small primary" data-dq="abrir" data-k="${x.k}">Asignar a alumno</button><button class="btn small" data-dq="just" data-k="${x.k}" data-d="${esc(x.fecha)}">Justificado</button>${x.mk?`<button class="btn small" data-dq="manborrar" data-mk="${esc(x.mk)}" data-d="${esc(x.mes+"-01")}" title="Borrar este apunte">×</button>`:""}`}</span></div>`};
   return `<div class="bar"><h2>Descuadres y pagos sin identificar</h2><span class="legend">${nP?`<b style="color:var(--bad)">${nP} pendiente${nP===1?"":"s"}</b> · ${sumP>=0?"+":"−"}${eur(Math.abs(sumP))}`:"Nada pendiente"}</span></div>
   <p class="note" style="margin-top:0">Aquí llega solo lo que no cuadra: cobros con tarjeta que no están en la caja de Argos (sube la caja de cada día en Gastos), Bizum y transferencias sin alumno, y descuadres de efectivo de la Caja. Cuando una familia diga «yo pagué tal día», búscalo por fecha, importe o tarjeta y asígnalo a su alumno.</p>
   ${typeof fpChip==="function"?`<p class="note" style="margin:-4px 0 10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">Colores: ${["Tarjeta","Bizum","Transferencia","Efectivo"].map(fpChip).join("")}</p>`:""}
+  ${S.pv?"":DQ.nuevo?`<div class="panel" style="padding:10px 14px;margin-bottom:10px"><b>Apuntar un descuadre</b> <span class="note">(por ejemplo, el «DESCUADRE CAJA» del arqueo de Argos)</span>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:6px">
+      <label class="f" style="flex:0 1 150px">Día<input type="date" id="dqn-f" value="${todayISO()}"></label>
+      <label class="f" style="flex:0 1 150px">Forma de pago<select id="dqn-t">${["Efectivo","Tarjeta","Bizum","Transferencia"].map(t=>`<option>${t}</option>`).join("")}</select></label>
+      <label class="f" style="flex:0 1 170px">¿Falta o sobra?<select id="dqn-s"><option value="-1">Falta dinero en caja</option><option value="1">Sobra dinero en caja</option></select></label>
+      <label class="f" style="flex:0 1 110px">Importe (€)<input type="text" id="dqn-i" inputmode="decimal" placeholder="25"></label>
+      <label class="f" style="flex:1 1 200px">Nota<input type="text" id="dqn-n" maxlength="160" placeholder="Ej.: arqueo del lunes, contado"></label>
+      <button class="btn primary" data-dq="nuevook">Guardar</button><button class="btn" data-dq="nuevono">Cancelar</button></div></div>`
+    :`<div style="margin-bottom:10px"><button class="btn" data-dq="nuevo">+ Apuntar un descuadre</button></div>`}
   <div class="bar" style="gap:8px;flex-wrap:wrap">
     <label class="f" style="flex:0 1 150px">Estado<select id="dq-f"><option value="pend" ${DQ.f==="pend"?"selected":""}>Pendientes</option><option value="res" ${DQ.f==="res"?"selected":""}>Resueltos</option><option value="todos" ${DQ.f==="todos"?"selected":""}>Todos</option></select></label>
     <label class="f" style="flex:0 1 150px">Tipo<select id="dq-tipo"><option value="">Todos</option>${["Tarjeta","Bizum","Transferencia","Efectivo"].map(t=>`<option ${DQ.tipo===t?"selected":""}>${t}</option>`).join("")}</select></label>
@@ -3061,6 +3073,14 @@ document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.c
     t.disabled=true;const recibos=(a.recibos||[]).map(y=>y===r?{...y,estado:"pagado",pagado:d,forma,caja:{id:"desc|"+k,t:nowISO(),por:quienSoy()}}:y);
     if(!await save(id,{recibos})){t.disabled=false;return}a.recibos=recibos;
     if(await descGuardar(k,d,{estado:"asignado",alumno:id,nombre:a.nombre,recibo:r.numero||r.id,nota,t:nowISO(),por:quienSoy()})){DQ.abre=null;toast(`Asignado a ${titulo(a.nombre)} y recibo ${r.numero||""} marcado como pagado`);render()}}
+  else if(act==="nuevo"){DQ.nuevo=true;render()}
+  else if(act==="nuevono"){DQ.nuevo=false;render()}
+  else if(act==="nuevook"){const f=($("#dqn-f")||{}).value||"",imp=gtNum(($("#dqn-i")||{}).value||""),sg=+(($("#dqn-s")||{}).value||-1);
+    if(!f){toast("Elige el día");return}if(imp==null||isNaN(imp)||imp<=0){toast("Escribe el importe");return}
+    const mk="man_"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);t.disabled=true;
+    if(await descGuardar(mk,f,{manual:{fecha:f,tipo:($("#dqn-t")||{}).value||"Efectivo",imp:r2(sg*Math.abs(imp)),nota:String(($("#dqn-n")||{}).value||"").trim().slice(0,160),por:quienSoy(),t:nowISO()}})){DQ.nuevo=false;toast("Descuadre apuntado");render()}else t.disabled=false}
+  else if(act==="manborrar"){if(!t.dataset.ok){t.dataset.ok="1";t.textContent="¿Borrar?";setTimeout(()=>{if(t.isConnected){delete t.dataset.ok;t.textContent="×"}},4000);return}
+    if(await descGuardar(t.dataset.mk,t.dataset.d,null)){toast("Apunte borrado");render()}}
   else if(act==="just"){if(!t.dataset.ok){t.dataset.ok="1";t.textContent="¿Seguro? Pulsa otra vez";setTimeout(()=>{if(t.isConnected){delete t.dataset.ok;t.textContent="Justificado"}},4000);return}
     if(await descGuardar(k,t.dataset.d,{estado:"justificado",t:nowISO(),por:quienSoy()})){toast("Marcado como justificado");render()}}
   else if(act==="reabrir"){const x=conTodos(descItems).find(y=>y.k===k),al=x&&x.res&&x.res.recibo&&x.res.alumno;

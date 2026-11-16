@@ -96,7 +96,7 @@ const centro=()=>CU.rol==="dir"||CU.rol==="mos";
 /* ---------- alumnos: alumnos/<id> + privado/<id> ----------
    En alumnos/<id> va solo lo que pueden ver sus profesoras; además, dirección calcula ahí profes (qué profesoras
    le dan clase, para las reglas) y _d (nivel, recibos pendientes y horas estimadas de sesión). Todo lo demás, en privado. */
-const CORE=new Set(["nombre","clases","faltas","asist","token","trasHechos","foto","telefonos","bloqueado","actualizado","puntuales","confOk","extras"]);
+const CORE=new Set(["nombre","clases","clasesHist","telRel","pagador","faltas","asist","token","trasHechos","foto","telefonos","bloqueado","actualizado","puntuales","confOk","extras"]);
 const AL={core:new Map(),priv:new Map(),okC:false,okP:false,subs:0};
 const KV={claves:new Map(),cuentas:new Map(),okK:false,okQ:false,altas:null};
 function partir(d){const c={},p={};for(const [k,v] of Object.entries(d||{})){if(k==="profes"||k==="_d")continue;(CORE.has(k)?c:p)[k]=v}return [c,p]}
@@ -297,6 +297,9 @@ const F={
   CU,stable,claveAlta,credDe,
   listo:()=>KV.okK&&KV.okQ&&AL.okC&&AL.okP&&!AL.fc,
   coreDe:id=>AL.core.get(id)||null,
+  /* 16/11/2026: Ainea (profesora con permiso extra en las reglas) lee todos los alumnos con sus recibos, aparte de su horario */
+  todosAl:(ok,ko)=>juntos([escColM("alumnos"),escColM("privado")],v=>v,([c,p])=>{const cm=new Map(c),pm=new Map(p),m=new Map();
+    for(const id of new Set([...cm.keys(),...pm.keys()])){const o={...(pm.get(id)||{}),...(cm.get(id)||{})};delete o.profes;delete o._d;m.set(id,o)}ok(m)},ko),
   coreUpdate:async(id,d)=>{await updateDoc(doc(fs,"alumnos/"+id),limpio(d));AL.core.set(id,{...(AL.core.get(id)||{}),...d})},
   privUpdate:async(id,d)=>{await updateDoc(doc(fs,"privado/"+id),limpio(d));AL.priv.set(id,{...(AL.priv.get(id)||{}),...d})},
   clave:u=>KV.claves.get(nU(u))||null,

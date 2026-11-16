@@ -390,17 +390,19 @@ function vCajaRes(l,q){
     return `<button class="li" data-gc="elegir" data-id="${esc(id)}"><span class="grow">${esc(titulo(x.nombre))}</span><small>${p.length?`${p.length} pendiente${p.length===1?"":"s"} · ${eur(r2(t))}`:"al día"}</small></button>`}).join("")}</div>`;
 }
 function vCajaHecho(){
-  const c={...GC.ultimo,anulado:anulados().has(GC.ultimo.id)},a=S.alumnos.get(c.alumno),tels=((a&&a.telefonos)||[]).map(digitos).filter(x=>x.length>=9);
-  const tel=GC.tel!=null?GC.tel:(tels[0]||"").slice(-9);
+  const c={...GC.ultimo,anulado:anulados().has(GC.ultimo.id)},a=S.alumnos.get(c.alumno),cs=a&&typeof contactosAl==="function"?contactosAl(a):[];
+  const tel=GC.tel!=null?GC.tel:(cs[0]||{}).tel||"",rel=GC.rel!=null?GC.rel:(a&&typeof relDe==="function"?relDe(a,tel):"");
   return `<div class="aviso ${c.anulado?"pend":"info"}" style="display:block;margin:0 0 10px"><b>${c.anulado?"Cobro anulado":"Cobrado"}: ${eur(c.total)}</b> · ${formaTxt(c.forma)} · ${esc(titulo(c.nombre))}<br><span class="note">${horaC(c)} · cobra ${esc(c.quien||c.por||"")}</span>${c.cambio>0?`<br>Cambio: <b>${eur(c.cambio)}</b>`:""}</div>
     <b style="font-size:14px">Justificante</b>
     <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:6px">
       <button class="btn primary" data-gc="imprimir">Imprimir ticket</button>
       <label class="f" style="flex:0 1 120px">Papel<select id="gc-ancho"><option value="80" ${anchoTk()==="80"?"selected":""}>80 mm</option><option value="58" ${anchoTk()==="58"?"selected":""}>58 mm</option></select></label></div>
     <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:12px">
-      <label class="f" style="flex:1 1 160px">WhatsApp a${tels.length>1?` <span class="note">(${tels.map(t=>fmtTel(t.slice(-9))).join(", ")})</span>`:""}<input type="tel" id="gc-tel" inputmode="tel" value="${esc(tel)}" placeholder="Móvil (9 cifras)"></label>
+      ${cs.length>1?`<div style="flex-basis:100%;display:flex;gap:6px;flex-wrap:wrap">${cs.map(x=>`<button class="chip" data-gc="usatel" data-t="${x.tel}" data-r="${esc(x.rel)}" aria-pressed="${x.tel===tel}">${x.rel?`<b>${esc(x.rel)}</b> · `:""}${fmtTel(x.tel)}${x.pag?" ★":""}</button>`).join("")}</div>`:""}
+      <label class="f" style="flex:1 1 150px">WhatsApp a<input type="tel" id="gc-tel" inputmode="tel" value="${esc(tel)}" placeholder="Móvil (9 cifras)"></label>
+      <label class="f" style="flex:0 1 140px">Quién paga<select id="gc-rel"><option value="">—</option>${(typeof REL_OPC!=="undefined"?REL_OPC:[]).map(r=>`<option ${r===rel?"selected":""}>${r}</option>`).join("")}</select></label>
       <button class="btn" data-gc="wa">Enviar por WhatsApp</button></div>
-    <label class="chk" style="margin-top:6px"><input type="checkbox" id="gc-guardatel"><span>Guardar este número en su ficha (por ejemplo, el del padre o la madre)</span></label>
+    <label class="chk" style="margin-top:6px"><input type="checkbox" id="gc-guardatel" checked><span>Guardar este número en su ficha con quién es (la próxima vez saldrá el primero)</span></label>
     <p class="note" style="margin:4px 0 0">Se envía la imagen del ticket. En el ordenador se abre el chat de ese número con la imagen ya copiada: pulsa <b>Ctrl+V</b> y envía. En el móvil o la tablet se abre «Compartir»: elige WhatsApp y el contacto.</p>
     <button class="btn" style="margin-top:12px;width:100%" data-gc="nuevo">Nuevo cobro</button>`;
 }
@@ -563,13 +565,13 @@ async function cobrar(){
   if(!cajaPrueba()){const ids=new Set(sel.map(r=>r.id)),recibos=(a.recibos||[]).map(r=>ids.has(r.id)?{...r,estado:"pagado",pagado:full.dia,forma:formaTxt(GC.forma),caja:{id:cid,t:full.t,por:quien}}:r);
     if(!(await save(id,{recibos})))toast("El cobro está apuntado en la caja, pero no se han podido marcar los recibos como pagados. Avisa a dirección.");
     else{a.recibos=recibos;if(!esMos())revisarBajas().catch(()=>{})}}
-  GC.ultimo=full;GC.tel=null;GC.sel=null;GC.forma="";GC.ent="";GC.nota="";GC.hora="";GC.quien="";render();toast(`Cobrado ${eur(tot)}`);
+  GC.ultimo=full;GC.tel=null;GC.rel=null;GC.sel=null;GC.forma="";GC.ent="";GC.nota="";GC.hora="";GC.quien="";render();toast(`Cobrado ${eur(tot)}`);
 }
 document.addEventListener("input",e=>{const t=e.target;if(!t||!t.id)return;
   if(t.id==="gc-q"){GC.q=t.value;const q=nzC(t.value),l=q.length>=2?sortedAlumnos().filter(([,x])=>!x.bloqueado&&x.nombre.includes(q)).slice(0,12):[];const r=$("#gc-res");if(r)r.innerHTML=vCajaRes(l,q)}
   else if(t.id==="gc-ent"){GC.ent=t.value;const a=S.alumnos.get(GC.al);if(!a)return;const tot=pendientesDe(a,GC.al).filter(r=>GC.sel.has(r.id)).reduce((s,r)=>s+(+r.importe||0),0),ent=gtNum(t.value),c=$("#gc-cambio");
     if(c)c.innerHTML=ent!=null&&!isNaN(ent)?(ent-tot>=-0.004?`Cambio: <b>${eur(r2(ent-tot))}</b>`:`<span style="color:var(--bad)">Faltan ${eur(r2(tot-ent))}</span>`):""}
-  else if(t.id==="gc-nota")GC.nota=t.value;else if(t.id==="gc-tel")GC.tel=t.value;else if(t.id==="gc-hora")GC.hora=t.value});
+  else if(t.id==="gc-nota")GC.nota=t.value;else if(t.id==="gc-tel")GC.tel=t.value;else if(t.id==="gc-rel")GC.rel=t.value;else if(t.id==="gc-hora")GC.hora=t.value});
 document.addEventListener("change",e=>{const t=e.target;if(!t)return;
   if(t.dataset&&t.dataset.gcr){if(!GC.sel)GC.sel=new Set();GC.hora=(($("#gc-hora")||{}).value)||GC.hora;t.checked?GC.sel.add(t.dataset.gcr):GC.sel.delete(t.dataset.gcr);render()}
   else if(t.id==="gc-ancho")lsSet("althea.ticket",t.value);
@@ -582,12 +584,13 @@ document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.c
   else if(act==="otro"){GC.al=null;GC.sel=null;GC.forma="";render();setTimeout(()=>{const i=$("#gc-q");if(i){i.focus();i.select()}},0)}
   else if(act==="forma"){GC.hora=(($("#gc-hora")||{}).value)||GC.hora;GC.forma=t.dataset.v;render()}
   else if(act==="cobrar"){t.disabled=true;await cobrar();t.disabled=false}
-  else if(act==="nuevo"){GC.ultimo=null;GC.al=null;GC.q="";GC.tel=null;render();setTimeout(()=>{const i=$("#gc-q");if(i)i.focus()},0)}
-  else if(act==="ver"){const c=cobrosDia(GC.dia&&!esMos()?GC.dia:todayISO()).find(x=>x.id===t.dataset.id);if(c){GC.ultimo=c;GC.tel=null;render();scrollTo(0,0)}}
+  else if(act==="nuevo"){GC.ultimo=null;GC.al=null;GC.q="";GC.tel=null;GC.rel=null;render();setTimeout(()=>{const i=$("#gc-q");if(i)i.focus()},0)}
+  else if(act==="ver"){const c=cobrosDia(GC.dia&&!esMos()?GC.dia:todayISO()).find(x=>x.id===t.dataset.id);if(c){GC.ultimo=c;GC.tel=null;GC.rel=null;render();scrollTo(0,0)}}
   else if(act==="imprimir"){if(GC.ultimo)imprimirTicket({...GC.ultimo,anulado:anulados().has(GC.ultimo.id)})}
   else if(act==="wa"){const c=GC.ultimo&&{...GC.ultimo,anulado:anulados().has(GC.ultimo.id)};if(!c)return;const tel=digitos(($("#gc-tel")||{}).value||"").slice(-9);if(tel.length!==9){toast("Escribe un móvil de 9 cifras");return}
     await enviarTicketWA(c,tel);
-    if(($("#gc-guardatel")||{}).checked){const a=S.alumnos.get(c.alumno);if(a){const l=(a.telefonos||[]).map(digitos);if(!l.some(x=>x.slice(-9)===tel)){const telefonos=[tel,...(a.telefonos||[])];if(await save(c.alumno,{telefonos})){a.telefonos=telefonos;toast("Número guardado en la ficha")}}}}}
+    if(($("#gc-guardatel")||{}).checked&&typeof guardarContacto==="function"){const rel=($("#gc-rel")||{}).value||"";if(await guardarContacto(c.alumno,tel,rel,true))toast(`Guardado en su ficha${rel?" como "+rel:""}`)}}
+  else if(act==="usatel"){GC.tel=t.dataset.t;GC.rel=t.dataset.r||"";render()}
   else if(act==="abrir"){const v=gtNum(($("#gc-fondo")||{}).value);if(v==null||isNaN(v)||v<0){toast("Escribe el efectivo inicial (0 si no hay)");return}const quien=leerQuien("gc-qap");if(!quien)return;
     /* lo que se arrastraba (cierre anterior o día sin cerrar) frente a lo contado al abrir: si no coincide, queda como descuadre de apertura */
     const uc=ultimoCierre(),sc=[...new Set(GC.docs.filter(d=>d.tipo==="apertura"&&d.dia<todayISO()).map(d=>d.dia))].sort().reverse().map(d=>estadoCaja(d)).find(x=>x.abierta);
@@ -3009,23 +3012,26 @@ function descItems(){const out=[],add=x=>{x.k=hashTxt(x.src);out.push(x)},desde=
   const G=descGuardados();for(const x of out)x.res=G[x.k]||null;
   return out.sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha))||Math.abs(b.imp)-Math.abs(a.imp))}
 const descPend=()=>{try{return gbVer()&&GB.ok?descItems().filter(x=>!x.res).length:0}catch(_){return 0}};
-function vDescuadres(){if(!gbVer())return `<div class="empty">Solo dirección.</div>`;gbEscuchar();cajaEscuchar();
+const descVer=()=>gbVer()||(typeof esPlus==="function"&&esPlus());
+function vDescuadres(){if(!descVer())return `<div class="empty">Solo dirección.</div>`;if(!gbVer()&&typeof PLUS!=="undefined"&&!PLUS.m)return `<div class="empty">${PLUS.err?esc(PLUS.err):"Cargando…"}</div>`;return conTodos(vDescuadres0)}
+function vDescuadres0(){gbEscuchar();cajaEscuchar();
   if(!GB.ok)return `<div class="empty">Cargando…</div>`;
   const all=descItems(),q=nzC(DQ.q).normalize("NFD").replace(/[̀-ͯ]/g,""),qn=gtNum(DQ.q);
   let l=all.filter(x=>DQ.f==="todos"||(DQ.f==="pend"?!x.res:!!x.res));
   if(DQ.tipo)l=l.filter(x=>x.tipo===DQ.tipo);if(DQ.d0)l=l.filter(x=>x.fecha>=DQ.d0);if(DQ.d1)l=l.filter(x=>x.fecha<=DQ.d1);
   if(q)l=l.filter(x=>(qn!=null&&!isNaN(qn)&&Math.abs(Math.abs(x.imp)-qn)<0.005)||nzC([x.det,x.pista,x.res&&x.res.nombre,x.res&&x.res.nota,x.tipo].join(" ")).normalize("NFD").replace(/[̀-ͯ]/g,"").includes(q));
   const nP=all.filter(x=>!x.res).length,sumP=r2(all.filter(x=>!x.res).reduce((s,x)=>s+x.imp,0));
-  const fila=x=>`<div class="row" style="flex-wrap:wrap;gap:6px;align-items:flex-start${x.res?";opacity:.7":""}">
-      <span style="min-width:96px"><b>${fmtFecha(x.fecha)}</b><br><span class="note">${x.tipo}</span></span>
+  const fila=x=>{const fi=typeof fpInfo==="function"?fpInfo(x.tipo):null;return `<div class="row" style="flex-wrap:wrap;gap:6px;align-items:flex-start;${fi?`border-left:4px solid ${fi.c};padding-left:10px;`:""}${x.res?"opacity:.7":""}">
+      <span style="min-width:96px"><b>${fmtFecha(x.fecha)}</b><br>${typeof fpChip==="function"?fpChip(x.tipo):`<span class="note">${x.tipo}</span>`}</span>
       <span class="grow" style="white-space:normal;flex-basis:260px">${esc(x.det)}${x.pista?`<br><span class="note" style="color:var(--warn)">¿Será ${esc(x.pista)}?</span>`:""}
         ${x.res?`<br><span class="badge ${x.res.estado==="asignado"?"b-si":"b-off"}">${x.res.estado==="asignado"?"Asignado a "+esc(titulo(x.res.nombre||"")):"Justificado"}</span>${x.res.nota?` <span class="note">«${esc(x.res.nota)}»</span>`:""} <span class="note">· ${esc(x.res.por||"")} ${fmtFecha(String(x.res.t||"").slice(0,10))}</span>`:""}
         ${DQ.abre===x.k?vDescAsignar(x):""}</span>
       <b style="min-width:80px;text-align:right;color:var(${x.imp>=0?"--ok":"--bad"})">${x.imp>=0?"+":"−"}${eur(Math.abs(x.imp))}</b>
       <span style="display:flex;gap:4px;flex-wrap:wrap">${x.res?`<button class="btn small" data-dq="reabrir" data-k="${x.k}" data-d="${esc(x.fecha)}">Reabrir</button>`
-        :`<button class="btn small primary" data-dq="abrir" data-k="${x.k}">Asignar a alumno</button><button class="btn small" data-dq="just" data-k="${x.k}" data-d="${esc(x.fecha)}">Justificado</button>`}</span></div>`;
+        :`<button class="btn small primary" data-dq="abrir" data-k="${x.k}">Asignar a alumno</button><button class="btn small" data-dq="just" data-k="${x.k}" data-d="${esc(x.fecha)}">Justificado</button>`}</span></div>`};
   return `<div class="bar"><h2>Descuadres y pagos sin identificar</h2><span class="legend">${nP?`<b style="color:var(--bad)">${nP} pendiente${nP===1?"":"s"}</b> · ${sumP>=0?"+":"−"}${eur(Math.abs(sumP))}`:"Nada pendiente"}</span></div>
   <p class="note" style="margin-top:0">Aquí llega solo lo que no cuadra: cobros con tarjeta que no están en la caja de Argos (sube la caja de cada día en Gastos), Bizum y transferencias sin alumno, y descuadres de efectivo de la Caja. Cuando una familia diga «yo pagué tal día», búscalo por fecha, importe o tarjeta y asígnalo a su alumno.</p>
+  ${typeof fpChip==="function"?`<p class="note" style="margin:-4px 0 10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">Colores: ${["Tarjeta","Bizum","Transferencia","Efectivo"].map(fpChip).join("")}</p>`:""}
   <div class="bar" style="gap:8px;flex-wrap:wrap">
     <label class="f" style="flex:0 1 150px">Estado<select id="dq-f"><option value="pend" ${DQ.f==="pend"?"selected":""}>Pendientes</option><option value="res" ${DQ.f==="res"?"selected":""}>Resueltos</option><option value="todos" ${DQ.f==="todos"?"selected":""}>Todos</option></select></label>
     <label class="f" style="flex:0 1 150px">Tipo<select id="dq-tipo"><option value="">Todos</option>${["Tarjeta","Bizum","Transferencia","Efectivo"].map(t=>`<option ${DQ.tipo===t?"selected":""}>${t}</option>`).join("")}</select></label>
@@ -3040,18 +3046,18 @@ function vDescAsignar(x){const q=nzC(DQ.aq||"");const l=q.length>=2?sortedAlumno
     <p class="note" style="margin:6px 0 0">Asignar no cambia el recibo en Argos: sirve para saber de quién es. Marca allí el recibo como pagado y vuelve a subir el listado.</p></div>`}
 async function descGuardar(k,dia,v){const mes=String(dia).slice(0,7),ref=S.db.doc("banco/"+mes);
   try{const sn=await ref.get();if(sn.exists)await ref.update({["desc."+k]:v});else await ref.set({mes,desc:{[k]:v}});return true}catch(e){console.error(e);toast("No se ha podido guardar.");return false}}
-document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.closest("[data-dq]");if(!t||!gbVer())return;e.preventDefault();const act=t.dataset.dq,k=t.dataset.k;
+document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.closest("[data-dq]");if(!t||!descVer())return;e.preventDefault();const act=t.dataset.dq,k=t.dataset.k;
   if(act==="abrir"){DQ.abre=k;DQ.aq="";render();setTimeout(()=>{const i=$("#dq-aq");if(i)i.focus()},0)}
   else if(act==="cerrar"){DQ.abre=null;render()}
-  else if(act==="asignar"){const a=S.alumnos.get(t.dataset.al);if(!a)return;const nota=String(($("#dq-nota")||{}).value||"").trim().slice(0,200);
+  else if(act==="asignar"){const a=conTodos(()=>S.alumnos.get(t.dataset.al));if(!a)return;const nota=String(($("#dq-nota")||{}).value||"").trim().slice(0,200);
     if(await descGuardar(k,t.dataset.d,{estado:"asignado",alumno:t.dataset.al,nombre:a.nombre,nota,t:nowISO(),por:quienSoy()})){DQ.abre=null;toast("Asignado a "+titulo(a.nombre));render()}}
   else if(act==="just"){if(!t.dataset.ok){t.dataset.ok="1";t.textContent="¿Seguro? Pulsa otra vez";setTimeout(()=>{if(t.isConnected){delete t.dataset.ok;t.textContent="Justificado"}},4000);return}
     if(await descGuardar(k,t.dataset.d,{estado:"justificado",t:nowISO(),por:quienSoy()})){toast("Marcado como justificado");render()}}
   else if(act==="reabrir"){if(await descGuardar(k,t.dataset.d,null)){toast("Vuelve a pendientes");render()}}});
-document.addEventListener("input",e=>{const t=e.target;if(!t||!gbVer())return;
-  if(t.id==="dq-aq"){DQ.aq=t.value;const x=descItems().find(y=>y.k===DQ.abre),r=$("#dq-ares");if(x&&r){const tmp=document.createElement("div");tmp.innerHTML=vDescAsignar(x);const n=tmp.querySelector("#dq-ares");if(n)r.innerHTML=n.innerHTML}}
+document.addEventListener("input",e=>{const t=e.target;if(!t||!descVer())return;
+  if(t.id==="dq-aq"){DQ.aq=t.value;const x=conTodos(descItems).find(y=>y.k===DQ.abre),r=$("#dq-ares");if(x&&r){const tmp=document.createElement("div");tmp.innerHTML=conTodos(()=>vDescAsignar(x));const n=tmp.querySelector("#dq-ares");if(n)r.innerHTML=n.innerHTML}}
   else if(t.id==="dq-q"){DQ.q=t.value;clearTimeout(DQ.tq);DQ.tq=setTimeout(()=>{render();const i=$("#dq-q");if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},350)}});
-document.addEventListener("change",e=>{const t=e.target;if(!t||!gbVer())return;
+document.addEventListener("change",e=>{const t=e.target;if(!t||!descVer())return;
   if(t.id==="dq-f"){DQ.f=t.value;render()}else if(t.id==="dq-tipo"){DQ.tipo=t.value;render()}else if(t.id==="dq-d0"){DQ.d0=t.value;render()}else if(t.id==="dq-d1"){DQ.d1=t.value;render()}});
 
 /* ============================================================================================

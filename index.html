@@ -372,7 +372,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=16nov-v117"></script>
+<script type="module" src="fb.js?v=17nov-v118"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -1141,7 +1141,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="16nov-v117";
+const APP_VER="17nov-v118";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -2334,7 +2334,7 @@ function vTraspasosProfe(){
 async function responderTras(tid,estado){
   const it=trasEntrantes().find(x=>x.t.tid===tid);if(!it||S.pv)return;const t=it.t;
   const trasResp={...((S.miBuzon&&S.miBuzon.trasResp)||{}),[tid]:{estado,t:nowISO()}}, res={...((S.miBuzon&&S.miBuzon.res)||{})};
-  if(estado==="aceptada"&&t.tipo==="puntual"){const rid=nuevoId("p");res[rid]={rid,tok:t.tok,profe:S.myProfe,de:t.de,a:t.a,estado:"aceptada",fecha:todayISO(),origen:"traspaso",tid,nombre:t.nombre||""}}
+  if(estado==="aceptada"&&t.tipo==="puntual"){const rid=nuevoId("p");res[rid]={rid,tok:t.tok,profe:S.myProfe,de:t.de,a:t.a,estado:"aceptada",fecha:todayISO(),origen:"traspaso",tid,nombre:t.nombre||"",...(t.recup?{recup:t.recup,nota:t.nota||""}:{})}}
   const d={...(S.miBuzon||{}),profe:S.myProfe,res,trasResp};
   try{await S.db.doc("buzon/"+S.me).set(d);S.miBuzon=d;render();toast(estado==="aceptada"?(t.tipo==="fijo"?"Aceptado: el horario fijo se actualiza solo":"Aceptado: ya sale en tu Asistencia"):"Rechazado")}
   catch(_){toast("No se ha podido guardar. Inténtalo de nuevo.")}
@@ -3888,9 +3888,9 @@ function vRecProg(id,a,f){
   else{const hs=horasDe(B,dia);if(!hs.includes(r.h))r.h=hs[0]||"";sel=hs.length?`<label class="f" style="flex:1 1 140px">Hora<select id="rf-h">${hs.map(x=>`<option value="${x}" ${x===r.h?"selected":""}>${HLABEL[x]} · ${esIndividual(B,dia,x)?"individual":"grupo"} (${ocupadas(B,dia,x)}/${capDe(B,dia,x)})</option>`).join("")}</select></label>`:`<span class="note" style="color:var(--bad)">${esc(B)} no trabaja los ${dia.toLowerCase()}.</span>`}
   return `<tr><td colspan="7" style="background:var(--sunk)"><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
     <label class="f" style="flex:1 1 140px">Día de la recuperación<input type="date" id="rf-f" value="${esc(r.f)}" min="${todayISO()}"></label>
-    <label class="f" style="flex:1 1 130px">Profesora<select id="rf-p">${selOpts(S.role==="profe"?[S.myProfe]:EQUIPO,B)}</select></label>${sel}
-    <button class="btn small primary" data-act="recprog" data-id="${esc(id)}" data-f="${esc(f.id)}">Guardar recuperación</button><button class="btn small" data-act="recprogno">Cancelar</button></div>
-    <p class="note" style="margin:6px 0 0">${esc(titulo(a.nombre))} la verá en su calendario como clase ese día, y ${S.role==="profe"?"la tendrás":esc(B)+" la tendrá"} para pasar lista («Viene por un cambio de clase»).</p></td></tr>`;
+    <label class="f" style="flex:1 1 130px">Profesora<select id="rf-p">${selOpts(EQUIPO,B)}</select></label>${sel}
+    <button class="btn small primary" data-act="recprog" data-id="${esc(id)}" data-f="${esc(f.id)}">${S.role==="profe"&&B!==S.myProfe?"Enviar a "+esc(B):"Guardar recuperación"}</button><button class="btn small" data-act="recprogno">Cancelar</button></div>
+    <p class="note" style="margin:6px 0 0">${S.role==="profe"&&B!==S.myProfe?`Le llegará a ${esc(B)} para que la acepte (en su pestaña Cambios). Cuando la acepte, ${esc(titulo(a.nombre))} la verá en su calendario y ${esc(B)} la tendrá para pasar lista. Para cambiar su horario de todas las semanas a otra profesora, usa «Mover» → «Para siempre».`:`${esc(titulo(a.nombre))} la verá en su calendario como clase ese día, y ${S.role==="profe"?"la tendrás":esc(B)+" la tendrá"} para pasar lista («Viene por un cambio de clase»).`}</p></td></tr>`;
 }
 document.addEventListener("change",e=>{const t=e.target;if(!t||!t.id||!t.id.startsWith("rf-")||!S.recF)return;const r=S.recF;
   if(t.id==="rf-f")r.f=t.value;if(t.id==="rf-p")r.p=t.value;if(t.id==="rf-h")r.h=t.value;if(t.id==="rf-ini")r.ini=+t.value;if(t.id==="rf-tipo")r.tipo=t.value;
@@ -3920,7 +3920,8 @@ function filaFalta(id,a,f,conNombre){
     <td>${f.hora?HSHORT[f.hora]||esc(f.hora):"—"}</td>
     <td>${f.profe?`<span class="pl" style="--pc:${pc(f.profe)}"><span class="dot"></span>${esc(f.profe)}</span>`:"—"}</td>
     <td><span class="seg">${seg}</span></td>
-    <td>${S.ro?(f.fechaRecup?fmtFecha(f.fechaRecup):"—"):`<input type="date" value="${esc(f.fechaRecup||"")}" data-act="frecup" data-id="${id}" data-f="${f.id}" aria-label="Fecha de recuperación" style="padding:4px 6px;font-size:13px">`}${(S.role==="dir"&&!esMos()&&!S.ro||S.role==="profe"&&f.profe===S.myProfe)&&!S.pv&&f.recuperada==="pendiente"&&!(S.recF&&S.recF.fid===f.id)?`<br><button class="btn small" data-act="recprogabrir" data-id="${esc(id)}" data-f="${esc(f.id)}" style="margin-top:4px">${(()=>{try{return resSemanaAc().some(x=>x.tok===a.token&&x.de&&x.de.fecha===f.fecha&&(!f.hora||x.de.hora===f.hora))}catch(_){return false}})()?"Cambiar recuperación":"Programar recuperación"}</button>`:""}${(()=>{if(f.fechaRecup)return "";let r=null;try{r=resSemanaAc().find(x=>x.tok===a.token&&x.de&&x.de.fecha===f.fecha&&(!f.hora||x.de.hora===f.hora))}catch(_){}return r?`<br><small class="note" style="color:var(--accent);font-weight:600">Pasa al ${esc(fCorta(r.a.fecha))}${r.a.ini?" "+esc(r.a.ini):r.a.hora&&HSHORT[r.a.hora]?" "+HSHORT[r.a.hora]:""}${r.a.profe||r.profe?" con "+esc(r.a.profe||r.profe):""}</small>`:""})()}</td>
+    <td>${S.ro?(f.fechaRecup?fmtFecha(f.fechaRecup):"—"):`<input type="date" value="${esc(f.fechaRecup||"")}" data-act="frecup" data-id="${id}" data-f="${f.id}" aria-label="Fecha de recuperación" style="padding:4px 6px;font-size:13px">`}${(S.role==="dir"&&!esMos()&&!S.ro||S.role==="profe"&&f.profe===S.myProfe)&&!S.pv&&f.recuperada==="pendiente"&&!(S.recF&&S.recF.fid===f.id)?`<br><button class="btn small" data-act="recprogabrir" data-id="${esc(id)}" data-f="${esc(f.id)}" style="margin-top:4px">${(()=>{try{return resSemanaAc().some(x=>x.tok===a.token&&x.de&&x.de.fecha===f.fecha&&(!f.hora||x.de.hora===f.hora))}catch(_){return false}})()?"Cambiar recuperación":"Programar recuperación"}</button>`:""}${(()=>{if(f.fechaRecup)return "";let r=null;try{r=resSemanaAc().find(x=>x.tok===a.token&&x.de&&x.de.fecha===f.fecha&&(!f.hora||x.de.hora===f.hora))}catch(_){}return r?`<br><small class="note" style="color:var(--accent);font-weight:600">Pasa al ${esc(fCorta(r.a.fecha))}${r.a.ini?" "+esc(r.a.ini):r.a.hora&&HSHORT[r.a.hora]?" "+HSHORT[r.a.hora]:""}${r.a.profe||r.profe?" con "+esc(r.a.profe||r.profe):""}</small>`:""})()}${(()=>{if(S.role!=="profe"||f.fechaRecup)return "";let x=null;try{x=trasSalientes().find(y=>y.t.recup===f.id&&!(y.r&&y.r.estado==="aceptada"))}catch(_){}if(!x)return "";
+      return x.r&&x.r.estado==="rechazada"?`<br><small class="note" style="color:var(--bad);font-weight:600">${esc(x.t.a.profe)} no la ha aceptado</small>`:`<br><small class="note" style="color:var(--warn);font-weight:600">Enviada a ${esc(x.t.a.profe)} para el ${esc(fCorta(x.t.a.fecha))} · pendiente</small>`})()}</td>
     <td><button class="btn small ed" data-act="delfalta" data-id="${id}" data-f="${f.id}" title="Borrar falta" aria-label="Borrar falta">×</button></td>
   </tr>`;
 }
@@ -4163,7 +4164,11 @@ document.addEventListener("click",async e=>{
         t.textContent="Se pisa: pulsa otra vez para aceptar";t.classList.add("danger");toast(txt);
         setTimeout(()=>{if(t.isConnected){t.textContent="Guardar recuperación";t.classList.remove("danger")}if(S.recPisaOk===clave)S.recPisaOk=null},8000);return}
       S.recPisaOk=null}
-    if(S.role==="profe"){if(B!==S.myProfe||f.profe!==S.myProfe)return;if(!a.token){toast("Este alumno aún no se puede mover. Avisa a dirección.");return}
+    if(S.role==="profe"){if(f.profe!==S.myProfe)return;if(!a.token){toast("Este alumno aún no se puede mover. Avisa a dirección.");return}
+      /* 17/11/2026 (titular): la profesora puede pasar la recuperación a otra compañera; le llega como «solo una vez» para que la acepte */
+      if(B!==S.myProfe){t.disabled=true;S.recF=null;
+        await enviarTras({tid:nuevoId("t"),tipo:"puntual",tok:a.token,nombre:a.nombre,de:{fecha:f.fecha,hora:f.hora,profe:S.myProfe},a:{fecha:r.f,...aObj},nota:"Recuperación de la clase del "+fCorta(f.fecha),recup:f.id,creada:hoy});
+        if(t.isConnected)t.disabled=false;return}
       const rp={rid:nuevoId("p"),tok:a.token,profe:B,de:{fecha:f.fecha,hora:f.hora,profe:B},a:{fecha:r.f,...aObj},estado:"aceptada",fecha:hoy,origen:"profe",nota:"Recuperación de la clase del "+fCorta(f.fecha),recup:f.id};
       t.disabled=true;if(await guardarRes(rp)){S.recF=null;render();toast(`Recuperación el ${fCorta(r.f)}`)}else t.disabled=false;return}
     const lim=sumaDias(hoy,-120),rec={rid:nuevoId("d"),profe:f.profe||B,de:{fecha:f.fecha,hora:f.hora,profe:f.profe||B},a:{fecha:r.f,...aObj},estado:"aceptada",fecha:hoy,origen:"direccion",nota:"Recuperación de la clase del "+fCorta(f.fecha),recup:f.id};
@@ -4897,7 +4902,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=16nov-v117"></script>
+<script src="gestion.js?v=17nov-v118"></script>
 
 
 </body></html>

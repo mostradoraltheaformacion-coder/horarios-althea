@@ -372,7 +372,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=17nov-v119"></script>
+<script type="module" src="fb.js?v=17nov-v121"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -1141,7 +1141,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="17nov-v119";
+const APP_VER="17nov-v121";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -1290,13 +1290,13 @@ const ESP_DIAS=28;
 const misEsp=()=>Object.values((S.miBuzon&&S.miBuzon.esp)||{}).filter(e=>e&&e.eid&&e.de&&e.profe);
 const sinDestino=p=>({fecha:"",hora:"",profe:p,reserva:true});
 const espARes=(e,tok)=>({rid:"E"+e.eid,eid:e.eid,tok,profe:e.profe,de:{fecha:e.de.fecha,hora:e.de.hora,profe:e.profe,...(e.de.ini?{ini:e.de.ini,dur:+e.de.dur||60}:{})},
-  a:e.a?{...e.a,profe:e.profe}:sinDestino(e.profe),estado:"aceptada",fecha:e.creada||"",origen:"espera"});
+  a:e.a?{...e.a,profe:e.profe}:e.nr?{...sinDestino(e.profe),noViene:true}:sinDestino(e.profe),estado:"aceptada",fecha:e.creada||"",origen:"espera"});
 const plazaARes=x=>({rid:"P"+x.id,profe:x.profe,de:{...x.de,profe:x.profe},a:x.a?{...x.a,profe:x.profe}:sinDestino(x.profe),estado:"aceptada",fecha:x.t||"",origen:"espera"});
 const plazasRes=p=>(S.plazas||[]).filter(x=>x&&x.profe===p&&x.de&&x.de.fecha).map(plazaARes);
 /* Si la toma se guardó en plazas pero no en el buzón (fallo al guardar), se da por tomada */
 function espEstado(e){if(e.a)return e;const t=(S.plazas||[]).find(x=>x&&x.eid===e.eid&&x.a&&x.uid===S.me);return t?{...e,a:t.a,pk:t.id,tomada:t.t||""}:e}
 const misRes=a=>[...S.resp.filter(r=>r.tok&&r.tok===a.token),...(S.role==="alumno"?misEsp().map(e=>espARes(espEstado(e),a.token)):[])];
-const destTxt=r=>r.a&&r.a.reserva?"en espera de hueco":`${fCorta(r.a.fecha)} · ${hTxtCorto(r.a)}`;
+const destTxt=r=>r.a&&r.a.noViene?"no viene":r.a&&r.a.reserva?"en espera de hueco":`${fCorta(r.a.fecha)} · ${hTxtCorto(r.a)}`;
 let ESPC={k:null,v:[]};
 function espStaff(){
   if(S.role!=="profe"&&S.role!=="dir")return [];
@@ -1350,7 +1350,7 @@ function vAlumno(){
 function vAyudaAl(){let o=true;try{const v=localStorage.getItem("althea.ayudaAl");if(v!==null)o=v==="1"}catch(_){}
   return `<details class="panel" style="padding:10px 14px;margin:8px 0 10px" ${o?"open":""} ontoggle="try{localStorage.setItem('althea.ayudaAl',this.open?'1':'0')}catch(_){}">
   <summary style="cursor:pointer"><b>▶ Vídeo: cómo usar la app</b> <span class="note">(1 minuto)</span></summary>
-  <video src="ayuda-alumnos.mp4" controls playsinline preload="metadata" style="display:block;margin:10px auto 0;max-height:70vh;max-width:100%;border-radius:12px;background:#000"></video>
+  <video src="ayuda-alumnos.mp4?v=${APP_VER}" controls playsinline preload="metadata" style="display:block;margin:10px auto 0;max-height:70vh;max-width:100%;border-radius:12px;background:#000"></video>
   <p class="note" style="margin-top:6px;text-align:center">Tu horario · cambiar una clase · si no hay hueco · tus recibos · mensajes con el centro</p></details>`}
 /* ---------- peticiones cuando no hay hueco ----------
    El alumno las guarda en su buzón (campo pet):
@@ -1402,7 +1402,8 @@ function sinHueco(cb){
 function cajaEspera(cb,primera){
   return `<div class="petbox"${primera?` style="border-color:var(--accent)"`:""}><b>${primera?"Avisadme cuando quede un hueco":"¿No te viene bien ninguna? Déjala en lista de espera"}</b>
     <p class="note">Dejas libre tu plaza de este día para otra familia y tu clase queda pendiente de recuperar. En cuanto ${esc(cb.p)} tenga un hueco libre (hasta el ${fCorta(sumaDias(cb.f,ESP_DIAS))}), te sale un aviso aquí y lo coges al momento. Si esperan varias familias, se lo queda la primera que lo coja.</p>
-    <div class="petbtns"><button class="btn${primera?" primary":""}" data-act="espapuntar">No puedo venir: apuntarme a la lista de espera</button></div></div>`;
+    <div class="petbtns"><button class="btn${primera?" primary":""}" data-act="espapuntar">No puedo venir: apuntarme a la lista de espera</button></div>
+    <p class="note" style="margin-top:8px">¿No vas a venir y no necesitas recuperarla? <button class="btn small" data-act="espnoviene">Solo avisar de que no voy</button> Tu plaza queda libre para otra familia.</p></div>`;
 }
 async function enviarPet(tipo){
   const cb=S.cb, m=miAlumno();if(!cb||!m)return;const {a}=m;
@@ -1469,7 +1470,7 @@ function avisosEsp(a){
 }
 function espPodadas(){const lim=sumaDias(todayISO(),-60),o={};for(const e of misEsp())if(String(e.hasta)>=lim||String(e.creada)>=lim)o[e.eid]=e;return o}
 async function guardarEsp(esp,a){const d={...(S.miBuzon||{}),profes:profesBuzon(a),esp};await S.db.doc("buzon/"+S.me).set(d);S.miBuzon=d}
-async function apuntarEspera(){
+async function apuntarEspera(nr){
   const cb=S.cb,m=miAlumno();if(!cb||!m)return;const {a}=m;
   if(!window.__plazas){toast("La lista de espera no está disponible ahora mismo");return}
   if(!FLEX.has(cb.p)||cb.i==null||isNaN(cb.i))return;
@@ -1477,8 +1478,8 @@ async function apuntarEspera(){
   if(bloqueo(a)){toast("Ya tienes un cambio en curso");return}
   const eid=nuevoId("w"),hasta=sumaDias(cb.f,ESP_DIAS),de={fecha:cb.f,hora:cb.h,ini:hm(cb.i),dur:cb.dur||60};
   try{await window.__plazas.liberar("L_"+eid,{tipo:"libera",profe:cb.p,de,t:todayISO(),f:hasta,eid})}catch(_){toast("No se ha podido guardar. Inténtalo de nuevo.");return}
-  const esp=espPodadas();esp[eid]={eid,profe:cb.p,de:{...de,...(cb.grupo?{g:1}:{})},hasta,creada:todayISO()};
-  try{await guardarEsp(esp,a);S.cb=null;drawCambio();render();toast("Apuntada a la lista de espera. Te avisaremos aquí.")}
+  const esp=espPodadas();esp[eid]={eid,profe:cb.p,de:{...de,...(cb.grupo?{g:1}:{})},hasta,creada:todayISO(),...(nr?{nr:1,renuncia:todayISO()}:{})};
+  try{await guardarEsp(esp,a);S.cb=null;drawCambio();render();toast(nr?"Anotado: no vas a esa clase y tu plaza queda libre":"Apuntada a la lista de espera. Te avisaremos aquí.")}
   catch(_){try{await window.__plazas.quitar("L_"+eid)}catch(_){}toast("No se ha podido guardar. Inténtalo de nuevo.")}
 }
 async function tomarHueco(){
@@ -1503,9 +1504,10 @@ async function quitarEspera(eid){
   const m=miAlumno();if(!m)return;const {a}=m, e=misEsp().map(espEstado).find(x=>x.eid===eid);if(!e||e.a)return;
   const hoy=todayISO(), cl=`${fLarga(e.de.fecha)} · ${e.de.ini||""}`, esp=espPodadas();
   if(e.de.fecha>hoy&&plazaPropiaLibre(e)){
-    if(!confirm(`¿Quitarla de la lista de espera?\n\nVuelves a tener tu clase del ${cl} como siempre.`))return;
+    if(!confirm(e.nr?`¿Al final sí vas?\n\nVuelves a tener tu clase del ${cl} como siempre.`:`¿Quitarla de la lista de espera?\n\nVuelves a tener tu clase del ${cl} como siempre.`))return;
     try{await window.__plazas.quitar("L_"+eid)}catch(_){toast("No se ha podido guardar. Inténtalo de nuevo.");return}
     delete esp[eid];try{await guardarEsp(esp,a)}catch(_){}render();toast("Quitada de la lista de espera");return}
+  if(e.nr){toast(e.de.fecha>hoy?"Tu plaza ya la ha cogido otra familia. Habla con el centro.":"Esa clase ya ha pasado");return}
   if(!confirm(`Tu plaza del ${cl} ya no está libre${e.de.fecha>hoy?" (la ha cogido otra familia)":""}.\n\n¿Dejar de esperar hueco? Esa clase quedará sin recuperar.`))return;
   esp[eid]={...(esp[eid]||e),renuncia:hoy};
   try{await guardarEsp(esp,a);render();toast("Ya no te avisaremos de huecos para esa clase")}catch(_){toast("No se ha podido guardar. Inténtalo de nuevo.")}
@@ -1535,7 +1537,7 @@ function vMes(a){
       const tras=o.mv&&o.mv.origen==="traspaso",hx=o.mv&&o.mv.origen==="hextra";
       if(hx)return `<span class="clase extra hextra${as==="si"||as==="recup"?" ok":""}${as==="rec"||as==="norec"?" falta":""}" style="--pc:${pc(o.profe)}"><span class="tag">${as?ASIS[as][1]:"Hora extra"}</span>${FLEX.has(o.profe)||o.mv.e.ini?sesTxt(o):HSHORT[o.hora]||esc(o.hora)}<small>${esc(o.profe)}</small></span>`;
       const cls=["clase",o.t==="normal"?"":o.t,tras&&o.t==="extra"?"traspaso":"",f<hoy&&!as?"pasada":"",as==="rec"||as==="norec"?"falta":"",as==="si"||as==="recup"?"ok":""].filter(Boolean).join(" ");
-      const tag=as?ASIS[as][1]:o.t==="perdida"?"Sin clase":o.t==="movida"?(o.mv&&o.mv.a&&o.mv.a.reserva?"En espera":"Cambiada"):o.t==="extra"?(tras?"Con "+o.profe:"Cambio"):"";
+      const tag=as?ASIS[as][1]:o.t==="perdida"?"Sin clase":o.t==="movida"?(o.mv&&o.mv.a&&o.mv.a.noViene?"No vas":o.mv&&o.mv.a&&o.mv.a.reserva?"En espera":"Cambiada"):o.t==="extra"?(tras?"Con "+o.profe:"Cambio"):"";
       return `<button class="${cls}" style="--pc:${pc(o.profe)}" data-act="clase" data-f="${f}" data-h="${esc(o.hora)}" data-p="${esc(o.profe)}" data-t="${o.t}" data-i="${o.ini}" data-dur="${o.fin-o.ini}" data-g="${o.tipo==="grupo"?1:""}" aria-label="${diaDe(f)} ${+f.slice(8)}, ${sesTxt(o)} con ${esc(o.profe)}${tag?", "+tag:""}">${tag?`<span class="tag">${tag}</span>`:""}${FLEX.has(o.profe)?sesTxt(o):HSHORT[o.hora]||esc(o.hora)}<small>${esc(o.profe)}${FLEX.has(o.profe)&&!o.conf?" · hora por confirmar":""}</small></button>`}).join("");
     cells+=`<div class="day${fuera?" out":""}${f===hoy?" hoy":""}${fe&&!fuera?" fest":""}"><span class="num">${+f.slice(8)}${f===hoy?" · hoy":""}</span>${fe&&!fuera?`<span class="fn" title="${esc(fe.nombre)}">${esc(fe.nombre)}</span>`:""}${chips}</div>`;
   }
@@ -1968,6 +1970,7 @@ function drawCambio(){
     const falta=a.faltas.find(z=>z.fecha===cb.f&&(!z.hora||z.hora===cb.h));
     if(falta&&cb.t!=="perdida")cuerpo+=`<p class="note" style="margin:0;color:var(--bad)">Tienes una falta apuntada en esta clase.</p>`;
     if(cb.t==="perdida")cuerpo+=`<p style="margin:0">Este día no hay clase: <b>${esc(fe?fe.nombre:"día sin clase")}</b>. Las clases que caen en un día sin clase no se recuperan; solo tu profesora puede pasarla a otro día.</p>`;
+    else if(cb.t==="movida"&&mv&&mv.a.noViene)cuerpo+=`<p style="margin:0">${mv.eid?"Has avisado de que no vienes":"El centro ha anotado que no vienes"} a esta clase. Tu plaza queda libre para otra familia y no se guarda para recuperar.</p>${mv.eid&&cb.f>hoy?`<button class="btn" data-act="espquitar" data-eid="${esc(mv.eid)}">Al final sí voy</button>`:mv.eid?"":`<p class="note" style="margin:0">Si al final sí vienes, díselo al centro.</p>`}`;
     else if(cb.t==="movida"&&mv&&mv.a.reserva)cuerpo+=`<p style="margin:0">Esta clase está en <b>lista de espera</b>: tu plaza queda libre para otra familia y te avisaremos en «Mi horario» cuando quede un hueco para recuperarla.</p>`;
     else if(cb.t==="movida"&&mv)cuerpo+=`<p style="margin:0">Esta clase se ha pasado al <b>${fLarga(mv.a.fecha)} · ${hTxt(mv.a)}</b>${mv.origen==="traspaso"?` con ${esc((mv.a&&mv.a.profe)||mv.profe)}`:mv.origen==="profe"?`. La ha cambiado ${esc(mv.profe)}`:""}.</p>`;
     else if(cb.t==="extra"&&mv)cuerpo+=`<p style="margin:0">Clase cambiada desde el <b>${fLarga(mv.de.fecha)} · ${hTxt(mv.de)}</b>.</p>`;
@@ -2115,7 +2118,7 @@ function vCambios(){
     const fg=festivosProfe();
     const festHtml=fg.size?[...fg.entries()].map(([f,{fe,l}])=>{const sin=l.filter(x=>!x.mv).length;
       return `<details class="fd"><summary>${fLarga(f)} <span class="badge b-off">${esc(fe.nombre)}</span><span class="note">${sin?`${sin} sin pasar`:"todas pasadas"} · ${l.length} clase${l.length===1?"":"s"}</span></summary>
-        ${l.map(x=>`<div class="row"><span class="grow">${esc(titulo(x.a.nombre))}</span><span class="note">${FLEX.has(S.myProfe)?sesTxt(x.x):HSHORT[x.h]}</span>${x.mv?`<span class="note">${x.mv.a.reserva?"en lista de espera":"pasada al "+destTxt(x.mv)}</span>`:`<button class="btn small" data-act="moverfest" data-id="${x.id}" data-f="${f}" data-h="${x.h}">Pasar a otro día</button>`}</div>`).join("")}</details>`}).join("")
+        ${l.map(x=>`<div class="row"><span class="grow">${esc(titulo(x.a.nombre))}</span><span class="note">${FLEX.has(S.myProfe)?sesTxt(x.x):HSHORT[x.h]}</span>${x.mv?`<span class="note">${x.mv.a.reserva?(x.mv.a.noViene?"no viene":"en lista de espera"):"pasada al "+destTxt(x.mv)}</span>`:`<button class="btn small" data-act="moverfest" data-id="${x.id}" data-f="${f}" data-h="${x.h}">Pasar a otro día</button>`}</div>`).join("")}</details>`}).join("")
       :`<p class="note">No hay días sin clase en los próximos dos meses.</p>`;
     const hist=Object.values((S.miBuzon&&S.miBuzon.res)||{}).filter(r=>r&&r.de).sort((x,y)=>String(y.fecha).localeCompare(String(x.fecha))||y.rid.localeCompare(x.rid)).slice(0,40);
     const histHtml=hist.length?`<div class="tbl"><table class="ft" style="min-width:560px"><thead><tr><th>Alumno</th><th>Cambio</th><th>Estado</th><th>Contestado</th><th></th></tr></thead><tbody>${hist.map(r=>{const al=alumnoPorToken(r.tok);
@@ -2355,7 +2358,7 @@ function vAsistencia(){
     const n=sesionesFecha(p,g).filter(x=>pasaLista(x.o)&&!asistDe(x.a,g,x.o.hora,p)).length;if(n)atras.push({g,n})}
   const filasA=l.map(({id,a,o})=>{
     const hr=FLEX.has(p)?sesTxt(o):(HSHORT[o.hora]||esc(o.hora));
-    if(o.t==="movida")return `<div class="arow"><span class="hr">${hr}</span><span class="who"><b>${esc(titulo(a.nombre))}</b><small class="note">${o.mv.a.reserva?"No viene: en lista de espera para recuperarla":"Clase cambiada al "+destTxt(o.mv)}</small></span></div>`;
+    if(o.t==="movida")return `<div class="arow"><span class="hr">${hr}</span><span class="who"><b>${esc(titulo(a.nombre))}</b><small class="note">${o.mv.a.noViene?"Avisó que no viene"+(o.mv.nota?" · «"+esc(o.mv.nota)+"»":""):o.mv.a.reserva?"No viene: en lista de espera para recuperarla":"Clase cambiada al "+destTxt(o.mv)}</small></span></div>`;
     if(o.t==="perdida")return `<div class="arow"><span class="hr">${hr}</span><span class="who"><b>${esc(titulo(a.nombre))}</b><small class="note">Día sin clase</small></span></div>`;
     const e=asistDe(a,f,o.hora,p), b=(v,txt)=>`<button class="${v} ${e===v||(v==="rec"&&e==="recup")?"on":""}" data-act="asmark" data-id="${esc(id)}" data-h="${esc(o.hora)}" data-v="${v}">${txt}</button>`;
     return `<div class="arow"><span class="hr">${hr}</span><span class="who" style="flex-direction:row;align-items:center;gap:8px">${avatarAl(a)}<span style="display:flex;flex-direction:column;min-width:0"><b>${campana(id)}${esc(titulo(a.nombre))}</b>${o.t==="extra"?`<small class="note">${o.mv&&o.mv.origen==="hextra"?"Hora extra":"Viene por un cambio de clase"}</small>`:""}${e==="recup"?`<small class="note">Falta ya recuperada</small>`:""}${quedaTxt(f,o)}</span></span>
@@ -2476,9 +2479,15 @@ function abrirMover(id,d0,hk,p,d1,h1,f0,f1){
 function formMover(a,cb){
   const c=a.clases.find(c=>c.dia===cb.cDia&&c.hora===cb.h&&c.profe===cb.p);if(!c)return null;
   const esDir=S.role==="dir", B=cb.aProfe, otra=B!==cb.p, hoy=todayISO();
-  const seg=`<span class="seg"><button class="${cb.mvTipo==="puntual"?"on si":""}" data-act="mvtipo" data-v="puntual">Solo una vez</button><button class="${cb.mvTipo==="fijo"?"on si":""}" data-act="mvtipo" data-v="fijo">Para siempre</button></span>`;
+  const seg=`<span class="seg"><button class="${cb.mvTipo==="puntual"?"on si":""}" data-act="mvtipo" data-v="puntual">Solo una vez</button><button class="${cb.mvTipo==="fijo"?"on si":""}" data-act="mvtipo" data-v="fijo">Para siempre</button><button class="${cb.mvTipo==="noviene"?"on si":""}" data-act="mvtipo" data-v="noviene">No viene ese día</button></span>`;
   let h=`<p style="margin:0">Mover la clase de <b>${esc(titulo(a.nombre))}</b> de los ${cb.cDia.toLowerCase()} (${FLEX.has(cb.p)?sesTxt(sesDe(a,c)):HLABEL[c.hora]||""}) con ${esc(cb.p)}.</p>`;
-  if(!cb.mvTipo)return h+`<p style="margin:0"><b>¿Es solo una vez o para siempre?</b></p>${seg}`;
+  if(!cb.mvTipo)return h+`<p style="margin:0"><b>¿Es solo una vez, para siempre, o avisa de que no viene?</b></p>${seg}`;
+  /* 17/11/2026 (titular): avisa de que no viene un día y no pide recuperarla: su plaza queda libre (y, con las profesoras
+     de sesiones a medida, la ve la lista de espera). */
+  if(cb.mvTipo==="noviene")return h+seg+`<label class="f">Clase del<input type="date" id="mv-fde" value="${cb.fDe}" min="${hoy}"></label>
+    <label class="f">Nota (opcional)<textarea id="mv-nota" maxlength="300" placeholder="Por ejemplo: avisa su madre por WhatsApp">${esc(cb.nota||"")}</textarea></label>
+    <p class="note" style="margin:0">Ese día no cuenta como clase suya y su plaza queda libre${FLEX.has(cb.p)?": a las familias en lista de espera con "+esc(cb.p)+" les sale el hueco":""}. No se le guarda para recuperar. Si cambia de idea, se puede deshacer desde la hora en Semana.</p>
+    <button class="btn primary" data-act="mvok">Dejar su plaza libre ese día</button>`;
   h+=seg;if(esDir&&cb.mvTipo==="fijo")h+=`<div class="aviso pend" style="display:block"><b>Para siempre:</b> se cambia su horario fijo, todas las semanas.</div>`;
   const fijo=cb.mvTipo==="fijo", dia=fijo?cb.aDia:diaDe(cb.fA);
   if(fijo)h+=`<label class="f">Nuevo día de la semana<select id="mv-dia">${selOpts(DIAS,cb.aDia)}</select></label>`;
@@ -2499,10 +2508,41 @@ function aplicaFijo(a,de,aa){
   const txt=`Tu clase de los ${de.dia.toLowerCase()} con ${de.profe} pasa a los ${aa.dia.toLowerCase()} ${aa.ini?"a las "+aa.ini:"de "+(HLABEL[aa.hora]||aa.hora)} con ${aa.profe}.`;
   return {clases:sinRepetidas(a.clases.map((c,k)=>k===i?n:c)),avisosHorario:[...(a.avisosHorario||[]).filter(x=>x&&x.fecha>=sumaDias(todayISO(),-60)),{fecha:todayISO(),texto:txt}]};
 }
+async function noViene(a,c,cb){
+  const hoy=todayISO(),A=cb.p,f=cb.fDe;
+  if(!f||f<hoy){toast("Elige una fecha de hoy en adelante");return}
+  if(diaDe(f)!==cb.cDia){toast(`La fecha tiene que ser un ${cb.cDia.toLowerCase()}`);return}
+  if(festivoDe(f)){toast("Ese día no hay clase");return}
+  if(S.role==="profe"&&A!==S.myProfe)return;
+  if(!a.token){toast("Este alumno aún no se puede cambiar. Avisa a dirección.");return}
+  if(resSemanaAc().some(r=>r.tok===a.token&&r.de.fecha===f&&r.de.hora===c.hora&&(r.de.profe||r.profe)===A)){toast("Esa clase ya tiene un cambio ese día");return}
+  const x=sesDe(a,c), de={fecha:f,hora:c.hora,profe:A,...(FLEX.has(A)?{ini:hm(x.ini),dur:x.fin-x.ini}:{})};
+  const rid=nuevoId(S.role==="dir"?"d":"p"), r={rid,tok:a.token,profe:A,de,a:{...sinDestino(A),noViene:true},estado:"aceptada",fecha:hoy,origen:S.role==="dir"?"direccion":"profe",nota:cb.nota||"",noViene:true};
+  let ok=false;
+  if(S.role==="dir"){const lim=sumaDias(hoy,-120),puntuales=[...(a.puntuales||[]).filter(y=>y&&y.a&&(y.a.reserva?String(y.de.fecha):String(y.a.fecha))>=lim&&String(y.de.fecha)>=lim),r];
+    if(await save(cb.id,{puntuales})){a.puntuales=puntuales;ok=true}}
+  else ok=await guardarRes(r);
+  if(!ok)return;
+  if(FLEX.has(A)&&window.__plazas){try{await window.__plazas.liberar("S_"+rid,{tipo:"libera",profe:A,de:{fecha:de.fecha,hora:de.hora,ini:de.ini,dur:de.dur},t:hoy,f,eid:rid})}catch(_){toast("Anotado, pero no se ha podido avisar a la lista de espera");S.cb=null;drawCambio();render();return}}
+  S.cb=null;drawCambio();render();if(S.cell)drawCell();toast(`${titulo(a.nombre)} no viene el ${fCorta(f)}: su plaza queda libre`);
+}
+async function deshacerNoViene(rid,tok){
+  const e=alumnoPorToken(tok);if(!e||S.pv)return;const {id,a}=e, r=resSemanaAc().find(x=>x.rid===rid);if(!r)return;
+  const P=r.de.profe||r.profe, cogida=FLEX.has(P)&&(S.plazas||[]).some(x=>x&&x.a&&x.profe===P&&x.a.fecha===r.de.fecha&&x.a.ini===r.de.ini);
+  if(!confirm(cogida?`Su plaza del ${fCorta(r.de.fecha)} ya la ha cogido otra familia de la lista de espera. Si lo deshaces, ese día habrá dos alumnos a esa hora. ¿Deshacer igualmente?`:`¿Deshacer? ${titulo(a.nombre)} vuelve a tener su clase el ${fCorta(r.de.fecha)}.`))return;
+  let ok=false;
+  if(S.role==="dir"&&(a.puntuales||[]).some(x=>x&&x.rid===rid)){const puntuales=a.puntuales.map(x=>x&&x.rid===rid?{...x,estado:"anulada"}:x);if(await save(id,{puntuales})){a.puntuales=puntuales;ok=true}}
+  else if(S.role==="profe"&&S.miBuzon&&S.miBuzon.res&&S.miBuzon.res[rid]){const res={...S.miBuzon.res,[rid]:{...S.miBuzon.res[rid],estado:"anulada"}},d={...S.miBuzon,profe:S.myProfe,res};
+    try{await S.db.doc("buzon/"+S.me).set(d);S.miBuzon=d;ok=true}catch(_){toast("No se ha podido guardar. Inténtalo de nuevo.")}}
+  if(!ok)return;
+  if(window.__plazas&&(S.plazas||[]).some(x=>x&&x.id==="S_"+rid))window.__plazas.quitar("S_"+rid).catch(()=>{});
+  render();if(S.cell)drawCell();toast("Deshecho: vuelve a tener su clase ese día");
+}
 async function moverClase(){
   const cb=S.cb,a=cb&&S.alumnos.get(cb.id);if(!a)return;
   const c=a.clases.find(c=>c.dia===cb.cDia&&c.hora===cb.h&&c.profe===cb.p);if(!c)return;
   cb.nota=(($("#mv-nota")||{}).value||"").trim().slice(0,300);
+  if(cb.mvTipo==="noviene")return noViene(a,c,cb);
   const A=cb.p,B=cb.aProfe,x=sesDe(a,c),fijo=cb.mvTipo==="fijo",dia=fijo?cb.aDia:diaDe(cb.fA),hoy=todayISO();
   if(!fijo){if(diaDe(cb.fDe)!==cb.cDia){toast(`La fecha de la clase tiene que ser un ${cb.cDia.toLowerCase()}`);return}
     if(cb.fDe<hoy||cb.fA<hoy){toast("Elige fechas de hoy en adelante");return}
@@ -2528,7 +2568,7 @@ async function moverClase(){
     return enviarTras({tid:nuevoId("t"),tipo:"fijo",tok:a.token,nombre:a.nombre,de,a:aa,nota:cb.nota,creada:hoy})}
   const de={fecha:cb.fDe,hora:c.hora,profe:A,...(FLEX.has(A)?{ini:hm(x.ini),dur:x.fin-x.ini}:{})},aa={fecha:cb.fA,...aObj};
   if(S.role==="dir"){const lim=sumaDias(hoy,-120),r={rid:nuevoId("d"),profe:A,de,a:aa,estado:"aceptada",fecha:hoy,origen:"direccion",nota:cb.nota};
-    const puntuales=[...(a.puntuales||[]).filter(y=>y&&y.a&&String(y.a.fecha)>=lim&&String(y.de.fecha)>=lim),r];
+    const puntuales=[...(a.puntuales||[]).filter(y=>y&&y.a&&(y.a.reserva?String(y.de.fecha):String(y.a.fecha))>=lim&&String(y.de.fecha)>=lim),r];
     if(await save(cb.id,{puntuales})){a.puntuales=puntuales;S.cb=null;drawCambio();render();toast(`Solo ese día: clase pasada al ${fCorta(aa.fecha)}`)}return}
   if(B===A){if(!a.token){toast("Este alumno aún no se puede mover. Avisa a dirección.");return}
     const r={rid:nuevoId("p"),tok:a.token,profe:A,de,a:aa,estado:"aceptada",fecha:hoy,origen:"profe",nota:cb.nota};
@@ -3844,7 +3884,7 @@ function vFichaMes(id,a){
     const sale=c=>ac.find(r=>r.de.fecha===f&&r.de.hora===c.hora&&(r.de.profe||r.profe)===c.profe);
     const fij=clasesEn(a,f).filter(c=>c.dia===d&&(!fe||sale(c))).map(c=>({c,x:sesDe(a,c)})).sort((u,v)=>u.x.ini-v.x.ini).map(({c,x})=>{const r=sale(c);
       const txt=(FLEX.has(c.profe)?hm(x.ini):HSHORT[c.hora]||c.hora)+" "+esc(c.profe);
-      if(r)return r.a.reserva?`<div class="fx out" title="En lista de espera de hueco">${txt}<small>en espera</small></div>`:`<div class="fx out" title="Pasa al ${esc(fCorta(r.a.fecha))}">${txt}<small>→ ${esc(fCorta(r.a.fecha))}</small></div>`;
+      if(r)return r.a.reserva?`<div class="fx out" title="${r.a.noViene?"Avisó que no viene":"En lista de espera de hueco"}">${txt}<small>${r.a.noViene?"no viene":"en espera"}</small></div>`:`<div class="fx out" title="Pasa al ${esc(fCorta(r.a.fecha))}">${txt}<small>→ ${esc(fCorta(r.a.fecha))}</small></div>`;
       const dr=!pas&&puedeFicha(c)?` draggable="true" data-drag="${esc(id)}|${esc(c.dia)}|${esc(c.hora)}|${esc(c.profe)}|${f}" data-act="fmover" data-id="${esc(id)}" data-d="${esc(c.dia)}" data-h="${esc(c.hora)}" data-p="${esc(c.profe)}" data-f="${f}" role="button" tabindex="0" title="Arrastra a otra fecha o pulsa para mover"`:"";
       return `<div class="fx" style="--pc:${pc(c.profe)}"${dr}>${txt}</div>`}).join("");
     const ent=ac.filter(r=>r.a.fecha===f).map(r=>`<div class="fx in" style="--pc:${pc(r.a.profe||r.profe)}" title="Cambio de un día">${r.a.ini?esc(r.a.ini):HSHORT[r.a.hora]||""} ${esc(r.a.profe||r.profe)}<small>cambio</small></div>`).join("");
@@ -4225,10 +4265,14 @@ function drawCell(){
   const {d,h}=S.cell;let m=ajusteCelda(ocupacion(S.semIni||lunesDe(todayISO()))[d+"|"+h]||[],d,h,S.semIni||lunesDe(todayISO()));
   if(S.role==="profe")m=m.filter(x=>x.profe===S.myProfe);
   const by={};m.forEach(x=>(by[x.profe]??=[]).push(x));
+  const fCel=sumaDias(S.semIni||lunesDe(todayISO()),DIAS.indexOf(d)), nv=resSemanaAc().filter(r=>r.a&&r.a.reserva&&r.de.fecha===fCel&&(r.de.hora===h||(r.de.ini&&keyDeMin(minDe(r.de.ini))===h))&&(S.role!=="profe"||(r.de.profe||r.profe)===S.myProfe));
+  const nvHtml=nv.length?`<div class="grp"><h4>No vienen este día</h4>${nv.map(r=>{const e=alumnoPorToken(r.tok);if(!e)return "";
+    const puede=!S.pv&&r.a.noViene&&r.de.fecha>=todayISO()&&((S.role==="dir"&&!S.ro&&(e.a.puntuales||[]).some(x=>x&&x.rid===r.rid))||(S.role==="profe"&&S.miBuzon&&S.miBuzon.res&&S.miBuzon.res[r.rid]));
+    return `<div class="row"><span class="grow">${r.de.ini?`<b class="hr">${esc(r.de.ini)}</b> `:""}${esc(e.a.nombre)} <span class="note">${r.a.noViene?"avisó que no viene":"en lista de espera"}${r.nota?" · «"+esc(r.nota)+"»":""}</span></span>${puede?`<button class="btn small" data-act="nvdeshacer" data-rid="${esc(r.rid)}" data-tok="${esc(r.tok)}">Deshacer</button>`:""}</div>`}).join("")}</div>`:"";
   const groups=Object.keys(by).sort().map(p=>`<div class="grp"><h4 style="--pc:${pc(p)}"><span class="dot"></span>${esc(p)}<span class="n">${FLEX.has(p)?`${by[p].length} sesi${by[p].length===1?"ón":"ones"}`:`${tipoTxt(p,d,h)} · ${by[p].length} / ${capDe(p,d,h)}`}</span></h4>${by[p].sort((a,b)=>FLEX.has(p)?a.x.ini-b.x.ini:a.nombre.localeCompare(b.nombre,"es")).map(x=>`<div class="row${x.mv?" mvc":""}"><span class="grow">${FLEX.has(p)?`<b class="hr" style="font-variant-numeric:tabular-nums">${sesTxt(x.x)}</b> `:""}${campana(x.id)}${esc(x.nombre)}${FLEX.has(p)?` <span class="note">${TIPOS[x.x.tipo].t}${x.x.conf?"":" · por confirmar"}${x.x.choca?" · se pisa":""}</span>`:""}${x.mv?' <small>· cambio solo este día</small>':""}</span>${x.mv?btnPunt(x.id,x.r):`<button class="btn small ed" data-act="faltahoy" data-id="${x.id}" data-p="${esc(p)}" data-hk="${esc(x.hk)}">Falta</button>${(S.role==="dir"||(S.role==="profe"&&p===S.myProfe))?`<button class="btn small" data-act="mover" data-id="${x.id}" data-d="${d}" data-hk="${esc(x.hk)}" data-p="${esc(p)}">Mover</button>`:""}<button class="btn small ed" data-act="quitarde" data-id="${x.id}" data-p="${esc(p)}" data-hk="${esc(x.hk)}" title="Quitar de esta hora" aria-label="Quitar de esta hora">×</button>`}</div>`).join("")}</div>`).join("")||`<p class="note">Nadie tiene clase a esta hora.</p>`;
   $("#layer").innerHTML=`<div class="scrim" data-act="cerrar"></div><aside class="drawer" role="dialog" aria-label="${d} ${HLABEL[h]}">
     <div class="dh"><div><h3>${d} · ${HLABEL[h]}</h3><p>${m.length} alumnos</p></div><button class="btn x" data-act="cerrar" aria-label="Cerrar">Cerrar</button></div>
-    <div class="db">${groups}
+    <div class="db">${groups}${nvHtml}
       <div class="addbox ed"><b style="font-size:13px">Añadir alumno a esta hora</b>
         <input type="text" id="cl-al" list="dl-al" placeholder="Nombre del alumno" autocomplete="off" aria-label="Alumno">
         ${(()=>{const ok=profes().filter(p=>trabaja(p,d,h));if(!ok.length)return `<p class="note" style="margin:0">Ninguna profesora trabaja a esta hora.</p>`;
@@ -4292,7 +4336,7 @@ document.addEventListener("click",async e=>{
       const rp={rid:nuevoId("p"),tok:a.token,profe:B,de:{fecha:f.fecha,hora:f.hora,profe:B},a:{fecha:r.f,...aObj},estado:"aceptada",fecha:hoy,origen:"profe",nota:"Recuperación de la clase del "+fCorta(f.fecha),recup:f.id};
       t.disabled=true;if(await guardarRes(rp)){S.recF=null;render();toast(`Recuperación el ${fCorta(r.f)}`)}else t.disabled=false;return}
     const lim=sumaDias(hoy,-120),rec={rid:nuevoId("d"),profe:f.profe||B,de:{fecha:f.fecha,hora:f.hora,profe:f.profe||B},a:{fecha:r.f,...aObj},estado:"aceptada",fecha:hoy,origen:"direccion",nota:"Recuperación de la clase del "+fCorta(f.fecha),recup:f.id};
-    const puntuales=[...(a.puntuales||[]).filter(y=>y&&y.a&&String(y.a.fecha)>=lim&&String(y.de.fecha)>=lim&&y.recup!==f.id),rec];
+    const puntuales=[...(a.puntuales||[]).filter(y=>y&&y.a&&(y.a.reserva?String(y.de.fecha):String(y.a.fecha))>=lim&&String(y.de.fecha)>=lim&&y.recup!==f.id),rec];
     const faltas=a.faltas.map(z=>z.id===f.id?{...z,fechaRecup:r.f}:z);t.disabled=true;
     if(await save(id,{puntuales,faltas})){a.puntuales=puntuales;a.faltas=faltas;S.recF=null;render();toast(`Recuperación el ${fCorta(r.f)}`)}else t.disabled=false}
   else if(act==="argosok"&&a&&S.role==="dir"&&!esMos()){const argosOk={t:nowISO(),por:quienSoy()};t.disabled=true;if(await save(id,{argosOk})){a.argosOk=argosOk;render();toast(titulo(a.nombre)+": pasado a Argos")}else t.disabled=false}
@@ -4490,6 +4534,8 @@ document.addEventListener("click",async e=>{
   else if(act==="sesok"){const x=filaSes(+t.dataset.k);if(!x)return;t.disabled=true;await guardarSes([x]);t.disabled=false}
   else if(act==="sesdia"){const l=[];(S.sesRows||[]).forEach((x,k)=>{if(x.c.dia===t.dataset.d){const y=filaSes(k);if(y)l.push(y)}});t.disabled=true;await guardarSes(l);t.disabled=false}
   else if(act==="petenviar"){t.disabled=true;await enviarPet(t.dataset.tipo);t.disabled=false}
+  else if(act==="nvdeshacer"){t.disabled=true;await deshacerNoViene(t.dataset.rid,t.dataset.tok);if(t.isConnected)t.disabled=false}
+  else if(act==="espnoviene"){t.disabled=true;await apuntarEspera(true);if(t.isConnected)t.disabled=false}
   else if(act==="espapuntar"){t.disabled=true;await apuntarEspera();if(t.isConnected)t.disabled=false}
   else if(act==="espver"){const e=misEsp().find(x=>x.eid===t.dataset.eid);if(!e)return;S.cell=null;S.cb={modo:"espera",eid:e.eid,f:e.de.fecha,h:e.de.hora,p:e.profe,i:e.de.ini?minDe(e.de.ini):null,dur:+e.de.dur||60,grupo:!!e.de.g,selF:"",selH:""};drawCambio()}
   else if(act==="espquitar"){t.disabled=true;await quitarEspera(t.dataset.eid);if(t.isConnected)t.disabled=false}
@@ -5029,7 +5075,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=17nov-v119"></script>
+<script src="gestion.js?v=17nov-v121"></script>
 
 
 </body></html>

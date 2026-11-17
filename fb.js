@@ -338,6 +338,16 @@ window.__fich={
     return onSnapshot(q,{includeMetadataChanges:false},s=>ok(s.docs.map(tDe)),e=>{console.warn("fichajes",e);ko&&ko(e)})},
   pines:(ok,ko)=>onSnapshot(collection(fs,"fichPin"),s=>{const o={};s.docs.forEach(d=>o[d.id]=d.data().h);ok(o)},e=>{ko&&ko(e)}),
   ponerPin:async(profe,h)=>{await vigilar(setDoc0(doc(fs,"fichPin/"+profe),{h,t:new Date().toISOString()}))}};
+/* ---------- Lista de espera de huecos (17/11/2026) ----------
+   plazas/<id>, sin nombres: «L_<eid>» = un alumno deja libre su clase (de) y espera hueco; «T_…» = coge un hueco (a).
+   El id de la toma es la plaza concreta (profesora, fecha, hora, número de plaza): las reglas no dejan sobrescribir,
+   así que si dos familias cogen el mismo hueco a la vez, la segunda falla («el primero que lo pida»). */
+window.__plazas={
+  escuchar:(o,ok)=>{const q=o.profes?query(collection(fs,"plazas"),where("profe","in",o.profes.slice(0,30))):query(collection(fs,"plazas"),where("f",">=",o.desde||""));
+    return onSnapshot(q,s=>ok(s.docs.map(d=>({id:d.id,...d.data()}))),e=>console.warn("plazas",e))},
+  liberar:async(id,d)=>{await vigilar(setDoc0(doc(fs,"plazas/"+id),{...d,uid:CU.uid}))},
+  tomar:async(lib,id,d)=>{const b=writeBatch(fs);b.set(doc(fs,"plazas/"+id),{...d,uid:CU.uid});if(lib)b.delete(doc(fs,"plazas/"+lib));await vigilar(b.commit())},
+  quitar:async id=>{await vigilar(deleteDoc0(doc(fs,"plazas/"+id)))}};
 
 /* ---------- entrada ---------- */
 async function cargarPerfil(){

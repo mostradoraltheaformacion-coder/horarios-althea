@@ -943,18 +943,23 @@ function cuadreTarjetaDias(){const AC=argosCajaDias(),dias=Object.keys(AC).sort(
    día, se buscan más pistas: (1) apuntado en Argos otro día cercano (±3) y que allí sobra; (2) apuntado otro día con otra forma de
    pago; (3) un recibo que Argos da como pagado con tarjeta por ese importe (±1 día); (4) la misma tarjeta ya pagó antes a un alumno;
    (5) recibos pendientes por ese importe, o de una misma familia (mismos apellidos) que suman ese importe. */
+/* 18/11/2026 (titular): en las pistas y coincidencias solo cuentan los recibos pendientes del último trimestre
+   (emitidos en los 3 meses anteriores al cobro) y desde que la app lleva las cuentas (ATR_DESDE). */
+function pendReciente(r,d){const e=String((r&&r.emitido)||"");if(!r||r.estado==="pagado"||r.estado==="anulado"||!e||e>d)return false;
+  const m0=String(d).slice(0,7)+"-01",m1=sumaDias(m0,-1).slice(0,7)+"-01",m2=sumaDias(m1,-1).slice(0,7)+"-01",desde=(typeof ATR_DESDE==="function"?ATR_DESDE():"2026-10")+"-01";
+  return e>=(m2>desde?m2:desde)}
 function pistasTarjeta(o,d,L,AC){const out=[],c=Math.round(o.imp*100),cerca=x=>Math.abs(difDias(x,d))<=3&&x!==d,nom=t=>titulo(String(t||"").toLowerCase());
   for(const y of L){if(!cerca(y.d)||y.modo!=="ops")continue;for(const r of y.soloArgos||[])if(Math.round(r.imp*100)===c)out.push(`apuntado en Argos el ${fmtFecha(y.d)} con tarjeta: ${nom(r.tit)}${r.num?" ("+r.num+")":""} (ese día sobra en Argos)`)}
   for(const [x,v] of Object.entries(AC)){if(!cerca(x))continue;for(const r of v.f||[])if(!esTarj(r.fp)&&Math.round(r.imp*100)===c)out.push(`el ${fmtFecha(x)} en Argos con ${String(r.fp||"otra forma").toLowerCase()}: ${nom(r.tit)}`)}
   const e=pdTry(()=>enlaceTpv({f:d,imp:o.imp,tarj:o.tarj}),[]);
   for(const x of e.filter(x=>!x.pend))out.push(`recibo pagado con tarjeta en Argos: ${nom(x.n)} (${x.txt})`);
   const tk=pdTry(()=>tarjetasConocidas(),{}),al=o.tarj&&tk[o.tarj]?S.alumnos.get(tk[o.tarj]):null;
-  if(al){const pe=(al.recibos||[]).filter(r=>r&&r.estado!=="pagado");out.push(`la tarjeta …${o.tarj} ya pagó antes a ${nom(al.nombre)}${pe.length?` · tiene pendiente ${pe.map(r=>`${r.numero||""} ${eur(+r.importe||0)}`).join(", ")}`:""}`)}
+  if(al){const pe=(al.recibos||[]).filter(r=>pendReciente(r,d));out.push(`la tarjeta …${o.tarj} ya pagó antes a ${nom(al.nombre)}${pe.length?` · tiene pendiente ${pe.map(r=>`${r.numero||""} ${eur(+r.importe||0)}`).join(", ")}`:""}`)}
   if(!out.length){const pend=e.filter(x=>x.pend);
     if(pend.length&&pend.length<=5)out.push(`recibos pendientes de ${eur(o.imp)}: ${pend.map(x=>`${nom(x.n)} (${String(x.txt).replace(" · pendiente en Argos","")})`).join(", ")}`);
     else if(pend.length)out.push(`${pend.length} alumnos tienen un recibo pendiente de ${eur(o.imp)}: no se puede saber cuál solo por el importe`);
     const fam={};for(const [id,a] of S.alumnos){if(a.baja)continue;const k=String(a.nombre||"").trim().split(/\s+/).slice(-2).join(" ");if(!k.includes(" "))continue;
-      for(const r of a.recibos||[])if(r&&r.estado!=="pagado"&&String(r.emitido||"")<=d)(fam[k]=fam[k]||[]).push({a,r})}
+      for(const r of a.recibos||[])if(pendReciente(r,d))(fam[k]=fam[k]||[]).push({a,r})}
     for(const [k,l] of Object.entries(fam)){if(new Set(l.map(x=>x.a)).size<2&&l.length<2)continue;
       const R=l.slice(0,12),dp=new Map([[0,[]]]);for(const x of R){const v=Math.round((+x.r.importe||0)*100);for(const [s,q] of [...dp]){const n=s+v;if(n<=c&&!dp.has(n))dp.set(n,[...q,x])}}
       const sel=dp.get(c);if(sel&&sel.length>1)out.push(`familia ${titulo(k.toLowerCase())}: ${sel.map(x=>`${nom(x.a.nombre).split(" ")[0]} ${x.r.numero||""} ${eur(+x.r.importe||0)}`).join(" + ")} (pendientes)`)}}
@@ -1131,7 +1136,7 @@ function enlaceTpv(op){const out=[];
   const caja=(typeof GC!=="undefined"?GC.docs:[]).filter(d=>d.tipo==="cobro"&&d.forma==="tarjeta"&&Math.abs(+d.total-op.imp)<0.005&&difDias(d.dia,op.f)<=1);
   for(const d of caja)if(!out.some(o=>o.id===d.alumno))out.push({n:d.nombre,id:d.alumno,txt:"Caja "+horaC(d)});
   if(!out.length){/* si Argos aún no lo da como pagado: recibos pendientes por ese importe (posibles) */
-    for(const [id,a] of S.alumnos){if(a.baja)continue;const r=(a.recibos||[]).find(r=>r&&r.estado!=="pagado"&&Math.abs(+r.importe-op.imp)<0.005&&String(r.emitido||"")<=op.f);if(r)out.push({n:a.nombre,id,txt:(r.numero||"")+" · pendiente en Argos",pend:true})}}
+    for(const [id,a] of S.alumnos){if(a.baja)continue;const r=(a.recibos||[]).find(r=>pendReciente(r,op.f)&&Math.abs(+r.importe-op.imp)<0.005);if(r)out.push({n:a.nombre,id,txt:(r.numero||"")+" · pendiente en Argos",pend:true})}}
   return out}
 /* Bizum y transferencias recibidas: de qué alumno es el cobro.
    1) Por nombre: las palabras del concepto del PDF («Alvaro aguera octubre») y del ordenante que coinciden con el nombre del alumno.
@@ -3064,7 +3069,7 @@ function descCoinc(x){const A=Math.abs(+x.imp||0),f=x.fecha;if(!A||!f)return [];
   const cajaHoy=new Map();try{const AC=argosCajaDias()[f];for(const y of (AC&&AC.f)||[]){if(/DESCUADRE/i.test(String(y.c||""))||c2(+y.imp||0)!==c2(A))continue;
     const id=typeof idDeTitular==="function"?idDeTitular(y.tit,[]):null;if(id&&!cajaHoy.has(id))cajaHoy.set(id,{numero:y.num,forma:y.fp,h:y.h})}}catch(_){}
   for(const [id,a] of S.alumnos){if(!a)continue;const why=[];let sc=0,rec=[];
-    const pend=(a.recibos||[]).filter(r=>r&&r.estado!=="pagado"&&r.estado!=="anulado"&&r.importe!=null);
+    const pend=(a.recibos||[]).filter(r=>pendReciente(r,f)&&r.importe!=null);
     /* cobrado ese mismo día por ese importe: si falta dinero, puede que no se cobrara de verdad o que se pagara con otra forma; si es un cobro del banco, puede que en Argos se apuntara con otra forma de pago */
     const hoyP=(a.recibos||[]).filter(r=>r&&r.estado==="pagado"&&String(r.pagado||"").slice(0,10)===f&&c2(+r.importe||0)===c2(A));
     if(!hoyP.length&&cajaHoy.has(id))hoyP.push(cajaHoy.get(id));

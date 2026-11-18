@@ -3182,12 +3182,18 @@ function horasExtraProfe(p,mes){const hoy=todayISO(),ev=[],usados={},fechasSuelt
           else rec="SIN RECIBO";txt="hora extra"}
         /* 11/11/2026: alumno de clases sueltas (paga cada clase): su recibo de ese día (o de los 5 siguientes, sin repetir) */
         /* también alumnos con clase fija que pagan cada hora (recibos «HORA …» de un día concreto, como Antonio Verdugo) */
-        else if(s.a.sueltas||o.t==="normal"&&(s.a.recibos||[]).some(r=>r&&/\bHORA\b/i.test(String(r.concepto||"")+" "+String(r.curso||""))&&String(r.emitido||"").slice(0,7)===f.slice(0,7))){const fr=r=>String(r.emitido||r.fecha||"").slice(0,10),u=usados[s.id]=usados[s.id]||new Set();
+        else if(s.a.sueltas||o.t==="normal"&&(s.a.recibos||[]).some(r=>r&&/\bHORA\b/i.test(String(r.concepto||"")+" "+String(r.curso||""))&&String(r.emitido||"").slice(0,7)===f.slice(0,7))){const fr=r=>String(r.emitido||r.fecha||"").slice(0,10),u=usados[s.id]=usados[s.id]||new Map(),key=r=>r.numero||r.id||fr(r);
           /* el recibo de su mismo día; si no hay, uno de los 5 días siguientes que no sea de otro día con clase */
           const conClase=fechasSuelta[s.id]=fechasSuelta[s.id]||new Set(diasMes(mes).filter(d=>d<=hoy&&sesionesFecha(p,d).some(x=>x.id===s.id)));
-          const libres=(s.a.recibos||[]).filter(r=>r&&!u.has(r.numero||r.id||fr(r))&&(s.a.sueltas||/\bHORA\b/i.test(String(r.concepto||"")+" "+String(r.curso||""))));
-          const r=libres.find(r=>fr(r)===f)||libres.filter(r=>fr(r)>f&&fr(r)<=sumaDias(f,5)&&!conClase.has(fr(r))).sort((x,y)=>fr(x).localeCompare(fr(y)))[0];
-          txt=s.a.sueltas?"clase suelta":"paga por hora";if(r){u.add(r.numero||r.id||fr(r));ing=+r.importe||0;rec=`recibo ${r.numero||fmtFecha(fr(r))}${r.estado==="pagado"?" pagado":" pendiente"}`}else rec="SIN RECIBO"}
+          const suyos=(s.a.recibos||[]).filter(r=>r&&r.estado!=="anulado"&&(+r.importe||0)>0&&(s.a.sueltas||/\bHORA\b/i.test(String(r.concepto||"")+" "+String(r.curso||""))));
+          /* 18/11/2026 (titular): un recibo puede pagar varias clases de una vez (36 € = 2 clases de 18 €): cuenta para tantas clases
+             como veces cabe el precio de una clase (el de clases sueltas o, si no hay, el recibo más pequeño de ese alumno) */
+          const precio=(s.a.sueltas&&+s.a.sueltas.precio)||(suyos.length?Math.min(...suyos.map(r=>+r.importe||0)):0),cap=r=>precio>0?Math.max(1,Math.round((+r.importe||0)/precio)):1;
+          const libres=suyos.filter(r=>(u.get(key(r))||0)<cap(r));
+          const r=libres.find(r=>fr(r)===f)||libres.filter(r=>fr(r)>f&&fr(r)<=sumaDias(f,5)&&!conClase.has(fr(r))).sort((x,y)=>fr(x).localeCompare(fr(y)))[0]
+            ||libres.filter(r=>cap(r)>1&&(u.get(key(r))||0)>0&&fr(r)<f&&fr(r)>=sumaDias(f,-31)).sort((x,y)=>fr(y).localeCompare(fr(x)))[0];
+          txt=s.a.sueltas?"clase suelta":"paga por hora";
+          if(r){const k=cap(r);u.set(key(r),(u.get(key(r))||0)+1);ing=r2((+r.importe||0)/k);rec=`recibo ${r.numero||fmtFecha(fr(r))}${r.estado==="pagado"?" pagado":" pendiente"}${k>1?` (${eur(+r.importe||0)} = ${k} clases)`:""}`}else rec="SIN RECIBO"}
         else{txt=o.t==="extra"?(o.mv&&o.mv.recup?"recuperación":"cambio de clase"):"su clase";rec=o.t==="extra"?"no se cobra":"en su mensualidad"}
         return {id:s.id,n:s.a.nombre,ing:r2(ing),txt,rec,sin:rec==="SIN RECIBO"}});
       ev.push({f,ini:f0,fin:f1,fuera,fest:!!fe,al,ing:r2(al.reduce((x,y)=>x+y.ing,0))})}}

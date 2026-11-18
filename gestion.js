@@ -950,7 +950,13 @@ function pendReciente(r,d){const e=String((r&&r.emitido)||"");if(!r||r.estado===
   return e>=(m2>desde?m2:desde)}
 function pistasTarjeta(o,d,L,AC){const out=[],c=Math.round(o.imp*100),cerca=x=>Math.abs(difDias(x,d))<=3&&x!==d,nom=t=>titulo(String(t||"").toLowerCase());
   for(const y of L){if(!cerca(y.d)||y.modo!=="ops")continue;for(const r of y.soloArgos||[])if(Math.round(r.imp*100)===c)out.push(`apuntado en Argos el ${fmtFecha(y.d)} con tarjeta: ${nom(r.tit)}${r.num?" ("+r.num+")":""} (ese día sobra en Argos)`)}
-  for(const [x,v] of Object.entries(AC)){if(!cerca(x))continue;for(const r of v.f||[])if(!esTarj(r.fp)&&Math.round(r.imp*100)===c)out.push(`el ${fmtFecha(x)} en Argos con ${String(r.fp||"otra forma").toLowerCase()}: ${nom(r.tit)} · ${eur(r.imp)}${r.num?" · nº "+r.num:""}${r.c?" · «"+String(r.c).slice(0,50)+"»":""}${r.h?" · "+r.h:""}`)}
+  /* 18/11/2026 (titular): si un cobro con tarjeta se hubiera apuntado en Argos como efectivo, ese día faltaría ese dinero en el
+     arqueo. Solo se propone «con contado» si ese día hay un descuadre de efectivo (falta) de al menos ese importe, apuntado a mano
+     o en la caja de Argos; si el efectivo cuadró, esa pista no puede ser. */
+  const faltaEf=x=>{let t=0;for(const d of (typeof GB!=="undefined"&&GB.docs)||[])for(const v of Object.values(d.desc||{})){const m=v&&v.manual;if(m&&m.fecha===x&&/efect|contado/i.test(m.tipo||"Efectivo")&&(+m.imp||0)<0)t+=-(+m.imp)}
+    for(const y of (AC[x]&&AC[x].f)||[])if(/DESCUADRE/i.test(String(y.c||"")+" "+String(y.o||""))&&(+y.imp||0)<0)t+=-(+y.imp);return Math.round(t*100)};
+  const esEf=fp=>/contado|efectivo|met[aá]lico/i.test(String(fp||""));
+  for(const [x,v] of Object.entries(AC)){if(!cerca(x))continue;for(const r of v.f||[])if(!esTarj(r.fp)&&Math.round(r.imp*100)===c&&!(esEf(r.fp)&&faltaEf(x)<c))out.push(`el ${fmtFecha(x)} en Argos con ${String(r.fp||"otra forma").toLowerCase()}: ${nom(r.tit)} · ${eur(r.imp)}${r.num?" · nº "+r.num:""}${r.c?" · «"+String(r.c).slice(0,50)+"»":""}${r.h?" · "+r.h:""}`)}
   const e=pdTry(()=>enlaceTpv({f:d,imp:o.imp,tarj:o.tarj}),[]);
   /* 18/11/2026 (titular): un recibo que ya está en la caja de Argos con tarjeta otro día (p. ej. A26/001467 de Julia Marín,
      cobrado el 04/11 y que ese día cuadra) ya está contado allí: no es pista para este cobro. */

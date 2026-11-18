@@ -3165,6 +3165,17 @@ const PRECIO_HORA_EXTRA_PROFE=10;
 function costeHoraProfe(p,mes){const ns=NM.docs.filter(d=>d.tipo==="nomina"&&d.profe===p&&d.coste>0).sort((a,b)=>String(b.mes).localeCompare(String(a.mes)));
   const n=ns.find(d=>d.mes===mes)||ns.find(d=>d.mes<mes)||ns[0];if(!n)return null;
   const h=diasMes(n.mes).reduce((s,d)=>s+fcPrevisto(p,d),0)/60;return h>0?{v:r2(n.coste/h),mes:n.mes}:null}
+/* ¿Paga cada clase en vez de mensualidad? (alumnos con clase fija)
+   - algún recibo del mes con «HORA» en el concepto o el curso (Antonio Verdugo), o
+   - 18/11/2026 (titular, María Pérez Torres: «CLASES INDIVIDUALES UNIVERSIDAD», 18 € los días 03, 10 y 16/11): al menos dos recibos
+     del mes de importe pequeño (≤ PC_MAX) emitidos en días en que tuvo clase con esa profesora. */
+const PC_MAX=30;
+const reciboPorClase=r=>/\bHORA\b/i.test(String((r&&r.concepto)||"")+" "+String((r&&r.curso)||""));
+function pagaPorClase(a,p,mes){const rs=(a.recibos||[]).filter(r=>r&&r.estado!=="anulado"&&r.serie!=="HX"&&String(r.emitido||"").slice(0,7)===mes);
+  if(rs.some(reciboPorClase))return true;
+  const peq=rs.filter(r=>(+r.importe||0)>0&&(+r.importe||0)<=PC_MAX);if(peq.length<2)return false;
+  const dias=new Set(peq.map(r=>String(r.emitido).slice(0,10)));let k=0;for(const d of dias)if(sesionesFecha(p,d).some(x=>x.a===a||x.a&&x.a.token&&x.a.token===a.token))k++;
+  return k>=2}
 function horasExtraProfe(p,mes){const hoy=todayISO(),ev=[],usados={},fechasSuelta={};
   for(const f of diasMes(mes)){if(f>hoy)break;const d=diaDe(f),fe=festivoDe(f),tr=fe||!DIAS.includes(d)?[]:(typeof tramosContrato==="function"?tramosContrato:tramosDe)(p,d);
     /* 11/11/2026 (titular): solo cuenta la sesión si en la asistencia está «Asistió» */
@@ -3182,10 +3193,10 @@ function horasExtraProfe(p,mes){const hoy=todayISO(),ev=[],usados={},fechasSuelt
           else rec="SIN RECIBO";txt="hora extra"}
         /* 11/11/2026: alumno de clases sueltas (paga cada clase): su recibo de ese día (o de los 5 siguientes, sin repetir) */
         /* también alumnos con clase fija que pagan cada hora (recibos «HORA …» de un día concreto, como Antonio Verdugo) */
-        else if(s.a.sueltas||o.t==="normal"&&(s.a.recibos||[]).some(r=>r&&/\bHORA\b/i.test(String(r.concepto||"")+" "+String(r.curso||""))&&String(r.emitido||"").slice(0,7)===f.slice(0,7))){const fr=r=>String(r.emitido||r.fecha||"").slice(0,10),u=usados[s.id]=usados[s.id]||new Map(),key=r=>r.numero||r.id||fr(r);
+        else if(s.a.sueltas||(o.t==="normal"||o.t==="extra"&&!(o.mv&&o.mv.recup))&&pagaPorClase(s.a,p,f.slice(0,7))){const fr=r=>String(r.emitido||r.fecha||"").slice(0,10),u=usados[s.id]=usados[s.id]||new Map(),key=r=>r.numero||r.id||fr(r);
           /* el recibo de su mismo día; si no hay, uno de los 5 días siguientes que no sea de otro día con clase */
           const conClase=fechasSuelta[s.id]=fechasSuelta[s.id]||new Set(diasMes(mes).filter(d=>d<=hoy&&sesionesFecha(p,d).some(x=>x.id===s.id)));
-          const suyos=(s.a.recibos||[]).filter(r=>r&&r.estado!=="anulado"&&(+r.importe||0)>0&&(s.a.sueltas||/\bHORA\b/i.test(String(r.concepto||"")+" "+String(r.curso||""))));
+          const suyos=(s.a.recibos||[]).filter(r=>r&&r.estado!=="anulado"&&(+r.importe||0)>0&&r.serie!=="HX"&&(s.a.sueltas||reciboPorClase(r)||(+r.importe||0)<=PC_MAX));
           /* 18/11/2026 (titular): un recibo puede pagar varias clases de una vez (36 € = 2 clases de 18 €): cuenta para tantas clases
              como veces cabe el precio de una clase (el de clases sueltas o, si no hay, el recibo más pequeño de ese alumno) */
           const precio=(s.a.sueltas&&+s.a.sueltas.precio)||(suyos.length?Math.min(...suyos.map(r=>+r.importe||0)):0),cap=r=>precio>0?Math.max(1,Math.round((+r.importe||0)/precio)):1;

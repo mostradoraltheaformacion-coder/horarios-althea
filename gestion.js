@@ -952,7 +952,10 @@ function pistasTarjeta(o,d,L,AC){const out=[],c=Math.round(o.imp*100),cerca=x=>M
   for(const y of L){if(!cerca(y.d)||y.modo!=="ops")continue;for(const r of y.soloArgos||[])if(Math.round(r.imp*100)===c)out.push(`apuntado en Argos el ${fmtFecha(y.d)} con tarjeta: ${nom(r.tit)}${r.num?" ("+r.num+")":""} (ese día sobra en Argos)`)}
   for(const [x,v] of Object.entries(AC)){if(!cerca(x))continue;for(const r of v.f||[])if(!esTarj(r.fp)&&Math.round(r.imp*100)===c)out.push(`el ${fmtFecha(x)} en Argos con ${String(r.fp||"otra forma").toLowerCase()}: ${nom(r.tit)}`)}
   const e=pdTry(()=>enlaceTpv({f:d,imp:o.imp,tarj:o.tarj}),[]);
-  for(const x of e.filter(x=>!x.pend))out.push(`recibo pagado con tarjeta en Argos: ${nom(x.n)} (${x.txt})`);
+  /* 18/11/2026 (titular): un recibo que ya está en la caja de Argos con tarjeta otro día (p. ej. A26/001467 de Julia Marín,
+     cobrado el 04/11 y que ese día cuadra) ya está contado allí: no es pista para este cobro. */
+  const enCaja=new Set();for(const v of Object.values(AC))for(const r of (v&&v.f)||[])if(esTarj(r.fp)&&r.num)enCaja.add(String(r.num).trim());
+  for(const x of e.filter(x=>!x.pend&&!String(x.txt||"").split(/\s*\+\s*/).some(n=>enCaja.has(n.trim()))))out.push(`recibo pagado con tarjeta en Argos: ${nom(x.n)} (${x.txt})`);
   const tk=pdTry(()=>tarjetasConocidas(),{}),al=o.tarj&&tk[o.tarj]?S.alumnos.get(tk[o.tarj]):null;
   if(al){const pe=(al.recibos||[]).filter(r=>pendReciente(r,d));out.push(`la tarjeta …${o.tarj} ya pagó antes a ${nom(al.nombre)}${pe.length?` · tiene pendiente ${pe.map(r=>`${r.numero||""} ${eur(+r.importe||0)}`).join(", ")}`:""}`)}
   if(!out.length){const pend=e.filter(x=>x.pend);

@@ -955,7 +955,14 @@ function pistasTarjeta(o,d,L,AC){const out=[],c=Math.round(o.imp*100),cerca=x=>M
   /* 18/11/2026 (titular): un recibo que ya está en la caja de Argos con tarjeta otro día (p. ej. A26/001467 de Julia Marín,
      cobrado el 04/11 y que ese día cuadra) ya está contado allí: no es pista para este cobro. */
   const enCaja=new Set();for(const v of Object.values(AC))for(const r of (v&&v.f)||[])if(esTarj(r.fp)&&r.num)enCaja.add(String(r.num).trim());
-  for(const x of e.filter(x=>!x.pend&&!String(x.txt||"").split(/\s*\+\s*/).some(n=>enCaja.has(n.trim()))))out.push(`recibo pagado con tarjeta en Argos: ${nom(x.n)} (${x.txt})`);
+  /* En la caja de Argos el «Número» puede ser el de la factura y no el del recibo: se busca también por el día en que se
+     cobró el recibo, el importe y el titular (al menos dos palabras del nombre en común). */
+  const pal=t=>new Set(String(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().split(/[^a-zñ]+/).filter(w=>w.length>2));
+  const mismoTit=(t,n)=>{const A=pal(t),B=pal(n);let k=0;for(const w of A)if(B.has(w))k++;return k>=2};
+  const yaEnCaja=x=>{const a=S.alumnos.get(x.id);if(!a)return false;const nums=String(x.txt||"").split(/\s*\+\s*/).map(n=>n.trim()).filter(Boolean);if(!nums.length)return false;
+    return nums.every(n=>{if(enCaja.has(n))return true;const r=(a.recibos||[]).find(r=>r&&r.numero===n);if(!r)return false;const v=AC[String(r.pagado||"").slice(0,10)];
+      return !!v&&(v.f||[]).some(y=>esTarj(y.fp)&&Math.round((+y.imp||0)*100)===Math.round((+r.importe||0)*100)&&mismoTit(y.tit,a.nombre))})};
+  for(const x of e.filter(x=>!x.pend&&!yaEnCaja(x)))out.push(`recibo pagado con tarjeta en Argos: ${nom(x.n)} (${x.txt})`);
   const tk=pdTry(()=>tarjetasConocidas(),{}),al=o.tarj&&tk[o.tarj]?S.alumnos.get(tk[o.tarj]):null;
   if(al){const pe=(al.recibos||[]).filter(r=>pendReciente(r,d));out.push(`la tarjeta …${o.tarj} ya pagó antes a ${nom(al.nombre)}${pe.length?` · tiene pendiente ${pe.map(r=>`${r.numero||""} ${eur(+r.importe||0)}`).join(", ")}`:""}`)}
   if(!out.length){const pend=e.filter(x=>x.pend);

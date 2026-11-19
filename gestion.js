@@ -2755,7 +2755,15 @@ async function evFicha(id){const e=evDe(id);if(!e||!evCentro()||EV.busy)return;i
 /* Si la cita la marca como hecha la profesora (Fani), la ficha y el recibo los crea la app de dirección en cuanto la abre */
 let evAutoT=0;function evAuto(){if(!evCentro()||S.pv||S.ro||!S.alOk||EV.busy)return;const now=Date.now();if(now-evAutoT<15000)return;evAutoT=now;
   const e=EV.docs.find(x=>x.cobro&&x.cobro.estado==="pendiente"&&x.estado==="hecha"&&(+x.cobro.importe||0)>0);if(e){setTimeout(()=>evRecibo(e.id),500);return}
-  const f=EV.docs.find(x=>x.tipo==="entrevista"&&x.estado==="hecha"&&!(x.alumno&&S.alumnos.has(x.alumno))&&String(x.hecha||x.fecha)>="2026-11-19");if(f)setTimeout(()=>evFicha(f.id),500)}
+  const f=EV.docs.find(x=>x.tipo==="entrevista"&&x.estado==="hecha"&&!(x.alumno&&S.alumnos.has(x.alumno))&&String(x.hecha||x.fecha)>="2026-11-19");if(f){setTimeout(()=>evFicha(f.id),500);return}
+  /* sesiones ya hechas con recibo HX de la app sin pagar que ahora entran en su mensualidad: se quita del recibo y queda «incluida» */
+  for(const x of EV.docs){if(x.tipo!=="psico"||x.estado!=="hecha"||!x.cobro||x.cobro.estado!=="recibo"||!x.alumno)continue;const a=S.alumnos.get(x.alumno);if(!a||!psicoEnMensualidad(x,x.alumno))continue;
+    const r=(a.recibos||[]).find(r=>r&&r.numero===x.cobro.recibo);if(!r||r.estado==="pagado"||r.serie!=="HX"||r.origen!=="app")continue;
+    setTimeout(()=>evIncluirYa(x.id),500);return}}
+async function evIncluirYa(id){const e=evDe(id);if(!e||!evCentro()||EV.busy)return;const a=S.alumnos.get(e.alumno),inc=psicoEnMensualidad(e,e.alumno);if(!a||!inc)return;EV.busy=true;try{
+  const rs=a.recibos||[],nuevo=hxQuitar(rs,l=>l&&l.evento===e.id)||rs.filter(r=>!(r&&r.evento===e.id&&r.serie==="HX"&&r.estado!=="pagado"&&!(Array.isArray(r.lineas)&&r.lineas.length>1)));
+  if(nuevo.length!==rs.length||nuevo!==rs){if(!await save(e.alumno,{recibos:nuevo}))return;a.recibos=nuevo}
+  await evActualizar(id,{cobro:{...e.cobro,estado:"incluido",n:inc.n,i:inc.i,quitado:e.cobro.recibo||"",rt:nowISO(),rpor:quienSoy()}},`Sesión del ${fCorta(e.fecha)} incluida en su mensualidad: se quita del recibo ${e.cobro.recibo||""}`)}finally{EV.busy=false}}
 function evNuevo(pre){const hoy=todayISO(),lun=S.semIni||lunesDe(hoy);let f=hoy>=lun&&hoy<=sumaDias(lun,4)?hoy:lun;
   EV.form={tipo:"entrevista",profe:EV_PROFE,fecha:f,ini:17*60,dur:30,nombre:"",tel:"",asunto:"",...(pre||{})};EV.ver=null;EV.lista=null;evPintar()}
 document.addEventListener("click",async ev=>{const t=ev.target.closest&&ev.target.closest("[data-ev]");if(!t)return;ev.preventDefault();ev.stopPropagation();

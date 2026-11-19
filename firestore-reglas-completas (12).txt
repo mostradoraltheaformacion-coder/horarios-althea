@@ -1,0 +1,288 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function firmado() { return request.auth != null; }
+    function cuenta() { return get(/databases/$(database)/documents/cuentas/$(request.auth.uid)).data; }
+    function clave() { return get(/databases/$(database)/documents/claves/$(cuenta().usuario)).data; }
+    function valida() {
+      return firmado()
+        && exists(/databases/$(database)/documents/cuentas/$(request.auth.uid))
+        && exists(/databases/$(database)/documents/claves/$(cuenta().usuario))
+        && clave().clave == cuenta().clave
+        && clave().get('bloqueado', false) != true;
+    }
+    function esDir() { return valida() && clave().rol == 'dir'; }
+    function esProfe() { return valida() && clave().rol == 'profe'; }
+    function esStaff() { return valida() && (clave().rol == 'dir' || clave().rol == 'profe'); }
+    function esAlumno() { return valida() && clave().rol == 'alumno'; }
+    function esMos() { return valida() && clave().rol == 'mos'; }
+    function esCentro() { return esDir() || esMos(); }
+    function esAse() { return valida() && clave().rol == 'ase'; }
+    // 16/11/2026 (titular): Ainea, como profesora, ve además los recibos de los alumnos y los descuadres (puede asignarlos).
+    function esPlus() { return esProfe() && miProfe() == 'Ainea'; }
+    function miAlumno() { return clave().alumno; }
+    function miProfe() { return clave().profe; }
+
+    match /claves/{u} {
+      allow read, write: if esDir();
+      allow read, delete: if esMos() && resource.data.rol == 'alumno';
+      allow create: if esMos() && request.resource.data.rol == 'alumno';
+      allow update: if esMos() && resource.data.rol == 'alumno' && request.resource.data.rol == 'alumno';
+      allow get: if valida() && cuenta().usuario == u;
+      allow update: if valida() && cuenta().usuario == u
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['activado'])
+        && request.resource.data.activado == true;
+      allow update: if firmado()
+        && resource.data.rol == 'alumno'
+        && resource.data.get('activado', false) != true
+        && resource.data.get('bloqueado', false) != true
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clave', 'activado', 'altaKey'])
+        && request.resource.data.activado == true
+        && request.resource.data.clave is string && request.resource.data.clave.size() >= 6
+        && exists(/databases/$(database)/documents/altas/$(request.resource.data.altaKey))
+        && u in get(/databases/$(database)/documents/altas/$(request.resource.data.altaKey)).data.us;
+      allow create: if firmado()
+        && !exists(/databases/$(database)/documents/publico/instalado)
+        && getAfter(/databases/$(database)/documents/publico/instalado).data.uid == request.auth.uid
+        && request.resource.data.rol == 'dir';
+    }
+
+    match /cuentas/{uid} {
+      allow get: if firmado() && request.auth.uid == uid;
+      allow read: if esDir();
+      allow create, update: if firmado() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['usuario', 'clave', 't'])
+        && request.resource.data.usuario is string && request.resource.data.clave is string
+        && getAfter(/databases/$(database)/documents/claves/$(request.resource.data.usuario)).data.clave == request.resource.data.clave
+        && getAfter(/databases/$(database)/documents/claves/$(request.resource.data.usuario)).data.get('bloqueado', false) != true;
+      allow delete: if esDir() || (firmado() && request.auth.uid == uid);
+    }
+
+    match /altas/{k} {
+      allow get: if true;
+      allow list, write: if esCentro();
+    }
+
+    match /alumnos/{id} {
+      allow read: if esCentro() || esPlus() || (esAlumno() && miAlumno() == id) || (esProfe() && miProfe() in resource.data.profes);
+      allow create, update: if esCentro();
+      allow delete: if esDir();
+    }
+    match /privado/{id} {
+      allow read: if esCentro() || esPlus() || (esAlumno() && miAlumno() == id);
+      allow write: if esDir();
+      allow create: if esMos();
+      allow update: if esMos() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['recibos', 'matriculas', 'argos']);
+      // Recepción solo puede AÑADIR recibos (los de horas extra y clases sueltas que crea la app, 03/11/2026): no puede cambiar ni quitar ninguno.
+      allow update: if esMos() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['recibos'])
+        && request.resource.data.recibos.hasAll(resource.data.get('recibos', []));
+    }
+
+    // Caja (31/10/2026): aperturas, cobros, apuntes, retiradas, cierres y anulaciones. Se crean y no se pueden cambiar ni borrar.
+    // En modo prueba (hasta el 1/1/2027) la Caja no toca los recibos; mostrador sigue sin poder cambiarlos.
+    match /caja/{id} {
+      allow read: if esCentro() || esPlus();
+      allow create: if ((esCentro() && request.resource.data.tipo in ['cobro', 'cierre', 'apertura', 'retirada', 'apunte'])
+          || (esDir() && request.resource.data.tipo == 'anulacion'))
+        && request.resource.data.dia is string && request.resource.data.por is string;
+      allow update: if false;
+      // Solo se pueden borrar los apuntes de la prueba (antes del arranque real del 1/1/2027), y solo dirección.
+      allow delete: if esDir() && resource.data.dia < '2027-01-01';
+    }
+
+    // Gastos y banco (31/10/2026): movimientos de los extractos del Sabadell, solo dirección.
+    match /banco/{mes} {
+      allow read, write: if esDir();
+      allow read: if esPlus();
+      // Ainea solo puede asignar o justificar descuadres (campo desc)
+      allow update: if esPlus() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['desc']);
+      allow create: if esPlus() && request.resource.data.keys().hasOnly(['mes', 'desc']);
+    }
+
+    // Facturas de venta (01/11/2026): listado y PDF de Argos de cada mes, solo dirección (la asesoría las recibe en su copia).
+    match /ventas/{mes} {
+      allow read, write: if esDir();
+    }
+
+    // Facturas de talleres y servicios a entidades (11/11/2026): las hace dirección; la asesoría las ve (IVA trimestral).
+    match /facturasTaller/{id} {
+      allow read: if esDir() || esAse();
+      allow write: if esDir();
+    }
+
+    // Nóminas (07/11/2026): nominas/<AAAA-MM>_<profesora> y nominas/<AAAA-MM>_listado. Las crea dirección;
+    // las lee la asesoría, y cada profesora solo las suyas (el listado de costes tiene profe vacío: solo dirección y asesoría).
+    match /nominas/{id} {
+      allow read: if esDir() || esAse() || (esProfe() && resource.data.profe == miProfe());
+      allow write: if esDir();
+    }
+
+    // Registro de jornada (08/11/2026): cada fichaje lleva la hora del servidor (t == request.time) y solo se puede crear;
+    // nadie lo puede cambiar ni borrar. Las correcciones son documentos nuevos (solicitud de la profesora; ajuste, anulación
+    // o rechazo de dirección). Lo leen dirección, recepción (para el mostrador), la asesoría y cada profesora lo suyo.
+    match /fichajes/{id} {
+      allow read: if esDir() || esMos() || esAse() || (esProfe() && resource.data.profe == miProfe());
+      allow create: if valida()
+        && request.resource.data.t == request.time
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.profe is string && request.resource.data.dia is string
+        && ((esProfe() && request.resource.data.profe == miProfe() && request.resource.data.tipo in ['entrada', 'salida', 'solicitud'])
+          || (esMos() && request.resource.data.tipo in ['entrada', 'salida'] && request.resource.data.por == 'mostrador')
+          || (esDir() && request.resource.data.tipo in ['entrada', 'salida', 'ajuste', 'rechazo']));
+      allow update, delete: if false;
+    }
+    // PIN de cada profesora para fichar en el mostrador (solo el hash). Lo pone ella; lo leen dirección y recepción.
+    match /fichPin/{p} {
+      allow read: if esDir() || esMos();
+      allow write: if esProfe() && miProfe() == p;
+    }
+
+    // Impuestos (14/11/2026): impuestos/<AAAA-Tn>-<modelo>. La asesoría pone el importe, el día del cargo, quién lo paga y el PDF;
+    // dirección lo lee (y puede corregirlo).
+    match /impuestos/{id} {
+      allow read, write: if esDir() || esAse();
+    }
+
+    // Asesoría (31/10/2026): copia del informe de cada mes que envía dirección. La asesoría solo puede leerla.
+    match /asesoria/{mes} {
+      allow read: if esDir() || esAse();
+      allow write: if esDir();
+    }
+
+    // Facturas simplificadas (02/11/2026): desde el 1/1/2027, dirección las crea y las lee. Nadie puede modificarlas
+    // ni borrarlas (una errónea se corrige con rectificativa). Si el número ya existe, la creación falla.
+    match /facturas/{id} {
+      allow read: if esDir();
+      allow create: if esDir()
+        && request.resource.data.n is string
+        && request.resource.data.tot is number
+        && request.resource.data.huella is string;
+      allow update, delete: if false;
+    }
+    // Facturas de prueba (noviembre y diciembre de 2026): solo dirección; se pueden borrar.
+    match /facturasPrueba/{id} {
+      allow read, write: if esDir();
+    }
+
+    // Eventos del horario (02/11/2026): entrevistas, evaluaciones y sesiones psicopedagógicas.
+    // Dirección y recepción, todos; cada profesora, solo los suyos (y no puede pasarlos a otra profesora).
+    match /eventos/{id} {
+      allow read: if esCentro() || (esProfe() && resource.data.profe == miProfe());
+      // 19/11/2026: cada alumno ve sus propias citas en su calendario
+      allow read: if esAlumno() && resource.data.get('alumno', '') == miAlumno();
+      allow create: if esCentro() || (esProfe() && request.resource.data.profe == miProfe());
+      allow update: if esCentro() || (esProfe() && resource.data.profe == miProfe() && request.resource.data.profe == miProfe());
+      allow delete: if esDir();
+    }
+    // Anotaciones de las citas (19/11/2026): aparte de eventos/ para que la familia no las lea. Centro y la profesora de la cita.
+    match /eventosNotas/{id} {
+      allow read: if esCentro() || (esProfe() && resource.data.profe == miProfe());
+      allow write: if esCentro() || (esProfe() && request.resource.data.profe == miProfe());
+    }
+    // Preinscripción por enlace (03/11/2026): dirección la crea y la gestiona; recepción solo la lee (para respetar las reservas de 48 h).
+    // La familia abre el enlace (sin usuario), solo puede leer esa preinscripción y enviarla una vez, antes de que caduque la reserva:
+    // de «enviada» a «completada», con sus datos, la conformidad y la firma. Después solo puede avisar de que ha pagado por Bizum.
+    match /preins/{t} {
+      allow get: if true;
+      allow list: if esCentro();
+      allow create, update, delete: if esDir();
+      allow update: if resource.data.estado == 'enviada' && request.resource.data.estado == 'completada'
+        && request.time.toMillis() < resource.data.caducaMs
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['datos', 'cons', 'firma', 'estado', 'completada', 'primer'])
+        && request.resource.data.firma is string && request.resource.data.firma.size() < 400000;
+      allow update: if resource.data.estado in ['completada', 'procesando', 'alta']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['bizum'])
+        && request.resource.data.bizum is string && request.resource.data.bizum.size() < 40;
+    }
+
+    // Confirmación de citas: la familia abre el enlace del WhatsApp (sin usuario) y solo puede leer esa cita
+    // (nombre de pila, profesora, día y hora) y marcar «conf» o «noPuede». No se pueden listar.
+    match /citas/{t} {
+      allow get: if true;
+      allow list: if esCentro() || (esProfe() && resource.data.profe == miProfe());
+      allow create: if esCentro() || (esProfe() && request.resource.data.profe == miProfe());
+      allow update: if esCentro() || (esProfe() && resource.data.profe == miProfe() && request.resource.data.profe == miProfe());
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['conf', 'noPuede'])
+        && request.resource.data.conf is string && request.resource.data.conf.size() < 40
+        && request.resource.data.noPuede is string && request.resource.data.noPuede.size() < 40;
+      allow delete: if esCentro() || (esProfe() && resource.data.profe == miProfe());
+    }
+
+    match /buzon/{uid} {
+      allow read: if esDir() || (valida() && request.auth.uid == uid) || (esProfe() && miProfe() in resource.data.profes);
+      allow create, update: if esAlumno() && request.auth.uid == uid && request.resource.data.alumno == miAlumno();
+      allow delete: if esDir() || (firmado() && request.auth.uid == uid);
+    }
+    match /buzonProf/{uid} {
+      allow read: if esStaff() || esMos();
+      allow create, update: if esProfe() && request.auth.uid == uid && request.resource.data.profe == miProfe();
+      allow delete: if esDir() || (firmado() && request.auth.uid == uid);
+    }
+    match /buzonAl/{d} {
+      allow read: if esDir() || (esAlumno() && resource.data.alumno == miAlumno()) || (esProfe() && resource.data.profeUid == request.auth.uid);
+      allow create, update: if esProfe()
+        && request.resource.data.profeUid == request.auth.uid
+        && request.resource.data.profe == miProfe()
+        && d == request.resource.data.alumno + '__' + request.auth.uid
+        && miProfe() in get(/databases/$(database)/documents/alumnos/$(request.resource.data.alumno)).data.profes;
+      allow delete: if esDir() || (esProfe() && resource.data.profeUid == request.auth.uid);
+    }
+
+    match /mensajes/{uid} {
+      allow read: if esDir() || (valida() && request.auth.uid == uid);
+      allow write: if esDir();
+    }
+
+    // Nóminas (07/11/2026): las ven dirección, la asesoría y cada profesora la suya. Recepción no.
+    function puedeVer(f) {
+      return esDir()
+        || (esMos() && f.get('clase', '') != 'nomina')
+        || f.get('publico', false) == true
+        || (esAse() && f.get('clase', '') in ['gasto', 'banco', 'ventas', 'nomina', 'impuesto'])
+        || (esProfe() && f.get('clase', '') == 'foto')
+        || (esProfe() && f.get('clase', '') == 'nomina' && f.get('profe', '') == miProfe())
+        || (esAlumno() && f.get('alumno', '') == miAlumno());
+    }
+    match /archivos/{id} {
+      allow read: if valida() && puedeVer(resource.data);
+      allow create: if valida() && request.resource.data.owner == request.auth.uid
+        && (esCentro() || (esAlumno() && request.resource.data.alumno == miAlumno() && request.resource.data.clase == 'foto' && request.resource.data.get('publico', false) == false)
+          || (esAse() && request.resource.data.clase == 'impuesto'));
+      allow delete: if esDir() || (valida() && resource.data.owner == request.auth.uid);
+      match /p/{i} {
+        allow read: if valida() && puedeVer(get(/databases/$(database)/documents/archivos/$(id)).data);
+        allow create: if valida() && get(/databases/$(database)/documents/archivos/$(id)).data.owner == request.auth.uid;
+        allow delete: if esDir() || (valida() && get(/databases/$(database)/documents/archivos/$(id)).data.owner == request.auth.uid);
+      }
+    }
+
+    match /config/{d} {
+      allow read, write: if esDir();
+      allow read: if esMos() && (d == 'kiosko' || d == 'recibos' || d == 'cajaConceptos');
+      allow read: if esPlus() && (d == 'banco' || d == 'cajaConceptos');
+    }
+    match /publico/{d} {
+      allow read: if valida();
+      allow write: if esDir();
+    }
+    match /publico/instalado {
+      allow get: if true;
+      allow create: if firmado() && request.resource.data.uid == request.auth.uid;
+    }
+
+    // Lista de espera de huecos (17/11/2026): plazas/<id>, sin nombres. «L_…» = un alumno deja libre su clase;
+    // «T_…» = un alumno coge un hueco. La leen todas las cuentas válidas; cada alumno solo crea o borra las suyas;
+    // nadie puede sobrescribir una (si dos familias cogen el mismo hueco a la vez, la segunda falla).
+    match /plazas/{id} {
+      allow read: if valida();
+      // La crean las familias (lista de espera, «no voy») y, para «no viene ese día», dirección o la profesora de esa clase.
+      allow create: if (esAlumno() || esDir() || (esProfe() && request.resource.data.profe == miProfe()))
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['tipo', 'profe', 'de', 'a', 'uid', 't', 'f', 'eid'])
+        && request.resource.data.tipo in ['libera', 'toma']
+        && request.resource.data.profe in ['Rosa', 'Fani', 'Elena', 'Lorena'];
+      allow delete: if esDir() || (valida() && resource.data.uid == request.auth.uid);
+      allow update: if false;
+    }
+  }
+}

@@ -2597,15 +2597,20 @@ document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.c
 /* Solo para Fani (psicopedagoga), 02/11/2026: los eventos son siempre suyos; los crean dirección, recepción y la propia Fani. */
 const EV_PROFE="Fani";
 const EV_TIPOS={entrevista:{t:"Entrevista con la familia",c:"Entrevista",dur:30,precio:0},evaluacion:{t:"Evaluación",c:"Evaluación",dur:60,precio:180},psico:{t:"Sesión psicopedagógica",c:"Psicopedagogía",dur:60,precio:40}};
-const EV={docs:[],citas:{},sub:null,csub:null,ok:false,err:false,form:null,ver:null,busy:false};
+const EV={docs:[],citas:{},notas:{},sub:null,csub:null,nsub:null,ok:false,err:false,form:null,ver:null,busy:false};
+/* 19/11/2026: las anotaciones de las citas van en eventosNotas/<id> (solo centro y la profesora), no en eventos/ (que lee el alumno) */
+const evAnot=e=>(e&&EV.notas[e.id])||{};
+async function evGuardarAnot(id,v){const e=evDe(id);if(!e)return;try{await S.db.doc("eventosNotas/"+id).set({anot:v,t:nowISO(),por:quienSoy(),profe:e.profe});EV.notas[id]={anot:v,t:nowISO(),por:quienSoy(),profe:e.profe};evPintar();toast("Anotaciones guardadas")}
+  catch(x){console.warn(x);toast(/perm/i.test(String(x&&x.message))?"Faltan permisos: hay que publicar las reglas nuevas en Firebase.":"No se han podido guardar las anotaciones.")}}
 const evPuede=()=>S.screen==="app"&&!S.pv&&!S.ro&&(S.role==="dir"||(S.role==="profe"&&S.myProfe===EV_PROFE));
 const evCentro=()=>S.role==="dir"&&!(typeof esMos==="function"&&esMos());/* cobros y recibos: solo dirección */
 const evAlta=()=>S.role==="dir";/* dar de alta: dirección y recepción */
 function evEscuchar(){if(EV.sub||!S.db||!(S.role==="dir"||(S.role==="profe"&&S.myProfe===EV_PROFE)))return;
   const prof=S.role==="profe"?S.myProfe:"";const q=c=>prof?S.db.collection(c).where("profe","==",prof):S.db.collection(c);
   const re=()=>{if(S.view==="semana"){if(typeof refrescar==="function")refrescar()}if(EV.ver)evPintar()};
-  EV.sub=q("eventos").onSnapshot(s=>{EV.docs=s.docs.map(d=>({id:d.id,...d.data()}));EV.ok=true;EV.err=false;re()},()=>{EV.ok=true;EV.err=true;re()});
-  EV.csub=q("citas").onSnapshot(s=>{const o={};s.docs.forEach(d=>{o[d.id]=d.data()});EV.citas=o;re()},()=>{})}
+  EV.sub=q("eventos").onSnapshot(s=>{EV.docs=s.docs.map(d=>({id:d.id,...d.data()}));EV.ok=true;EV.err=false;re();try{evAuto()}catch(_){}},()=>{EV.ok=true;EV.err=true;re()});
+  EV.csub=q("citas").onSnapshot(s=>{const o={};s.docs.forEach(d=>{o[d.id]=d.data()});EV.citas=o;re()},()=>{});
+  EV.nsub=q("eventosNotas").onSnapshot(s=>{const o={};s.docs.forEach(d=>{o[d.id]=d.data()});EV.notas=o;re()},()=>{})}
 const evActivos=()=>EV.docs.filter(e=>e.estado!=="anulado");
 const evDe=id=>EV.docs.find(e=>e.id===id)||null;
 const evTok=()=>{const a=new Uint8Array(12);crypto.getRandomValues(a);return [...a].map(x=>"abcdefghijkmnpqrstuvwxyz23456789"[x%32]).join("")};
@@ -2657,8 +2662,7 @@ function evPintar(){const L=$("#layer");if(!L)return;
     const x=cob;if(x.estado==="recibo")return `<p style="color:var(--ok);margin:0">Recibo ${esc(x.recibo||"")} de ${eur(x.importe)} creado: se cobra en Caja y se factura en la facturación semanal.</p>`;
     if(x.estado==="argos")return `<p style="color:var(--ok);margin:0">Recibo de ${eur(x.importe)} hecho en Argos.</p>`;
     return `<div class="aviso pend" style="display:block;margin:0"><b>Cobro pendiente: ${eur(x.importe)}</b> · ${esc(x.concepto||"")}<br>
-      ${cajaPrueba()?`Hasta enero, haz el recibo en Argos.${evCentro()?` <button class="btn small" data-ev="argos" data-id="${esc((e.tipo==="evaluacion"?cabeza:e).id)}">Ya está hecho en Argos</button>`:" Avisa a dirección."}`
-        :evCentro()?`<button class="btn small primary" data-ev="recibo" data-id="${esc((e.tipo==="evaluacion"?cabeza:e).id)}">Crear el recibo de ${eur(x.importe)}</button> <span class="note">${e.alumno?"":"Se dará de alta a la persona como alumno."}</span>`:"Dirección hará el recibo."}</div>`})();
+      ${evCentro()?`<button class="btn small primary" data-ev="recibo" data-id="${esc((e.tipo==="evaluacion"?cabeza:e).id)}">Crear el recibo de ${eur(x.importe)}</button> <span class="note">${e.alumno?"":"Se dará de alta a la persona como alumno."}</span>${cajaPrueba()?` <button class="btn small" data-ev="argos" data-id="${esc((e.tipo==="evaluacion"?cabeza:e).id)}" title="Si ya lo hiciste en Argos">Ya está hecho en Argos</button>`:""}`:"Dirección hará el recibo (se crea solo al abrir la app)."}</div>`})();
   L.innerHTML=caja(T.t+(e.tipo==="evaluacion"?` · sesión ${e.ses||1}`:""),`${esc(titulo(e.nombre))}${e.estado==="anulado"?" · <b>anulada</b>":""}`,`
     <div class="addbox" style="display:flex;flex-direction:column;gap:6px">
       <div><b>${fLarga(e.fecha)}</b>, de ${hm(e.ini)} a ${hm(fin)} · ${esc(e.profe)}</div>
@@ -2669,6 +2673,10 @@ function evPintar(){const L=$("#layer");if(!L)return;
     ${e.estado!=="anulado"?`<div class="addbox" style="display:flex;flex-direction:column;gap:8px"><b style="font-size:13px">Confirmación ${evConfBadge(e)}</b>${confTxt}
       ${!pasada&&edita?`<div class="petbtns">${tel.length===9?`<a class="btn small primary" href="https://wa.me/34${tel}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">Enviar WhatsApp de confirmación</a>`:`<span class="note">Sin teléfono: no se puede enviar el WhatsApp.</span>`}<button class="btn small" data-ev="copiar" data-id="${esc(e.id)}">Copiar mensaje</button>${c.k!=="si"?`<button class="btn small" data-ev="confmano" data-id="${esc(e.id)}">Marcar confirmada a mano</button>`:""}</div>`:""}</div>`:""}
     ${cobroH?`<div class="addbox">${cobroH}</div>`:""}
+    ${e.tipo==="entrevista"&&e.estado==="activo"&&edita?`<div class="addbox"><div class="petbtns"><button class="btn small primary" data-ev="terminar" data-id="${esc(e.id)}">Entrevista hecha</button><span class="note">${e.alumno?"Queda en su ficha.":"Se crea su ficha con el nombre y el teléfono."}</span></div></div>`:""}
+    ${e.estado==="hecha"&&e.tipo==="entrevista"?`<p style="color:var(--ok);margin:0">Entrevista hecha${e.alumno?" · en la ficha del alumno":""}.</p>`:""}
+    ${(N=>e.estado!=="anulado"&&(edita||N.anot)?`<div class="addbox" style="display:flex;flex-direction:column;gap:6px"><b style="font-size:13px">Anotaciones${e.tipo==="entrevista"?" de la entrevista":""}</b> <span class="note">Solo las ven dirección, mostrador y ${esc(e.profe)}; la familia no.</span>
+      ${edita?`<textarea id="ev-anot" rows="4" maxlength="2000" placeholder="Lo que cuenta la familia, curso, dificultades, horario que le viene bien…">${esc(N.anot||"")}</textarea><div class="petbtns"><button class="btn small" data-ev="anot" data-id="${esc(e.id)}">Guardar anotaciones</button>${N.t?`<span class="note">Guardado el ${fmtFecha(String(N.t).slice(0,10))} · ${esc(N.por||"")}</span>`:""}</div>`:`<p style="margin:0;white-space:pre-wrap">${esc(N.anot)}</p>`}</div>`:"")(evAnot(e))}
     ${edita&&e.estado!=="anulado"?`<div class="petbtns"><button class="btn small" data-ev="editar" data-id="${esc(e.id)}">Cambiar día u hora</button>${!cob?`<button class="btn small" data-ev="anular" data-id="${esc(e.id)}">Anular la cita</button>`:""}</div>`:""}`)}
 function evMensaje(e){const T=EV_TIPOS[e.tipo],que=e.tipo==="entrevista"?`la entrevista sobre ${titulo(e.nombre)}`:e.tipo==="evaluacion"?`la sesión ${e.ses||1} de la evaluación de ${titulo(e.nombre)}`:`la sesión psicopedagógica de ${titulo(e.nombre)}`;
   return `Hola, le escribimos de Althea Formación. Le recordamos ${que} el ${fLarga(e.fecha).toLowerCase()} a las ${hm(e.ini)} con ${e.profe}. Por favor, confírmenos su asistencia en este enlace: ${URL_APP}/?cita=${e.tok} . Si no puede venir, indíquelo en el mismo enlace. Muchas gracias.`}
@@ -2696,19 +2704,45 @@ async function evGuardar(){evLeerForm();const F=EV.form;
   catch(x){console.warn(x);EV.busy=false;evPintar();toast(/perm/i.test(String((x&&x.fb)||"")+" "+(x&&x.message))?"Faltan permisos: hay que publicar las reglas nuevas en Firebase.":"No se ha podido guardar. Inténtalo de nuevo.")}}
 async function evActualizar(id,d,ok){try{await S.db.doc("eventos/"+id).update(d);const e=evDe(id);if(e)Object.assign(e,d);evPintar();if(S.view==="semana")render();if(ok)toast(ok);return true}catch(x){console.warn(x);toast("No se ha podido guardar.");return false}}
 async function evTerminar(id){const e=evDe(id);if(!e)return;const T=EV_TIPOS[e.tipo];
+  /* 19/11/2026 (titular): la entrevista no se cobra, pero al hacerse se crea su ficha (nombre y teléfono) y queda en su historial */
+  if(e.tipo==="entrevista"){const an=$("#ev-anot")?String($("#ev-anot").value||"").trim().slice(0,2000):null;
+    if(an!=null&&an!==(evAnot(e).anot||""))await evGuardarAnot(id,an);
+    await evActualizar(id,{estado:"hecha",hecha:nowISO()},"Entrevista hecha");if(evCentro())await evFicha(id);return}
   const n=e.tipo==="evaluacion"?EV.docs.filter(x=>(x.grupo||x.id)===e.id&&x.estado!=="anulado").length:1;
   const concepto=e.tipo==="evaluacion"?`Evaluación (${n} sesi${n===1?"ón":"ones"})`:`Sesión psicopedagógica del ${fmtFecha(e.fecha)}`;
   if(!confirm(`${e.tipo==="evaluacion"?"Terminar la evaluación":"Marcar la sesión como hecha"} y dejar pendiente el cobro de ${eur(T.precio)}?`))return;
-  await evActualizar(id,{estado:"hecha",cobro:{importe:T.precio,concepto,estado:"pendiente",t:nowISO(),por:quienSoy()}},"Cobro pendiente apuntado")}
-/* Desde el 1/1/2027: recibo en la ficha (alta si hace falta), con el contador de albaranes */
-async function evRecibo(id){const e=evDe(id);if(!e||!e.cobro||!evCentro()||cajaPrueba())return;
+  await evActualizar(id,{estado:"hecha",cobro:{importe:T.precio,concepto,estado:"pendiente",t:nowISO(),por:quienSoy()}},"Cobro pendiente apuntado");
+  /* 19/11/2026 (titular): al hacerse la sesión se crea la ficha (si no la tiene) y el recibo en la app, ya antes de enero */
+  if(evCentro()&&T.precio>0)await evRecibo(id)}
+/* 19/11/2026: citas del alumno en su ficha (dirección y mostrador) */
+function vCitasFicha(id){if(S.role!=="dir")return "";evEscuchar();const l=EV.docs.filter(e=>e.alumno===id&&e.estado!=="anulado").sort((x,y)=>(y.fecha+hm(y.ini)).localeCompare(x.fecha+hm(x.ini)));if(!l.length)return "";
+  return `<div><b style="font-size:14px">Citas</b> <span class="note">entrevistas, evaluaciones y sesiones</span>${l.slice(0,12).map(e=>`<div class="row" data-ev="ver" data-id="${esc(e.id)}" style="cursor:pointer"><span class="note" style="min-width:74px;font-variant-numeric:tabular-nums">${fmtFecha(e.fecha)}</span><span class="grow">${esc(EV_TIPOS[e.tipo].t)}${e.tipo==="evaluacion"?" · sesión "+(e.ses||1):""} · ${hm(e.ini)} · ${esc(e.profe)}</span>${e.estado==="hecha"?`<span class="badge b-si">Hecha</span>`:`<span class="badge b-off">Prevista</span>`}${e.cobro&&e.cobro.recibo?` <span class="note">${esc(e.cobro.recibo)}</span>`:""}</div>${(n=>n?`<div class="note" style="margin:0 0 6px 82px;white-space:pre-wrap">${esc(String(n).slice(0,300))}${String(n).length>300?"…":""}</div>`:"")(evAnot(e).anot)}`).join("")}</div>`}
+/* Desde el 1/1/2027: recibo en la ficha (alta si hace falta), con el contador de albaranes; antes, de la serie HX */
+async function evRecibo(id){const e=evDe(id);if(!e||!e.cobro||e.cobro.estado!=="pendiente"||!evCentro()||EV.busy)return;EV.busy=true;try{
   let aid=e.alumno&&S.alumnos.has(e.alumno)?e.alumno:idPorNombre(e.nombre);
   if(!aid){aid=await crearAlumno(e.nombre);if(!aid)return}
   const a=S.alumnos.get(aid),tels=[...new Set([...(a.telefonos||[]),e.tel].filter(Boolean))];
+  const grupo=EV.docs.filter(x=>x.id===e.id||(x.grupo||"")===e.id);
+  const ya=(a.recibos||[]).find(r=>r&&(r.evento===e.id||(Array.isArray(r.lineas)&&r.lineas.some(l=>l&&l.evento===e.id))));
+  if(ya){await evActualizar(id,{alumno:aid,cobro:{...e.cobro,estado:"recibo",recibo:ya.numero,rt:nowISO(),rpor:quienSoy()}},`Ya tenía el recibo ${ya.numero}`);return}
+  if(cajaPrueba()){const R=hxAnadir(a,a.recibos||[],{txt:e.cobro.concepto,imp:+e.cobro.importe,evento:e.id},todayISO());const r=R.nuevo?{...R.r,evento:e.id}:R.r,recibos=R.recibos.map(x=>x===R.r?r:x);
+    if(!await save(aid,{recibos,telefonos:tels,...(e.tipo==="psico"?{psico:true}:{})}))return;a.recibos=recibos;a.telefonos=tels;
+    for(const x of grupo)if(x.id!==id&&x.alumno!==aid)await evActualizar(x.id,{alumno:aid},"");
+    await evActualizar(id,{alumno:aid,cobro:{...e.cobro,estado:"recibo",recibo:r.numero,rt:nowISO(),rpor:quienSoy()}},`Recibo ${r.numero} creado: se cobra en Caja`);return}
   const C=contadores().alb,y=+todayISO().slice(0,4);let max=0;for(const [,x] of S.alumnos)for(const r of x.recibos||[])if(r&&r.origen==="app"&&+r.anio===y)max=Math.max(max,+r.num||0);
   const num=Math.max(max+1,+C.ini||1),r={id:uid(),numero:fmtContador(C,num,y),num,anio:y,emitido:todayISO(),concepto:e.cobro.concepto,importe:e.cobro.importe,estado:"pendiente",pagado:"",forma:"",origen:"app",evento:e.id};
   const recibos=[...(a.recibos||[]),r];if(!await save(aid,{recibos,telefonos:tels,...(e.tipo==="psico"?{psico:true}:{})}))return;a.recibos=recibos;a.telefonos=tels;
-  await evActualizar(id,{alumno:aid,cobro:{...e.cobro,estado:"recibo",recibo:r.numero,rt:nowISO(),rpor:quienSoy()}},`Recibo ${r.numero} creado`)}
+  for(const x of grupo)if(x.id!==id&&x.alumno!==aid)await evActualizar(x.id,{alumno:aid},"");
+  await evActualizar(id,{alumno:aid,cobro:{...e.cobro,estado:"recibo",recibo:r.numero,rt:nowISO(),rpor:quienSoy()}},`Recibo ${r.numero} creado`)}finally{EV.busy=false}}
+/* ficha del alumno para una cita hecha sin cobro (entrevista): la crea si no existe y la enlaza */
+async function evFicha(id){const e=evDe(id);if(!e||!evCentro()||EV.busy)return;if(e.alumno&&S.alumnos.has(e.alumno))return;EV.busy=true;try{
+  let aid=idPorNombre(e.nombre);if(!aid){aid=await crearAlumno(e.nombre);if(!aid)return}
+  const a=S.alumnos.get(aid),tels=[...new Set([...(a.telefonos||[]),e.tel].filter(Boolean))];if(tels.length!==(a.telefonos||[]).length&&await save(aid,{telefonos:tels}))a.telefonos=tels;
+  await evActualizar(id,{alumno:aid},`Ficha de ${titulo(e.nombre)} ${a.clases&&a.clases.length?"enlazada":"creada"}`)}finally{EV.busy=false}}
+/* Si la cita la marca como hecha la profesora (Fani), la ficha y el recibo los crea la app de dirección en cuanto la abre */
+let evAutoT=0;function evAuto(){if(!evCentro()||S.pv||S.ro||!S.alOk||EV.busy)return;const now=Date.now();if(now-evAutoT<15000)return;evAutoT=now;
+  const e=EV.docs.find(x=>x.cobro&&x.cobro.estado==="pendiente"&&x.estado==="hecha"&&(+x.cobro.importe||0)>0);if(e){setTimeout(()=>evRecibo(e.id),500);return}
+  const f=EV.docs.find(x=>x.tipo==="entrevista"&&x.estado==="hecha"&&!(x.alumno&&S.alumnos.has(x.alumno))&&String(x.hecha||x.fecha)>="2026-11-19");if(f)setTimeout(()=>evFicha(f.id),500)}
 function evNuevo(pre){const hoy=todayISO(),lun=S.semIni||lunesDe(hoy);let f=hoy>=lun&&hoy<=sumaDias(lun,4)?hoy:lun;
   EV.form={tipo:"entrevista",profe:EV_PROFE,fecha:f,ini:17*60,dur:30,nombre:"",tel:"",asunto:"",...(pre||{})};EV.ver=null;EV.lista=null;evPintar()}
 document.addEventListener("click",async ev=>{const t=ev.target.closest&&ev.target.closest("[data-ev]");if(!t)return;ev.preventDefault();ev.stopPropagation();
@@ -2727,6 +2761,7 @@ document.addEventListener("click",async ev=>{const t=ev.target.closest&&ev.targe
   else if(a==="anular"){if(confirm("¿Anular esta cita? Deja de salir en el horario."))await evActualizar(id,{estado:"anulado",anulado:{t:nowISO(),por:quienSoy()}},"Cita anulada")}
   else if(a==="confmano")await evActualizar(id,{confMano:nowISO()},"Marcada como confirmada")
   else if(a==="terminar")await evTerminar(id);
+  else if(a==="anot"){const v=String(($("#ev-anot")||{}).value||"").trim().slice(0,2000);await evGuardarAnot(id,v)}
   else if(a==="argos"&&evCentro()){const e=evDe(id);if(e&&e.cobro)await evActualizar(id,{cobro:{...e.cobro,estado:"argos",rt:nowISO(),rpor:quienSoy()}},"Apuntado: recibo hecho en Argos")}
   else if(a==="recibo"){t.disabled=true;await evRecibo(id);t.disabled=false}},true);
 document.head.insertAdjacentHTML("beforeend",`<style>.week .nm.evc{border-left:3px solid var(--pc,#888);padding-left:4px;cursor:pointer;background:color-mix(in srgb,var(--pc,#888) 10%,transparent);border-radius:3px;margin:1px 0}

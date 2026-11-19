@@ -338,6 +338,9 @@ window.__fich={
     return onSnapshot(q,{includeMetadataChanges:false},s=>ok(s.docs.map(tDe)),e=>{console.warn("fichajes",e);ko&&ko(e)})},
   pines:(ok,ko)=>onSnapshot(collection(fs,"fichPin"),s=>{const o={};s.docs.forEach(d=>o[d.id]=d.data().h);ok(o)},e=>{ko&&ko(e)}),
   ponerPin:async(profe,h)=>{await vigilar(setDoc0(doc(fs,"fichPin/"+profe),{h,t:new Date().toISOString()}))}};
+/* Citas (entrevista, evaluación, sesión) del propio alumno, para su calendario (19/11/2026) */
+window.__misCitas=ok=>{if(CU.rol!=="alumno"||!CU.alumno)return ()=>{};
+  return onSnapshot(query(collection(fs,"eventos"),where("alumno","==",CU.alumno)),s=>ok(s.docs.map(d=>({id:d.id,...d.data()}))),e=>{console.warn("citas",e);ok([])})};
 /* ---------- Lista de espera de huecos (17/11/2026) ----------
    plazas/<id>, sin nombres: «L_<eid>» = un alumno deja libre su clase (de) y espera hueco; «T_…» = coge un hueco (a).
    El id de la toma es la plaza concreta (profesora, fecha, hora, número de plaza): las reglas no dejan sobrescribir,

@@ -372,7 +372,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=19nov-v138"></script>
+<script type="module" src="fb.js?v=19nov-v139"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -1141,7 +1141,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="19nov-v138";
+const APP_VER="19nov-v139";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -4412,6 +4412,8 @@ document.addEventListener("click",async e=>{
     const cfg=S.recCfg||{},alias={};for(const [k,v] of Object.entries(cfg.alias||{}))alias[k]=v===bid?id:v;alias[nzN(b.nombre)]=id;
     const nums=new Set((a.recibos||[]).map(x=>x.numero));
     await guardarRecCfg({...cfg,alias,sinAlumno:(cfg.sinAlumno||[]).filter(x=>!nums.has(x.numero))});
+    /* 19/11/2026: las citas de la ficha repetida pasan a la buena (si no, seguirían apuntando a una ficha borrada) */
+    if(typeof EV!=="undefined")for(const x of EV.docs.filter(x=>x.alumno===bid)){try{await S.db.doc("eventos/"+x.id).update({alumno:id,nombre:a.nombre});x.alumno=id;x.nombre=a.nombre}catch(_){}}
     S.juntar=null;CONFC.l=null;SESC.al=null;S.sel=id;render();toast(`Fichas juntadas en ${titulo(a.nombre)}`)}
   else if(act==="quitarrepe"&&a&&S.role==="dir"){const clases=sinRepetidas(a.clases);t.disabled=true;
     if(await save(id,{clases})){a.clases=clases;CONFC.l=null;SESC.al=null;render();toast("Clase repetida quitada: "+titulo(a.nombre))}else t.disabled=false}
@@ -5099,7 +5101,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=19nov-v138"></script>
+<script src="gestion.js?v=19nov-v139"></script>
 
 
 </body></html>

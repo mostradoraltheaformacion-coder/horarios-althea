@@ -372,7 +372,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=18nov-v128"></script>
+<script type="module" src="fb.js?v=19nov-v129"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -1141,7 +1141,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="18nov-v128";
+const APP_VER="19nov-v129";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -3034,7 +3034,7 @@ function vInscripcion(){
   const back=I.paso>0&&I.paso<4?`<button class="btn" data-act="insprev">Atrás</button>`:"";
   let body="";
   if(I.paso===0&&I.modo==="pub"){body=vPrePlaza()}
-  else if(I.paso===0){const s=I.sel, fx=FLEX.has(s.profe), dias=insDias(s.profe);
+  else if(I.paso===0){const s=I.sel, fx=FLEX.has(s.profe), dias=I.forzar?DIAS:insDias(s.profe);
     if(!dias.includes(s.dia))s.dia=dias[0]||"Lunes";
     const lib=insLibres(s.profe,s.dia,s.tipo), k=fx?"ini":"hora";
     if(lib.length&&!lib.some(x=>String(x.v)===String(s[k])))s[k]=String(lib[0].v);
@@ -3050,11 +3050,13 @@ function vInscripcion(){
     <label class="f">Nivel del alumno<select data-ins="nivel"><option value="">Elige…</option>${NIVELES.map(n=>`<option ${n===I.d.nivel?"selected":""}>${n}</option>`).join("")}</select></label>
     ${I.d.nivel==="Primaria"?`<p class="note" style="margin:2px 0 4px">Primaria en grupo: Ainea no da primaria y Laura solo de 16:00 a 18:00. Las clases individuales no tienen restricción.</p>
     <label class="chk" style="margin:0 0 8px"><input type="checkbox" data-insexc="1" ${I.exc?"checked":""}><span>Excepción: mostrar también las horas que no cumplen la regla de primaria</span></label>`:""}
+    ${S.role==="dir"&&!S.kiosko?`<label class="chk" style="margin:0 0 8px"><input type="checkbox" data-insforzar="1" ${I.forzar?"checked":""}><span>Dirección: ver todas las horas, aunque estén fuera del horario de la profesora o sin plaza libre</span></label>`:""}
     <label class="f">Profesora<select data-inssel="profe">${EQUIPO.map(p=>`<option ${p===s.profe?"selected":""}>${p}</option>`).join("")}</select></label>
     <p class="note" style="margin:2px 0 8px">Horario de ${esc(s.profe)}: ${esc(textoHorario(s.profe))}</p>
     <div class="r2"><label class="f">Día<select data-inssel="dia">${dias.map(d=>`<option ${d===s.dia?"selected":""}>${d}</option>`).join("")}</select></label>
     ${fx?`<label class="f">Sesión<select data-inssel="tipo">${Object.entries(TIPOS).map(([k,v])=>`<option value="${k}" ${k===s.tipo?"selected":""}>${v.t}</option>`).join("")}</select></label>`:""}</div>
-    ${lib.length?`<label class="f">${fx?"Hora libre":"Hora con plaza libre"}<select data-inssel="${k}">${lib.map(x=>`<option value="${x.v}" ${String(x.v)===String(s[k])?"selected":""}>${esc(x.t)}</option>`).join("")}</select></label>`
+    ${I.forzar?`<p class="aviso pend" style="display:block;margin:4px 0 8px">Salen todas las horas. Las marcadas con ⚠ están fuera del horario de ${esc(s.profe)}, se pisan con otro alumno o no tienen plaza: la clase se añade igualmente y queda como excepción. Recuerda hablarlo con la profesora.</p>`:""}
+    ${lib.length?`<label class="f">${I.forzar?"Hora":fx?"Hora libre":"Hora con plaza libre"}<select data-inssel="${k}">${lib.map(x=>`<option value="${x.v}" ${String(x.v)===String(s[k])?"selected":""}>${esc(x.t)}</option>`).join("")}</select></label>`
       :`<p class="aviso pend" style="display:block">${esc(s.profe)} no tiene ningún hueco libre el ${s.dia.toLowerCase()}${fx?` para una sesión de ${TIPOS[s.tipo].t}`:""}. Prueba otro día u otra profesora.</p>`}
     ${lib.length?`<button class="btn" data-act="insaddclase">Añadir clase</button>`:""}
     ${I.clases.length?`<ul class="insclases">${I.clases.map((c,i)=>`<li>${esc(insClaseTxt(c))} <button class="btn small" data-act="insquitar" data-i="${i}">Quitar</button></li>`).join("")}</ul>`:`<p class="note">Sin clases todavía.</p>`}
@@ -3103,12 +3105,21 @@ function vInscripcion(){
     <p class="note">Para el personal: da de alta al alumno en Argos y haz su recibo. Para ver su horario en el móvil, que escanee el QR del mostrador y entre con su nombre y este móvil.</p>`}
   return `<section class="card ins">${head}${body}</section>${I.paso===4?"":salir}`;
 }
-function insClaseTxt(c){return `${c.dia} ${c.ini?`${c.ini} (${(TIPOS[c.tipo]||{}).t||""})`:HLABEL[c.hora]} · ${c.profe}`}
+function insClaseTxt(c){return (c.forzada?"⚠ ":"")+`${c.dia} ${c.ini?`${c.ini} (${(TIPOS[c.tipo]||{}).t||""})`:HLABEL[c.hora]} · ${c.profe}`}
 /* Disponibilidad real para la inscripción: días que trabaja, horas de grupo con plaza (contando las ya elegidas aquí)
    y, en logopedia, horas de inicio que caben en su tramo sin pisar otra sesión. */
 const insDias=p=>HORARIO_PROFE[p]?DIAS.filter(d=>(HORARIO_PROFE[p][d]||[]).length):DIAS;
 function insLibres(p,dia,tipo){
   const I=S.ins;
+  /* 19/11/2026 (titular): dirección puede añadir una clase fuera del horario de la profesora o sin hueco, con aviso */
+  if(I&&I.forzar){
+    if(!FLEX.has(p))return HORAS.map(h=>{const tr=trabaja(p,dia,h),cap=capDe(p,dia,h),occ=ocupadas(p,dia,h)+I.clases.filter(c=>c.profe===p&&c.dia===dia&&c.hora===h).length,l=cap-occ;
+      const av=[!tr?"fuera de su horario":"",tr&&l<=0?"sin plaza libre":""].filter(Boolean);return {v:h,l,t:`${HLABEL[h]}${av.length?" · ⚠ "+av.join(", "):l>0?` · ${l} plaza${l===1?"":"s"} libre${l===1?"":"s"}`:""}`}});
+    const dur=(TIPOS[tipo]||TIPOS["60"]).dur,out=[];
+    for(let t=9*60;t+dur<=22*60;t+=15){if(I.clases.some(c=>c.profe===p&&c.dia===dia&&c.ini&&minDe(c.ini)<t+dur&&minDe(c.ini)+((TIPOS[c.tipo]||{}).dur||60)>t))continue;
+      const fuera=!dentroTramo(p,dia,t,t+dur),ch=chocaSes(p,dia,t,tipo),av=[fuera?"fuera de su horario":"",ch?"se pisa con "+titulo(ch.a.nombre):""].filter(Boolean);
+      out.push({v:t,t:`${hm(t)}–${hm(t+dur)}${av.length?" · ⚠ "+av.join(", "):""}`})}
+    return out}
   if(!FLEX.has(p))return horasFijas(p,dia).map(h=>{const ind=esIndividual(p,dia,h),cap=capDe(p,dia,h),occ=ocupadas(p,dia,h)+I.clases.filter(c=>c.profe===p&&c.dia===dia&&c.hora===h).length,l=cap-occ;
     return {v:h,l,ind,t:`${HLABEL[h]} · ${ind?"individual, libre":`grupo, ${l} plaza${l===1?"":"s"} libre${l===1?"":"s"}`}`}}).filter(x=>x.l>0&&(I.exc||!primariaMal(I.d.nivel,p,dia,x.v,x.ind)));
   const dur=(TIPOS[tipo]||TIPOS["60"]).dur,out=[];
@@ -3123,12 +3134,14 @@ function insLibres(p,dia,tipo){
 }
 function insAddClase(){
   const I=S.ins,s=I.sel;let c={dia:s.dia,hora:s.hora,profe:s.profe};
+  const F=!!I.forzar,avisos=[];
   if(FLEX.has(c.profe)){const i=+s.ini,tp=s.tipo;
-    if(!dentroTramo(c.profe,c.dia,i,i+TIPOS[tp].dur)){toast(`A las ${hm(i)} no le da tiempo dentro del horario de ${c.profe}: ${textoHorario(c.profe)}`);return}
-    const ch=chocaSes(c.profe,c.dia,i,tp);if(ch){toast(`Se pisa con ${titulo(ch.a.nombre)} (${sesTxt(ch)})`);return}
+    if(!dentroTramo(c.profe,c.dia,i,i+TIPOS[tp].dur)){const m=`A las ${hm(i)} está fuera del horario de ${c.profe}: ${textoHorario(c.profe)}`;if(!F){toast(m);return}avisos.push(m)}
+    const ch=chocaSes(c.profe,c.dia,i,tp);if(ch){const m=`Se pisa con ${titulo(ch.a.nombre)} (${sesTxt(ch)})`;if(!F){toast(m);return}avisos.push(m)}
     c={dia:c.dia,hora:keyDeMin(i),profe:c.profe,ini:hm(i),tipo:tp,sesT:nowISO()}}
-  else{if(!trabaja(c.profe,c.dia,c.hora)){toast(`${c.profe} no trabaja el ${c.dia.toLowerCase()} de ${HLABEL[c.hora]}. Su horario: ${textoHorario(c.profe)}`);return}
-    if(ocupadas(c.profe,c.dia,c.hora)>=capDe(c.profe,c.dia,c.hora)){toast(esIndividual(c.profe,c.dia,c.hora)?`Esa hora de ${c.profe} es individual y ya la tiene otro alumno`:`El grupo de ${c.profe} ya tiene ${CAP} alumnos`);return}}
+  else{if(!trabaja(c.profe,c.dia,c.hora)){const m=`${c.profe} no trabaja el ${c.dia.toLowerCase()} de ${HLABEL[c.hora]}. Su horario: ${textoHorario(c.profe)}`;if(!F){toast(m);return}avisos.push(m)}
+    if(ocupadas(c.profe,c.dia,c.hora)>=capDe(c.profe,c.dia,c.hora)){const m=esIndividual(c.profe,c.dia,c.hora)?`Esa hora de ${c.profe} es individual y ya la tiene otro alumno`:`El grupo de ${c.profe} ya tiene ${CAP} alumnos`;if(!F){toast(m);return}avisos.push(m)}}
+  if(avisos.length){if(!confirm(`Atención:\n\n· ${avisos.join("\n· ")}\n\n¿Añadir la clase igualmente?`))return;c.forzada=true}
   {const m=primariaMal(I.d.nivel,c.profe,c.dia,c.hora,indDe(c.profe,c.dia,c.hora,c.tipo));if(m&&!I.exc){toast(m);return}if(m)c.excPrim=true}
   if(I.clases.some(x=>x.dia===c.dia&&x.hora===c.hora)){toast("Ya tiene clase ese día a esa hora");return}
   I.clases.push(c);render();
@@ -3367,7 +3380,7 @@ function vPreLista(){if(!preDir())return "";preEscuchar();if(PR.err)return `<div
   const res=[nAl?`${nAl} alta${nAl===1?"":"s"} nueva${nAl===1?"":"s"}`:"",nEs?`${nEs} esperando a la familia`:"",nCa?`${nCa} caducada${nCa===1?"":"s"}`:""].filter(Boolean).join(" · ");
   return `<details class="aviso ${nAl?"pend":"info"} fh" style="display:block" ${PR.abiertas||nAl?"open":""}><summary><b>Preinscripciones por enlace:</b> ${res}</summary><div class="fhl">${l.map(fila).join("")}</div></details>`}
 /* El hueco tiene que seguir libre (sin contar la reserva de la propia preinscripción): misma comprobación que la tablet */
-function preSinHueco(c){if(FLEX.has(c.profe)){const i=minDe(c.ini||"");if(!c.ini||!dentroTramo(c.profe,c.dia,i,i+((TIPOS[c.tipo]||TIPOS["60"]).dur)))return "fuera de su horario";const ch=chocaSes(c.profe,c.dia,i,c.tipo);return ch?`se pisa con ${titulo(ch.a.nombre)}`:""}
+function preSinHueco(c){if(c&&c.forzada)return "";/* añadida por dirección como excepción (19/11/2026) */if(FLEX.has(c.profe)){const i=minDe(c.ini||"");if(!c.ini||!dentroTramo(c.profe,c.dia,i,i+((TIPOS[c.tipo]||TIPOS["60"]).dur)))return "fuera de su horario";const ch=chocaSes(c.profe,c.dia,i,c.tipo);return ch?`se pisa con ${titulo(ch.a.nombre)}`:""}
   if(!trabaja(c.profe,c.dia,c.hora))return "la profesora no trabaja a esa hora";return ocupadas(c.profe,c.dia,c.hora)>=capDe(c.profe,c.dia,c.hora)?(esIndividual(c.profe,c.dia,c.hora)?"la hora individual ya está ocupada":"el grupo está lleno"):""}
 /* Alta automática de las completadas (una a una) */
 async function preAuto(){if(!preDir()||PR.auto)return;PR.auto=true;
@@ -4688,6 +4701,7 @@ document.addEventListener("change",async e=>{
     const mal=nivelDe(a)==="Primaria"?a.clases.filter(c=>primariaMal("Primaria",c.profe,c.dia,c.hora,indDe(c.profe,c.dia,c.hora,c.tipo))):[];if(mal.length)toast(`Ojo: ${mal.length} clase${mal.length===1?"":"s"} de su horario no vale${mal.length===1?"":"n"} para primaria (${mal.map(c=>c.profe+" "+c.dia.toLowerCase()).join(", ")})`)}}
   if(t.dataset&&t.dataset.confed&&S.confEd){S.confEd[t.dataset.confed]=t.value;if(t.dataset.confed!=="v")S.confEd.v="";render()}
   if(t.dataset&&t.dataset.insexc&&S.ins){S.ins.exc=t.checked;render()}
+  if(t.dataset&&t.dataset.insforzar&&S.ins&&S.role==="dir"){S.ins.forzar=t.checked;render()}
   if(t.dataset&&t.dataset.inssel&&S.ins){S.ins.sel[t.dataset.inssel]=t.value;render()}
   if(t.dataset&&t.dataset.insc&&S.ins){S.ins.cons[t.dataset.insc]=t.checked}
   if(t.dataset&&(t.dataset.hxpc||t.dataset.hxpi)&&S.role==="dir"&&!esMos()){const P=pilotoHX(),id=t.dataset.hxpc||t.dataset.hxpi,pc={...P.porClase};
@@ -5075,7 +5089,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=18nov-v128"></script>
+<script src="gestion.js?v=19nov-v129"></script>
 
 
 </body></html>

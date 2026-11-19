@@ -2671,7 +2671,7 @@ function evPintar(){const L=$("#layer");if(!L)return;
     <div class="addbox" style="display:flex;flex-direction:column;gap:6px">
       <div><b>${fLarga(e.fecha)}</b>, de ${hm(e.ini)} a ${hm(fin)} · ${esc(e.profe)}</div>
       ${e.tel?`<div>Teléfono: ${esc(fmtTel(e.tel))}</div>`:""}${e.asunto?`<div style="white-space:pre-wrap"><span class="note">${e.tipo==="entrevista"?"Asunto":"Notas"}:</span> ${esc(e.asunto)}</div>`:""}
-      ${e.alumno&&S.alumnos.has(e.alumno)?`<div class="note">Alumno del centro: <a href="#" data-act="ir" data-id="${esc(e.alumno)}" style="color:inherit">${esc(titulo(S.alumnos.get(e.alumno).nombre))}</a></div>`:""}
+      <div class="note">${e.alumno&&S.alumnos.has(e.alumno)?`Alumno del centro: <a href="#" data-act="ir" data-id="${esc(e.alumno)}" style="color:inherit">${esc(titulo(S.alumnos.get(e.alumno).nombre))}</a>`:"Sin ficha de alumno enlazada"}${S.role==="dir"&&!S.pv&&!S.ro?` <button class="btn small" data-ev="enlazar" data-id="${esc(e.id)}" style="margin-left:6px">${e.alumno&&S.alumnos.has(e.alumno)?"Cambiar":"Enlazar con un alumno"}</button>`:""}</div>
       ${grupo.length>1||e.tipo==="evaluacion"?`<div class="note">Sesiones de la evaluación: ${grupo.map(x=>`<a href="#" data-ev="ver" data-id="${esc(x.id)}" style="color:inherit;${x.id===e.id?"font-weight:700":""}">${x.ses||1}ª ${fCorta(x.fecha)} ${hm(x.ini)}</a>`).join(" · ")}</div>`:""}
     </div>
     ${e.estado!=="anulado"?`<div class="addbox" style="display:flex;flex-direction:column;gap:8px"><b style="font-size:13px">Confirmación ${evConfBadge(e)}</b>${confTxt}
@@ -2781,6 +2781,18 @@ document.addEventListener("click",async ev=>{const t=ev.target.closest&&ev.targe
     evNuevo({tipo:"evaluacion",grupo:e.id,ses:n+1,nombre:e.nombre,tel:e.tel,alumno:e.alumno||"",profe:e.profe,dur:+e.dur||60,ini:e.ini,fecha:sumaDias(e.fecha,7)>todayISO()?sumaDias(e.fecha,7):todayISO()})}
   else if(a==="anular"){if(confirm("¿Anular esta cita? Deja de salir en el horario."))await evActualizar(id,{estado:"anulado",anulado:{t:nowISO(),por:quienSoy()}},"Cita anulada")}
   else if(a==="confmano")await evActualizar(id,{confMano:nowISO()},"Marcada como confirmada")
+  else if(a==="enlazar"&&S.role==="dir"){const e=evDe(id);if(!e)return;const q=prompt("Escribe el nombre y apellidos del alumno (o parte):",titulo(e.nombre||""));if(!q)return;
+    const n=nzC(q),l=sortedAlumnos().filter(([,x])=>x&&String(x.nombre||"").includes(n));
+    let aid=l.length===1?l[0][0]:null;
+    if(l.length>1){const ex=l.find(([,x])=>x.nombre===n);if(ex)aid=ex[0];else{const op=l.slice(0,9).map(([,x],i)=>`${i+1}. ${titulo(x.nombre)}`).join("\n"),k=+prompt(`Hay varios. Escribe el número:\n${op}`);if(k>=1&&k<=Math.min(9,l.length))aid=l[k-1][0]}}
+    if(!aid){toast(l.length?"No se ha elegido ninguno":"No hay ningún alumno con ese nombre");return}
+    const al=S.alumnos.get(aid),grupo=EV.docs.filter(x=>x.id===e.id||(e.tipo==="evaluacion"&&(x.grupo||x.id)===(e.grupo||e.id)));
+    for(const x of grupo)await evActualizar(x.id,{alumno:aid,nombre:al.nombre},"");
+    /* si ya tenía un recibo HX sin pagar en la ficha anterior, se pasa a la nueva */
+    const old=e.alumno&&e.alumno!==aid&&S.alumnos.get(e.alumno),num=e.cobro&&e.cobro.recibo;
+    if(old&&num){const r=(old.recibos||[]).find(r=>r&&r.numero===num&&r.estado!=="pagado");if(r){const ro=(old.recibos||[]).filter(x=>x!==r),rn=[...(al.recibos||[]),r];
+      if(await save(e.alumno,{recibos:ro})&&await save(aid,{recibos:rn})){old.recibos=ro;al.recibos=rn}}}
+    toast(`Cita enlazada con ${titulo(al.nombre)}`);evAutoT=0;try{evAuto()}catch(_){}}
   else if(a==="terminar")await evTerminar(id);
   else if(a==="anot"){const v=String(($("#ev-anot")||{}).value||"").trim().slice(0,2000);await evGuardarAnot(id,v)}
   else if(a==="argos"&&evCentro()){const e=evDe(id);if(e&&e.cobro)await evActualizar(id,{cobro:{...e.cobro,estado:"argos",rt:nowISO(),rpor:quienSoy()}},"Apuntado: recibo hecho en Argos")}

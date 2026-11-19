@@ -2664,6 +2664,7 @@ function evPintar(){const L=$("#layer");if(!L)return;
       const al=e.alumno&&S.alumnos.get(e.alumno),rc=al&&(al.recibos||[]).find(r=>r&&r.numero===x.recibo),pend=rc&&rc.estado!=="pagado"&&!(typeof cajaPrueba==="function"&&cajaPrueba()&&typeof cobradosPrueba==="function"&&cobradosPrueba().has(e.alumno+"|"+rc.id));
       return `<p style="color:var(--ok);margin:0">Recibo ${esc(x.recibo||"")} de ${eur(x.importe)} creado${rc&&rc.estado==="pagado"?" y <b>pagado</b>":""}.</p>${pend&&S.role==="dir"&&!S.pv&&!S.ro?`<div class="petbtns" style="margin-top:6px"><button class="btn small primary" data-act="cobrarya" data-id="${esc(e.alumno)}">Cobrar ${eur(+rc.importe||0)}</button><span class="note">Abre la Caja con ${esc(titulo(al.nombre))}.</span></div>`:""}`}
     if(x.estado==="argos")return `<p style="color:var(--ok);margin:0">Recibo de ${eur(x.importe)} hecho en Argos.</p>`;
+    if(x.estado==="incluido")return `<p style="color:var(--ok);margin:0">Incluida en su mensualidad (sesión ${x.i||1} de ${x.n||1} de ${esc(mesTxt(String(e.fecha).slice(0,7)))}): no lleva recibo.</p>`;
     return `<div class="aviso pend" style="display:block;margin:0"><b>Cobro pendiente: ${eur(x.importe)}</b> · ${esc(x.concepto||"")}<br>
       ${evCentro()?`<button class="btn small primary" data-ev="recibo" data-id="${esc((e.tipo==="evaluacion"?cabeza:e).id)}">Crear el recibo de ${eur(x.importe)}</button> <span class="note">${e.alumno?"":"Se dará de alta a la persona como alumno."}</span>${cajaPrueba()?` <button class="btn small" data-ev="argos" data-id="${esc((e.tipo==="evaluacion"?cabeza:e).id)}" title="Si ya lo hiciste en Argos">Ya está hecho en Argos</button>`:""}`:"Dirección hará el recibo (se crea solo al abrir la app)."}</div>`})();
   L.innerHTML=caja(T.t+(e.tipo==="evaluacion"?` · sesión ${e.ses||1}`:""),`${esc(titulo(e.nombre))}${e.estado==="anulado"?" · <b>anulada</b>":""}`,`
@@ -2726,6 +2727,7 @@ async function evRecibo(id){const e=evDe(id);if(!e||!e.cobro||e.cobro.estado!=="
   if(!aid){aid=await crearAlumno(e.nombre);if(!aid)return}
   const a=S.alumnos.get(aid),tels=[...new Set([...(a.telefonos||[]),e.tel].filter(Boolean))];
   const grupo=EV.docs.filter(x=>x.id===e.id||(x.grupo||"")===e.id);
+  {const inc=psicoEnMensualidad({...e,alumno:aid},aid);if(inc){await evActualizar(id,{alumno:aid,cobro:{...e.cobro,estado:"incluido",n:inc.n,i:inc.i,rt:nowISO(),rpor:quienSoy()}},`Incluida en su mensualidad (sesión ${inc.i} de ${inc.n} de ${mesTxt(String(e.fecha).slice(0,7))})`);return}}
   const ya=(a.recibos||[]).find(r=>r&&(r.evento===e.id||(Array.isArray(r.lineas)&&r.lineas.some(l=>l&&l.evento===e.id))));
   if(ya){await evActualizar(id,{alumno:aid,cobro:{...e.cobro,estado:"recibo",recibo:ya.numero,rt:nowISO(),rpor:quienSoy()}},`Ya tenía el recibo ${ya.numero}`);return}
   if(cajaPrueba()){const R=hxAnadir(a,a.recibos||[],{txt:e.cobro.concepto,imp:+e.cobro.importe,evento:e.id},todayISO());const r=R.nuevo?{...R.r,evento:e.id}:R.r,recibos=R.recibos.map(x=>x===R.r?r:x);
@@ -2737,6 +2739,14 @@ async function evRecibo(id){const e=evDe(id);if(!e||!e.cobro||e.cobro.estado!=="
   const recibos=[...(a.recibos||[]),r];if(!await save(aid,{recibos,telefonos:tels,...(e.tipo==="psico"?{psico:true}:{})}))return;a.recibos=recibos;a.telefonos=tels;
   for(const x of grupo)if(x.id!==id&&x.alumno!==aid)await evActualizar(x.id,{alumno:aid},"");
   await evActualizar(id,{alumno:aid,cobro:{...e.cobro,estado:"recibo",recibo:r.numero,rt:nowISO(),rpor:quienSoy()}},`Recibo ${r.numero} creado`)}finally{EV.busy=false}}
+/* 19/11/2026 (titular, Enzo Gómez Aragón: 125 € = 2 sesiones de psicopedagogía de 40 € + 45 € de clase en grupo):
+   si su tarifa guardada lleva un curso de psicopedagogía, las primeras sesiones de cada mes van en la mensualidad y no llevan recibo.
+   Nº de sesiones incluidas = precio de esa línea ÷ precio de la sesión (40 €). */
+function psicoIncluidas(a){try{if(!a||!a.matriz)return 0;const TM=tfMapa(),M=calcMatriz(a,TM);if(!M.guardada)return 0;
+  const t=M.l.filter(y=>/PSICOPEDAG/i.test(String(y.curso||""))).reduce((s,y)=>s+(+precioLinea(y,TM)||0),0);return Math.floor(t/EV_TIPOS.psico.precio+0.01)}catch(_){return 0}}
+function psicoEnMensualidad(e,aid){const a=S.alumnos.get(aid),n=psicoIncluidas(a);if(!n||e.tipo!=="psico")return null;
+  const mes=String(e.fecha).slice(0,7),l=EV.docs.filter(x=>x.tipo==="psico"&&x.alumno===aid&&x.estado==="hecha"&&String(x.fecha).slice(0,7)===mes).sort((x,y)=>(x.fecha+hm(x.ini)).localeCompare(y.fecha+hm(y.ini)));
+  const i=l.findIndex(x=>x.id===e.id);return i>=0&&i<n?{n,i:i+1}:null}
 /* ficha del alumno para una cita hecha sin cobro (entrevista): la crea si no existe y la enlaza */
 async function evFicha(id){const e=evDe(id);if(!e||!evCentro()||EV.busy)return;if(e.alumno&&S.alumnos.has(e.alumno))return;EV.busy=true;try{
   let aid=idPorNombre(e.nombre);if(!aid){aid=await crearAlumno(e.nombre);if(!aid)return}

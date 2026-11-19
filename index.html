@@ -372,7 +372,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=19nov-v129"></script>
+<script type="module" src="fb.js?v=19nov-v130"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -1141,7 +1141,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="19nov-v129";
+const APP_VER="19nov-v130";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -2362,7 +2362,7 @@ function vAsistencia(){
     if(o.t==="perdida")return `<div class="arow"><span class="hr">${hr}</span><span class="who"><b>${esc(titulo(a.nombre))}</b><small class="note">Día sin clase</small></span></div>`;
     const e=asistDe(a,f,o.hora,p), b=(v,txt)=>`<button class="${v} ${e===v||(v==="rec"&&e==="recup")?"on":""}" data-act="asmark" data-id="${esc(id)}" data-h="${esc(o.hora)}" data-v="${v}">${txt}</button>`;
     return `<div class="arow"><span class="hr">${hr}</span><span class="who" style="flex-direction:row;align-items:center;gap:8px">${avatarAl(a)}<span style="display:flex;flex-direction:column;min-width:0"><b>${campana(id)}${esc(titulo(a.nombre))}</b>${o.t==="extra"?`<small class="note">${o.mv&&o.mv.origen==="hextra"?"Hora extra":"Viene por un cambio de clase"}</small>`:""}${e==="recup"?`<small class="note">Falta ya recuperada</small>`:""}${quedaTxt(f,o)}</span></span>
-      <span class="seg">${b("si","Asistió")}${b("rec","Cambia de día")}${b("norec","No vino")}</span>${f===todayISO()&&!S.pv&&!S.ro&&!String(id).startsWith("tok:")?`<button class="btn small" data-act="asmas" data-id="${esc(id)}" data-h="${esc(o.hora)}" data-fin="${o.fin}" title="Se queda una hora más: apunta una hora extra a continuación">+1 h extra</button>`:""}</div>`});
+      <span class="seg">${b("si","Asistió")}${b("rec","Cambia de día")}${b("norec","No vino")}</span>${f===todayISO()&&!S.pv&&!S.ro&&!String(id).startsWith("tok:")?`<button class="btn small" data-act="asmas" data-id="${esc(id)}" data-h="${esc(o.hora)}" data-fin="${o.fin}" title="Se queda una hora más: apunta una hora extra a continuación">+1 h extra</button>`:""}${btnCobrar(id,a)}</div>`});
   const filas=ahoraEnLista(f,l,filasA);
   const cuerpo=!DIAS.includes(dia)?`<div class="empty">Ese día es fin de semana.</div>`:fe&&!l.some(x=>pasaLista(x.o))?`<div class="empty">Ese día no hay clase: ${esc(fe.nombre)}.</div>`:l.length?filas:`<div class="empty">${esDir?esc(p)+" no tiene":"No tienes"} clases este día.</div>`;
   return `<div class="bar"><h2>Asistencia</h2><span class="legend">${sinMarcar?`${sinMarcar} sin pasar lista`:l.length?"Lista pasada":""}</span></div>${chips}
@@ -3916,7 +3916,7 @@ function vFicha(id){
   return `<div class="detail">
     <div class="bar" style="margin:0">${avatarAl(a,"lg")}<h3>${esc(a.nombre)}</h3>${S.role==="dir"&&!S.ro?`<button class="btn small" data-act="renombrar" data-id="${id}">Cambiar nombre</button>`:""}${S.role==="dir"&&!S.ro&&!esMos()?`<button class="btn small" data-act="juntar" data-id="${id}" title="Si este alumno está dos veces en la app, junta aquí la otra ficha">Juntar con otra ficha</button>`:""}${S.role==="dir"?`<label class="btn small" style="cursor:pointer">${fotoAl(a)?"Cambiar foto":"Subir foto"}<input type="file" accept="image/*" data-fotoficha="${id}" hidden></label>${fotoAl(a)?`<button class="btn small" data-act="quitarfoto" data-id="${id}">Quitar foto</button>`:""}`:""}<span id="delbox" class="ed">${a.baja?`<span class="badge b-no">De baja desde ${fmtFecha(a.baja)}</span>${!esMos()?` <button class="btn small" data-act="reactbaja" data-id="${id}" title="Vuelve a ser alumno: se le quita la baja">Reactivar</button>`:""}`:`<button class="btn danger small" data-act="borrar" data-id="${id}">Dar de baja</button>`}</span></div>${S.role==="dir"&&S.juntar===id?vJuntar(id,a):""}${S.role==="dir"?privFicha(id):""}${a.bloqueado?`<div class="aviso pend"><span>Datos bloqueados el ${fmtFecha(a.bloqueado.t)}. Se conservan solo el nombre y los recibos hasta el ${fmtFecha(a.bloqueado.hasta)}.</span></div>`:""}
     ${S.role==="dir"&&esAntiguo(a)?`<div class="aviso info"><span>No tiene horario ni recibos pendientes, así que no sale en la lista de alumnos actuales. Si le pones una clase, vuelve a salir.</span></div>`:""}
-    ${S.role==="dir"?(esMos()?"":vMatricula(a)+vTarifaAl(id,a)+vSueltas(id,a))+vAccesoFicha(id,a)+(esMos()?vRecibosLectura(a):vRecibosFicha(id,a))+vCambiosFicha(a):esPlus()?(PLUS.m?vRecibosLectura(PLUS.m.get(id)):`<p class="note">${PLUS.err?esc(PLUS.err):"Cargando recibos…"}</p>`):""}
+    ${S.role==="dir"?(esMos()?"":vMatricula(a)+vTarifaAl(id,a)+vSueltas(id,a))+vAccesoFicha(id,a)+(esMos()?vRecibosLectura(a,id):vRecibosFicha(id,a))+vCambiosFicha(a):esPlus()?(PLUS.m?vRecibosLectura(PLUS.m.get(id)):`<p class="note">${PLUS.err?esc(PLUS.err):"Cargando recibos…"}</p>`):""}
     ${S.role==="profe"&&recPend(a)?`<p style="margin:0">${marcaRec(a)} <span class="note">${recPend(a)===1?"Tiene 1 recibo pendiente de pago.":`Tiene ${recPend(a)} recibos pendientes de pago.`}</span></p>`:""}
     ${otras.length?`<p class="note" style="margin:0">También da clase con ${esc(otras.join(" y "))}.</p>`:""}
     <div><div class="mini">${mini}</div>${a.clases.some(c=>fdrag(id,c))?`<p class="note" style="margin:6px 0 0">Para mover una clase, arrástrala a otro día o púlsala.</p>`:""}</div>${vFichaMes(id,a)}${S.role==="profe"&&cuadFlag(a)?`<p class="note" style="margin:0;color:var(--warn)">● Dirección está revisando su recibo por un cambio de horario o una hora extra. Cuando esté ajustado, volverá a su color normal.</p>`:""}${vExtrasFicha(id,a)}${S.role==="profe"||(S.role==="dir"&&!S.ro&&!S.pv)?vAP(id,a):""}
@@ -3963,7 +3963,11 @@ function fpInfo(v){const t=String(v||"").toLowerCase();
   return t?{k:"otro",l:String(v),c:"#6b7280"}:null}
 const fpChip=v=>{const f=fpInfo(v);return f?`<span class="badge" style="background:${f.c}1a;color:${f.c};border:1px solid ${f.c}55">${esc(f.l)}</span>`:""};
 /* recibos del alumno solo para consultar (mostrador y Ainea): estado, forma de pago, día y hora */
-function vRecibosLectura(a){if(!a)return "";const r=[...(a.recibos||[])].filter(x=>x&&x.estado!=="anulado").sort((x,y)=>(x.estado==="pagado")-(y.estado==="pagado")||String(y.emitido).localeCompare(String(x.emitido)));
+/* 19/11/2026 (titular): en mostrador, botón «Cobrar» donde se ve al alumno (ficha y asistencia); lleva a la Caja con él ya elegido */
+function btnCobrar(id,a){if(!esMos()||S.pv||!id||String(id).startsWith("tok:")||typeof pendientesDe!=="function")return "";let p=[];try{p=pendientesDe(a,id)}catch(_){}if(!p.length)return "";
+  const t=Math.round(p.reduce((s,r)=>s+(+r.importe||0),0)*100)/100;
+  return `<button class="btn small primary" data-act="cobrarya" data-id="${esc(id)}" title="${p.length} recibo${p.length===1?"":"s"} pendiente${p.length===1?"":"s"}: ir a la Caja para cobrar">Cobrar ${eur(t)}</button>`}
+function vRecibosLectura(a,id){if(!a)return "";const r=[...(a.recibos||[])].filter(x=>x&&x.estado!=="anulado").sort((x,y)=>(x.estado==="pagado")-(y.estado==="pagado")||String(y.emitido).localeCompare(String(x.emitido)));
   const pend=r.filter(x=>x.estado!=="pagado"),tp=pend.reduce((s,x)=>s+(+x.importe||0),0);
   const hora=x=>{const t=x.caja&&x.caja.t?String(x.caja.t):String(x.pagado||"").length>10?String(x.pagado):"";if(!t)return "";const d=new Date(t);return isNaN(d)?"":d.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})};
   const fila=x=>{const pag=x.estado==="pagado",fp=pag?String(x.pagado||(x.caja&&x.caja.t)||"").slice(0,10):"",h=pag?hora(x):"";
@@ -3971,7 +3975,7 @@ function vRecibosLectura(a){if(!a)return "";const r=[...(a.recibos||[])].filter(
       <span class="grow" style="white-space:normal;flex-basis:180px">${esc(x.concepto||x.curso||"Recibo")}${x.numero?` <span class="note">· ${esc(x.numero)}</span>`:""}</span>
       <b style="font-variant-numeric:tabular-nums;min-width:60px;text-align:right">${eur(x.importe==null?null:+x.importe)}</b>
       ${pag?`<span class="badge b-si">Pagado</span>${fpChip(x.forma)}<span class="note">${fp?fmtFecha(fp):""}${h?" · "+h:""}</span>`:`<span class="badge b-pend">Pendiente</span>`}</div>`};
-  return `<div><div class="bar" style="margin-bottom:4px"><b style="font-size:14px;margin-right:auto">Recibos</b>${pend.length?`<span class="badge b-pend">${pend.length} pendiente${pend.length===1?"":"s"} · ${eur(Math.round(tp*100)/100)}</span>`:r.length?`<span class="badge b-si">Al día</span>`:""}</div>
+  return `<div><div class="bar" style="margin-bottom:4px"><b style="font-size:14px;margin-right:auto">Recibos</b>${btnCobrar(id,a)}${pend.length?`<span class="badge b-pend">${pend.length} pendiente${pend.length===1?"":"s"} · ${eur(Math.round(tp*100)/100)}</span>`:r.length?`<span class="badge b-si">Al día</span>`:""}</div>
     ${r.length?r.slice(0,24).map(fila).join(""):`<p class="note">Sin recibos.</p>`}${r.length>24?`<p class="note">Se muestran los 24 más recientes.</p>`:""}</div>`}
 function vRecibosFicha(id,a){
   const r=[...(a.recibos||[])].sort((x,y)=>String(y.emitido).localeCompare(String(x.emitido)));
@@ -4493,6 +4497,7 @@ document.addEventListener("click",async e=>{
     const s=libresPara(m.id,m.a,m.c,E.dia,E.tipo).find(y=>String(y.ini)===String(E.v));if(!s){toast("Elige una hora libre");return}
     S.confEd=null;await aplicarCambio(m,s)}
   else if(act==="irrecibos"&&S.role==="dir"){S.view="recibos";render();scrollTo(0,0)}
+  else if(act==="cobrarya"&&esMos()&&!S.pv&&typeof GC!=="undefined"){GC.al=t.dataset.id;GC.sel=null;GC.q="";GC.ultimo=null;GC.forma=GC.forma||"";S.cell=null;$("#layer")&&($("#layer").innerHTML="");S.view="caja";render();scrollTo(0,0)}
   else if(act==="kiosko"&&S.role==="dir"&&!S.pv){abrirKiosko()}
   else if(act==="kpinok"&&S.role==="dir"){const p=digitos(($("#k-pin")||{}).value);if(p.length<4||p.length>6){toast("El PIN tiene que tener de 4 a 6 cifras");return}
     try{await S.db.doc("config/kiosko").set({pin:p});S.kiosk={pin:p};S.kpinSet=false;render()}catch(_){toast("No se ha podido guardar el PIN")}}
@@ -5089,7 +5094,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=19nov-v129"></script>
+<script src="gestion.js?v=19nov-v130"></script>
 
 
 </body></html>

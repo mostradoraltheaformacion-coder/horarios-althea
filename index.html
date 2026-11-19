@@ -372,7 +372,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=19nov-v134"></script>
+<script type="module" src="fb.js?v=19nov-v135"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -1141,7 +1141,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="19nov-v134";
+const APP_VER="19nov-v135";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -4501,7 +4501,7 @@ document.addEventListener("click",async e=>{
     const s=libresPara(m.id,m.a,m.c,E.dia,E.tipo).find(y=>String(y.ini)===String(E.v));if(!s){toast("Elige una hora libre");return}
     S.confEd=null;await aplicarCambio(m,s)}
   else if(act==="irrecibos"&&S.role==="dir"){S.view="recibos";render();scrollTo(0,0)}
-  else if(act==="cobrarya"&&esMos()&&!S.pv&&typeof GC!=="undefined"){GC.al=t.dataset.id;GC.sel=null;GC.q="";GC.ultimo=null;GC.forma=GC.forma||"";S.cell=null;$("#layer")&&($("#layer").innerHTML="");S.view="caja";render();scrollTo(0,0)}
+  else if(act==="cobrarya"&&S.role==="dir"&&!S.pv&&typeof GC!=="undefined"){if(typeof EV!=="undefined"){EV.ver=null;EV.form=null;EV.lista=null}GC.al=t.dataset.id;GC.sel=null;GC.q="";GC.ultimo=null;GC.forma=GC.forma||"";S.cell=null;$("#layer")&&($("#layer").innerHTML="");S.view="caja";render();scrollTo(0,0)}
   else if(act==="kiosko"&&S.role==="dir"&&!S.pv){abrirKiosko()}
   else if(act==="kpinok"&&S.role==="dir"){const p=digitos(($("#k-pin")||{}).value);if(p.length<4||p.length>6){toast("El PIN tiene que tener de 4 a 6 cifras");return}
     try{await S.db.doc("config/kiosko").set({pin:p});S.kiosk={pin:p};S.kpinSet=false;render()}catch(_){toast("No se ha podido guardar el PIN")}}
@@ -5099,7 +5099,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=19nov-v134"></script>
+<script src="gestion.js?v=19nov-v135"></script>
 
 
 </body></html>

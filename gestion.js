@@ -2724,7 +2724,7 @@ function vCitasFicha(id){if(S.role!=="dir")return "";evEscuchar();const l=EV.doc
 /* Desde el 1/1/2027: recibo en la ficha (alta si hace falta), con el contador de albaranes; antes, de la serie HX */
 async function evRecibo(id){const e=evDe(id);if(!e||!e.cobro||e.cobro.estado!=="pendiente"||!evCentro()||EV.busy)return;EV.busy=true;try{
   let aid=e.alumno&&S.alumnos.has(e.alumno)?e.alumno:idPorNombre(e.nombre);
-  if(!aid){aid=await crearAlumno(e.nombre);if(!aid)return}
+  if(!aid){aid=await crearAlumno(e.nombre);if(!aid)return;if(await save(aid,{deCita:true}))S.alumnos.get(aid).deCita=true}
   const a=S.alumnos.get(aid),tels=[...new Set([...(a.telefonos||[]),e.tel].filter(Boolean))];
   const grupo=EV.docs.filter(x=>x.id===e.id||(x.grupo||"")===e.id);
   {const inc=psicoEnMensualidad({...e,alumno:aid},aid);if(inc){await evActualizar(id,{alumno:aid,cobro:{...e.cobro,estado:"incluido",n:inc.n,i:inc.i,rt:nowISO(),rpor:quienSoy()}},`Incluida en su mensualidad (sesión ${inc.i} de ${inc.n} de ${mesTxt(String(e.fecha).slice(0,7))})`);return}}
@@ -2749,7 +2749,7 @@ function psicoEnMensualidad(e,aid){const a=S.alumnos.get(aid),n=psicoIncluidas(a
   const i=l.findIndex(x=>x.id===e.id);return i>=0&&i<n?{n,i:i+1}:null}
 /* ficha del alumno para una cita hecha sin cobro (entrevista): la crea si no existe y la enlaza */
 async function evFicha(id){const e=evDe(id);if(!e||!evCentro()||EV.busy)return;if(e.alumno&&S.alumnos.has(e.alumno))return;EV.busy=true;try{
-  let aid=idPorNombre(e.nombre);if(!aid){aid=await crearAlumno(e.nombre);if(!aid)return}
+  let aid=idPorNombre(e.nombre);if(!aid){aid=await crearAlumno(e.nombre);if(!aid)return;if(await save(aid,{deCita:true}))S.alumnos.get(aid).deCita=true}
   const a=S.alumnos.get(aid),tels=[...new Set([...(a.telefonos||[]),e.tel].filter(Boolean))];if(tels.length!==(a.telefonos||[]).length&&await save(aid,{telefonos:tels}))a.telefonos=tels;
   await evActualizar(id,{alumno:aid},`Ficha de ${titulo(e.nombre)} ${a.clases&&a.clases.length?"enlazada":"creada"}`)}finally{EV.busy=false}}
 /* Si la cita la marca como hecha la profesora (Fani), la ficha y el recibo los crea la app de dirección en cuanto la abre */

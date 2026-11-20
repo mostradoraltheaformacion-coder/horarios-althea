@@ -3264,7 +3264,8 @@ function horasExtraProfe(p,mes){const hoy=todayISO(),ev=[],usados={},fechasSuelt
         else if(s.a.sueltas||(o.t==="normal"||o.t==="extra"&&!(o.mv&&o.mv.recup))&&pagaPorClase(s.a,p,f.slice(0,7))){const fr=r=>String(r.emitido||r.fecha||"").slice(0,10),u=usados[s.id]=usados[s.id]||new Map(),key=r=>r.numero||r.id||fr(r);
           /* el recibo de su mismo día; si no hay, uno de los 5 días siguientes que no sea de otro día con clase */
           const conClase=fechasSuelta[s.id]=fechasSuelta[s.id]||new Set(diasMes(mes).filter(d=>d<=hoy&&sesionesFecha(p,d).some(x=>x.id===s.id)));
-          const suyos=(s.a.recibos||[]).filter(r=>r&&r.estado!=="anulado"&&(+r.importe||0)>0&&r.serie!=="HX"&&(s.a.sueltas||reciboPorClase(r)||(+r.importe||0)<=PC_MAX));
+          /* 20/11/2026: con clases sueltas, los recibos HX que crea la app al marcar «Asistió» también cuentan (en v128 se habían dejado fuera por error) */
+          const suyos=(s.a.recibos||[]).filter(r=>r&&r.estado!=="anulado"&&(+r.importe||0)>0&&(s.a.sueltas||r.serie!=="HX")&&(s.a.sueltas||reciboPorClase(r)||(+r.importe||0)<=PC_MAX));
           /* 18/11/2026 (titular): un recibo puede pagar varias clases de una vez (36 € = 2 clases de 18 €): cuenta para tantas clases
              como veces cabe el precio de una clase (el de clases sueltas o, si no hay, el recibo más pequeño de ese alumno) */
           const precio=(s.a.sueltas&&+s.a.sueltas.precio)||(suyos.length?Math.min(...suyos.map(r=>+r.importe||0)):0),cap=r=>precio>0?Math.max(1,Math.round((+r.importe||0)/precio)):1;

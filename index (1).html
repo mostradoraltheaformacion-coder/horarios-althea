@@ -372,7 +372,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=18nov-v125"></script>
+<script type="module" src="fb.js?v=20nov-v141"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -1141,7 +1141,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="18nov-v125";
+const APP_VER="20nov-v141";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -1200,14 +1200,16 @@ function render0(){
 function miRol(){if(S.esDir)return "dir";return S.link?S.link.rol:null}
 function vHome(){
   const mio=miRol();
-  const card=r=>{const R=ROLES[r],tuyo=mio===r;return `<button class="rcard ${tuyo?"mine":""}" data-act="perfil" data-r="${r}">
+  /* 19/11/2026 (titular): el mostrador solo ve su propio acceso (no Dirección, Profesoras ni Alumnos) */
+  const mos=!!(window.__fb&&window.__fb.CU&&window.__fb.CU.rol==="mos");
+  const card=r=>{const R=mos&&r==="dir"?{...ROLES.dir,t:"Mostrador",d:"Horarios, alumnos, asistencia y cobros en la Caja."}:ROLES[r],tuyo=mio===r;return `<button class="rcard ${tuyo?"mine":""}" data-act="perfil" data-r="${r}">
     <span class="rk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${R.i}</svg>${R.t}</span>
     <span class="rd">${R.d}</span>
     <span class="rf">${tuyo?`<span class="badge b-si">Tu perfil</span>`:""}<span class="go">Entrar →</span></span></button>`};
   return `<section class="home-wrap">
     <div class="logo">${LOGO?`<img src="${LOGO}" alt="Althea Formación">`:`<div class="mark"><b>Althea</b><span>Formación</span></div>`}</div>
-    <div><h1>¿Con qué perfil entras?</h1><p class="lead">Elige el tuyo. Cada perfil ve solo lo que le corresponde: las profesoras, sus alumnos; cada alumno, su propio horario.</p></div>
-    <div class="rgrid">${["dir","profe","alumno"].map(card).join("")}</div>
+    <div><h1>${mos?"Mostrador":"¿Con qué perfil entras?"}</h1><p class="lead">${mos?"Entra para ver los horarios, pasar lista y cobrar.":"Elige el tuyo. Cada perfil ve solo lo que le corresponde: las profesoras, sus alumnos; cada alumno, su propio horario."}</p></div>
+    <div class="rgrid"${mos?' style="grid-template-columns:minmax(0,360px)"':""}>${(mos?["dir"]:["dir","profe","alumno"]).map(card).join("")}</div>
     ${S.homeMsg?`<div class="hmsg" role="status">${S.homeMsg}</div>`:""}<button class="btn" data-act="salir" style="justify-self:center">Cerrar sesión</button>
     <div class="hfoot"><span><b>Clases</b> de lunes a viernes</span><span><b>Mañanas</b> 10:00–12:00</span><span><b>Tardes</b> 16:00–21:00</span><span>Chiclana de la Frontera</span></div>
   </section>`;
@@ -1539,7 +1541,9 @@ function vMes(a){
       const cls=["clase",o.t==="normal"?"":o.t,tras&&o.t==="extra"?"traspaso":"",f<hoy&&!as?"pasada":"",as==="rec"||as==="norec"?"falta":"",as==="si"||as==="recup"?"ok":""].filter(Boolean).join(" ");
       const tag=as?ASIS[as][1]:o.t==="perdida"?"Sin clase":o.t==="movida"?(o.mv&&o.mv.a&&o.mv.a.noViene?"No vas":o.mv&&o.mv.a&&o.mv.a.reserva?"En espera":"Cambiada"):o.t==="extra"?(tras?"Con "+o.profe:"Cambio"):"";
       return `<button class="${cls}" style="--pc:${pc(o.profe)}" data-act="clase" data-f="${f}" data-h="${esc(o.hora)}" data-p="${esc(o.profe)}" data-t="${o.t}" data-i="${o.ini}" data-dur="${o.fin-o.ini}" data-g="${o.tipo==="grupo"?1:""}" aria-label="${diaDe(f)} ${+f.slice(8)}, ${sesTxt(o)} con ${esc(o.profe)}${tag?", "+tag:""}">${tag?`<span class="tag">${tag}</span>`:""}${FLEX.has(o.profe)?sesTxt(o):HSHORT[o.hora]||esc(o.hora)}<small>${esc(o.profe)}${FLEX.has(o.profe)&&!o.conf?" · hora por confirmar":""}</small></button>`}).join("");
-    cells+=`<div class="day${fuera?" out":""}${f===hoy?" hoy":""}${fe&&!fuera?" fest":""}"><span class="num">${+f.slice(8)}${f===hoy?" · hoy":""}</span>${fe&&!fuera?`<span class="fn" title="${esc(fe.nombre)}">${esc(fe.nombre)}</span>`:""}${chips}</div>`;
+    const CT={entrevista:"Entrevista",evaluacion:"Evaluación",psico:"Psicopedagogía"};
+    const citas=fuera||S.role!=="alumno"?"":(S.misCitas||[]).filter(e=>e.fecha===f).sort((x,y)=>x.ini-y.ini).map(e=>`<span class="clase extra${e.estado==="hecha"?" ok":""}" style="--pc:${pc(e.profe)}" title="${esc(CT[e.tipo]||"Cita")} con ${esc(e.profe)}"><span class="tag">${esc(CT[e.tipo]||"Cita")}</span>${hm(e.ini)}–${hm(e.ini+(+e.dur||60))}<small>${esc(e.profe)}</small></span>`).join("");
+    cells+=`<div class="day${fuera?" out":""}${f===hoy?" hoy":""}${fe&&!fuera?" fest":""}"><span class="num">${+f.slice(8)}${f===hoy?" · hoy":""}</span>${fe&&!fuera?`<span class="fn" title="${esc(fe.nombre)}">${esc(fe.nombre)}</span>`:""}${chips}${citas}</div>`;
   }
   const todas=asistTodas(a), porRec=todas.filter(x=>x.e==="rec").length, sinAv=todas.filter(x=>x.e==="norec").length, vino=todas.filter(x=>x.e==="si"&&x.f.startsWith(S.mes)).length;
   const resumen=`<div class="stats"><div class="stat static"><b>${porRec}</b><span>Clase${porRec===1?"":"s"} por recuperar</span></div><div class="stat static"><b>${sinAv}</b><span>Falta${sinAv===1?"":"s"} sin avisar (no se recuperan)</span></div><div class="stat static"><b>${vino}</b><span>Asistencia${vino===1?"":"s"} en ${MESES[m-1]}</span></div></div>`;
@@ -2362,7 +2366,7 @@ function vAsistencia(){
     if(o.t==="perdida")return `<div class="arow"><span class="hr">${hr}</span><span class="who"><b>${esc(titulo(a.nombre))}</b><small class="note">Día sin clase</small></span></div>`;
     const e=asistDe(a,f,o.hora,p), b=(v,txt)=>`<button class="${v} ${e===v||(v==="rec"&&e==="recup")?"on":""}" data-act="asmark" data-id="${esc(id)}" data-h="${esc(o.hora)}" data-v="${v}">${txt}</button>`;
     return `<div class="arow"><span class="hr">${hr}</span><span class="who" style="flex-direction:row;align-items:center;gap:8px">${avatarAl(a)}<span style="display:flex;flex-direction:column;min-width:0"><b>${campana(id)}${esc(titulo(a.nombre))}</b>${o.t==="extra"?`<small class="note">${o.mv&&o.mv.origen==="hextra"?"Hora extra":"Viene por un cambio de clase"}</small>`:""}${e==="recup"?`<small class="note">Falta ya recuperada</small>`:""}${quedaTxt(f,o)}</span></span>
-      <span class="seg">${b("si","Asistió")}${b("rec","Cambia de día")}${b("norec","No vino")}</span>${f===todayISO()&&!S.pv&&!S.ro&&!String(id).startsWith("tok:")?`<button class="btn small" data-act="asmas" data-id="${esc(id)}" data-h="${esc(o.hora)}" data-fin="${o.fin}" title="Se queda una hora más: apunta una hora extra a continuación">+1 h extra</button>`:""}</div>`});
+      <span class="seg">${b("si","Asistió")}${b("rec","Cambia de día")}${b("norec","No vino")}</span>${f===todayISO()&&!S.pv&&!S.ro&&!String(id).startsWith("tok:")?`<button class="btn small" data-act="asmas" data-id="${esc(id)}" data-h="${esc(o.hora)}" data-fin="${o.fin}" title="Se queda una hora más: apunta una hora extra a continuación">+1 h extra</button>`:""}${btnCobrar(id,a)}</div>`});
   const filas=ahoraEnLista(f,l,filasA);
   const cuerpo=!DIAS.includes(dia)?`<div class="empty">Ese día es fin de semana.</div>`:fe&&!l.some(x=>pasaLista(x.o))?`<div class="empty">Ese día no hay clase: ${esc(fe.nombre)}.</div>`:l.length?filas:`<div class="empty">${esDir?esc(p)+" no tiene":"No tienes"} clases este día.</div>`;
   return `<div class="bar"><h2>Asistencia</h2><span class="legend">${sinMarcar?`${sinMarcar} sin pasar lista`:l.length?"Lista pasada":""}</span></div>${chips}
@@ -3034,7 +3038,7 @@ function vInscripcion(){
   const back=I.paso>0&&I.paso<4?`<button class="btn" data-act="insprev">Atrás</button>`:"";
   let body="";
   if(I.paso===0&&I.modo==="pub"){body=vPrePlaza()}
-  else if(I.paso===0){const s=I.sel, fx=FLEX.has(s.profe), dias=insDias(s.profe);
+  else if(I.paso===0){const s=I.sel, fx=FLEX.has(s.profe), dias=I.forzar?DIAS:insDias(s.profe);
     if(!dias.includes(s.dia))s.dia=dias[0]||"Lunes";
     const lib=insLibres(s.profe,s.dia,s.tipo), k=fx?"ini":"hora";
     if(lib.length&&!lib.some(x=>String(x.v)===String(s[k])))s[k]=String(lib[0].v);
@@ -3050,11 +3054,13 @@ function vInscripcion(){
     <label class="f">Nivel del alumno<select data-ins="nivel"><option value="">Elige…</option>${NIVELES.map(n=>`<option ${n===I.d.nivel?"selected":""}>${n}</option>`).join("")}</select></label>
     ${I.d.nivel==="Primaria"?`<p class="note" style="margin:2px 0 4px">Primaria en grupo: Ainea no da primaria y Laura solo de 16:00 a 18:00. Las clases individuales no tienen restricción.</p>
     <label class="chk" style="margin:0 0 8px"><input type="checkbox" data-insexc="1" ${I.exc?"checked":""}><span>Excepción: mostrar también las horas que no cumplen la regla de primaria</span></label>`:""}
+    ${S.role==="dir"&&!S.kiosko?`<label class="chk" style="margin:0 0 8px"><input type="checkbox" data-insforzar="1" ${I.forzar?"checked":""}><span>Dirección: ver todas las horas, aunque estén fuera del horario de la profesora o sin plaza libre</span></label>`:""}
     <label class="f">Profesora<select data-inssel="profe">${EQUIPO.map(p=>`<option ${p===s.profe?"selected":""}>${p}</option>`).join("")}</select></label>
     <p class="note" style="margin:2px 0 8px">Horario de ${esc(s.profe)}: ${esc(textoHorario(s.profe))}</p>
     <div class="r2"><label class="f">Día<select data-inssel="dia">${dias.map(d=>`<option ${d===s.dia?"selected":""}>${d}</option>`).join("")}</select></label>
     ${fx?`<label class="f">Sesión<select data-inssel="tipo">${Object.entries(TIPOS).map(([k,v])=>`<option value="${k}" ${k===s.tipo?"selected":""}>${v.t}</option>`).join("")}</select></label>`:""}</div>
-    ${lib.length?`<label class="f">${fx?"Hora libre":"Hora con plaza libre"}<select data-inssel="${k}">${lib.map(x=>`<option value="${x.v}" ${String(x.v)===String(s[k])?"selected":""}>${esc(x.t)}</option>`).join("")}</select></label>`
+    ${I.forzar?`<p class="aviso pend" style="display:block;margin:4px 0 8px">Salen todas las horas. Las marcadas con ⚠ están fuera del horario de ${esc(s.profe)}, se pisan con otro alumno o no tienen plaza: la clase se añade igualmente y queda como excepción. Recuerda hablarlo con la profesora.</p>`:""}
+    ${lib.length?`<label class="f">${I.forzar?"Hora":fx?"Hora libre":"Hora con plaza libre"}<select data-inssel="${k}">${lib.map(x=>`<option value="${x.v}" ${String(x.v)===String(s[k])?"selected":""}>${esc(x.t)}</option>`).join("")}</select></label>`
       :`<p class="aviso pend" style="display:block">${esc(s.profe)} no tiene ningún hueco libre el ${s.dia.toLowerCase()}${fx?` para una sesión de ${TIPOS[s.tipo].t}`:""}. Prueba otro día u otra profesora.</p>`}
     ${lib.length?`<button class="btn" data-act="insaddclase">Añadir clase</button>`:""}
     ${I.clases.length?`<ul class="insclases">${I.clases.map((c,i)=>`<li>${esc(insClaseTxt(c))} <button class="btn small" data-act="insquitar" data-i="${i}">Quitar</button></li>`).join("")}</ul>`:`<p class="note">Sin clases todavía.</p>`}
@@ -3103,12 +3109,21 @@ function vInscripcion(){
     <p class="note">Para el personal: da de alta al alumno en Argos y haz su recibo. Para ver su horario en el móvil, que escanee el QR del mostrador y entre con su nombre y este móvil.</p>`}
   return `<section class="card ins">${head}${body}</section>${I.paso===4?"":salir}`;
 }
-function insClaseTxt(c){return `${c.dia} ${c.ini?`${c.ini} (${(TIPOS[c.tipo]||{}).t||""})`:HLABEL[c.hora]} · ${c.profe}`}
+function insClaseTxt(c){return (c.forzada?"⚠ ":"")+`${c.dia} ${c.ini?`${c.ini} (${(TIPOS[c.tipo]||{}).t||""})`:HLABEL[c.hora]} · ${c.profe}`}
 /* Disponibilidad real para la inscripción: días que trabaja, horas de grupo con plaza (contando las ya elegidas aquí)
    y, en logopedia, horas de inicio que caben en su tramo sin pisar otra sesión. */
 const insDias=p=>HORARIO_PROFE[p]?DIAS.filter(d=>(HORARIO_PROFE[p][d]||[]).length):DIAS;
 function insLibres(p,dia,tipo){
   const I=S.ins;
+  /* 19/11/2026 (titular): dirección puede añadir una clase fuera del horario de la profesora o sin hueco, con aviso */
+  if(I&&I.forzar){
+    if(!FLEX.has(p))return HORAS.map(h=>{const tr=trabaja(p,dia,h),cap=capDe(p,dia,h),occ=ocupadas(p,dia,h)+I.clases.filter(c=>c.profe===p&&c.dia===dia&&c.hora===h).length,l=cap-occ;
+      const av=[!tr?"fuera de su horario":"",tr&&l<=0?"sin plaza libre":""].filter(Boolean);return {v:h,l,t:`${HLABEL[h]}${av.length?" · ⚠ "+av.join(", "):l>0?` · ${l} plaza${l===1?"":"s"} libre${l===1?"":"s"}`:""}`}});
+    const dur=(TIPOS[tipo]||TIPOS["60"]).dur,out=[];
+    for(let t=9*60;t+dur<=22*60;t+=15){if(I.clases.some(c=>c.profe===p&&c.dia===dia&&c.ini&&minDe(c.ini)<t+dur&&minDe(c.ini)+((TIPOS[c.tipo]||{}).dur||60)>t))continue;
+      const fuera=!dentroTramo(p,dia,t,t+dur),ch=chocaSes(p,dia,t,tipo),av=[fuera?"fuera de su horario":"",ch?"se pisa con "+titulo(ch.a.nombre):""].filter(Boolean);
+      out.push({v:t,t:`${hm(t)}–${hm(t+dur)}${av.length?" · ⚠ "+av.join(", "):""}`})}
+    return out}
   if(!FLEX.has(p))return horasFijas(p,dia).map(h=>{const ind=esIndividual(p,dia,h),cap=capDe(p,dia,h),occ=ocupadas(p,dia,h)+I.clases.filter(c=>c.profe===p&&c.dia===dia&&c.hora===h).length,l=cap-occ;
     return {v:h,l,ind,t:`${HLABEL[h]} · ${ind?"individual, libre":`grupo, ${l} plaza${l===1?"":"s"} libre${l===1?"":"s"}`}`}}).filter(x=>x.l>0&&(I.exc||!primariaMal(I.d.nivel,p,dia,x.v,x.ind)));
   const dur=(TIPOS[tipo]||TIPOS["60"]).dur,out=[];
@@ -3123,12 +3138,14 @@ function insLibres(p,dia,tipo){
 }
 function insAddClase(){
   const I=S.ins,s=I.sel;let c={dia:s.dia,hora:s.hora,profe:s.profe};
+  const F=!!I.forzar,avisos=[];
   if(FLEX.has(c.profe)){const i=+s.ini,tp=s.tipo;
-    if(!dentroTramo(c.profe,c.dia,i,i+TIPOS[tp].dur)){toast(`A las ${hm(i)} no le da tiempo dentro del horario de ${c.profe}: ${textoHorario(c.profe)}`);return}
-    const ch=chocaSes(c.profe,c.dia,i,tp);if(ch){toast(`Se pisa con ${titulo(ch.a.nombre)} (${sesTxt(ch)})`);return}
+    if(!dentroTramo(c.profe,c.dia,i,i+TIPOS[tp].dur)){const m=`A las ${hm(i)} está fuera del horario de ${c.profe}: ${textoHorario(c.profe)}`;if(!F){toast(m);return}avisos.push(m)}
+    const ch=chocaSes(c.profe,c.dia,i,tp);if(ch){const m=`Se pisa con ${titulo(ch.a.nombre)} (${sesTxt(ch)})`;if(!F){toast(m);return}avisos.push(m)}
     c={dia:c.dia,hora:keyDeMin(i),profe:c.profe,ini:hm(i),tipo:tp,sesT:nowISO()}}
-  else{if(!trabaja(c.profe,c.dia,c.hora)){toast(`${c.profe} no trabaja el ${c.dia.toLowerCase()} de ${HLABEL[c.hora]}. Su horario: ${textoHorario(c.profe)}`);return}
-    if(ocupadas(c.profe,c.dia,c.hora)>=capDe(c.profe,c.dia,c.hora)){toast(esIndividual(c.profe,c.dia,c.hora)?`Esa hora de ${c.profe} es individual y ya la tiene otro alumno`:`El grupo de ${c.profe} ya tiene ${CAP} alumnos`);return}}
+  else{if(!trabaja(c.profe,c.dia,c.hora)){const m=`${c.profe} no trabaja el ${c.dia.toLowerCase()} de ${HLABEL[c.hora]}. Su horario: ${textoHorario(c.profe)}`;if(!F){toast(m);return}avisos.push(m)}
+    if(ocupadas(c.profe,c.dia,c.hora)>=capDe(c.profe,c.dia,c.hora)){const m=esIndividual(c.profe,c.dia,c.hora)?`Esa hora de ${c.profe} es individual y ya la tiene otro alumno`:`El grupo de ${c.profe} ya tiene ${CAP} alumnos`;if(!F){toast(m);return}avisos.push(m)}}
+  if(avisos.length){if(!confirm(`Atención:\n\n· ${avisos.join("\n· ")}\n\n¿Añadir la clase igualmente?`))return;c.forzada=true}
   {const m=primariaMal(I.d.nivel,c.profe,c.dia,c.hora,indDe(c.profe,c.dia,c.hora,c.tipo));if(m&&!I.exc){toast(m);return}if(m)c.excPrim=true}
   if(I.clases.some(x=>x.dia===c.dia&&x.hora===c.hora)){toast("Ya tiene clase ese día a esa hora");return}
   I.clases.push(c);render();
@@ -3367,7 +3384,7 @@ function vPreLista(){if(!preDir())return "";preEscuchar();if(PR.err)return `<div
   const res=[nAl?`${nAl} alta${nAl===1?"":"s"} nueva${nAl===1?"":"s"}`:"",nEs?`${nEs} esperando a la familia`:"",nCa?`${nCa} caducada${nCa===1?"":"s"}`:""].filter(Boolean).join(" · ");
   return `<details class="aviso ${nAl?"pend":"info"} fh" style="display:block" ${PR.abiertas||nAl?"open":""}><summary><b>Preinscripciones por enlace:</b> ${res}</summary><div class="fhl">${l.map(fila).join("")}</div></details>`}
 /* El hueco tiene que seguir libre (sin contar la reserva de la propia preinscripción): misma comprobación que la tablet */
-function preSinHueco(c){if(FLEX.has(c.profe)){const i=minDe(c.ini||"");if(!c.ini||!dentroTramo(c.profe,c.dia,i,i+((TIPOS[c.tipo]||TIPOS["60"]).dur)))return "fuera de su horario";const ch=chocaSes(c.profe,c.dia,i,c.tipo);return ch?`se pisa con ${titulo(ch.a.nombre)}`:""}
+function preSinHueco(c){if(c&&c.forzada)return "";/* añadida por dirección como excepción (19/11/2026) */if(FLEX.has(c.profe)){const i=minDe(c.ini||"");if(!c.ini||!dentroTramo(c.profe,c.dia,i,i+((TIPOS[c.tipo]||TIPOS["60"]).dur)))return "fuera de su horario";const ch=chocaSes(c.profe,c.dia,i,c.tipo);return ch?`se pisa con ${titulo(ch.a.nombre)}`:""}
   if(!trabaja(c.profe,c.dia,c.hora))return "la profesora no trabaja a esa hora";return ocupadas(c.profe,c.dia,c.hora)>=capDe(c.profe,c.dia,c.hora)?(esIndividual(c.profe,c.dia,c.hora)?"la hora individual ya está ocupada":"el grupo está lleno"):""}
 /* Alta automática de las completadas (una a una) */
 async function preAuto(){if(!preDir()||PR.auto)return;PR.auto=true;
@@ -3903,7 +3920,7 @@ function vFicha(id){
   return `<div class="detail">
     <div class="bar" style="margin:0">${avatarAl(a,"lg")}<h3>${esc(a.nombre)}</h3>${S.role==="dir"&&!S.ro?`<button class="btn small" data-act="renombrar" data-id="${id}">Cambiar nombre</button>`:""}${S.role==="dir"&&!S.ro&&!esMos()?`<button class="btn small" data-act="juntar" data-id="${id}" title="Si este alumno está dos veces en la app, junta aquí la otra ficha">Juntar con otra ficha</button>`:""}${S.role==="dir"?`<label class="btn small" style="cursor:pointer">${fotoAl(a)?"Cambiar foto":"Subir foto"}<input type="file" accept="image/*" data-fotoficha="${id}" hidden></label>${fotoAl(a)?`<button class="btn small" data-act="quitarfoto" data-id="${id}">Quitar foto</button>`:""}`:""}<span id="delbox" class="ed">${a.baja?`<span class="badge b-no">De baja desde ${fmtFecha(a.baja)}</span>${!esMos()?` <button class="btn small" data-act="reactbaja" data-id="${id}" title="Vuelve a ser alumno: se le quita la baja">Reactivar</button>`:""}`:`<button class="btn danger small" data-act="borrar" data-id="${id}">Dar de baja</button>`}</span></div>${S.role==="dir"&&S.juntar===id?vJuntar(id,a):""}${S.role==="dir"?privFicha(id):""}${a.bloqueado?`<div class="aviso pend"><span>Datos bloqueados el ${fmtFecha(a.bloqueado.t)}. Se conservan solo el nombre y los recibos hasta el ${fmtFecha(a.bloqueado.hasta)}.</span></div>`:""}
     ${S.role==="dir"&&esAntiguo(a)?`<div class="aviso info"><span>No tiene horario ni recibos pendientes, así que no sale en la lista de alumnos actuales. Si le pones una clase, vuelve a salir.</span></div>`:""}
-    ${S.role==="dir"?(esMos()?"":vMatricula(a)+vTarifaAl(id,a)+vSueltas(id,a))+vAccesoFicha(id,a)+(esMos()?vRecibosLectura(a):vRecibosFicha(id,a))+vCambiosFicha(a):esPlus()?(PLUS.m?vRecibosLectura(PLUS.m.get(id)):`<p class="note">${PLUS.err?esc(PLUS.err):"Cargando recibos…"}</p>`):""}
+    ${S.role==="dir"?(esMos()?"":vMatricula(a)+vTarifaAl(id,a)+vSueltas(id,a))+vAccesoFicha(id,a)+(esMos()?vRecibosLectura(a,id):vRecibosFicha(id,a))+vCambiosFicha(a)+(typeof vCitasFicha==="function"?vCitasFicha(id):""):esPlus()?(PLUS.m?vRecibosLectura(PLUS.m.get(id)):`<p class="note">${PLUS.err?esc(PLUS.err):"Cargando recibos…"}</p>`):""}
     ${S.role==="profe"&&recPend(a)?`<p style="margin:0">${marcaRec(a)} <span class="note">${recPend(a)===1?"Tiene 1 recibo pendiente de pago.":`Tiene ${recPend(a)} recibos pendientes de pago.`}</span></p>`:""}
     ${otras.length?`<p class="note" style="margin:0">También da clase con ${esc(otras.join(" y "))}.</p>`:""}
     <div><div class="mini">${mini}</div>${a.clases.some(c=>fdrag(id,c))?`<p class="note" style="margin:6px 0 0">Para mover una clase, arrástrala a otro día o púlsala.</p>`:""}</div>${vFichaMes(id,a)}${S.role==="profe"&&cuadFlag(a)?`<p class="note" style="margin:0;color:var(--warn)">● Dirección está revisando su recibo por un cambio de horario o una hora extra. Cuando esté ajustado, volverá a su color normal.</p>`:""}${vExtrasFicha(id,a)}${S.role==="profe"||(S.role==="dir"&&!S.ro&&!S.pv)?vAP(id,a):""}
@@ -3950,7 +3967,11 @@ function fpInfo(v){const t=String(v||"").toLowerCase();
   return t?{k:"otro",l:String(v),c:"#6b7280"}:null}
 const fpChip=v=>{const f=fpInfo(v);return f?`<span class="badge" style="background:${f.c}1a;color:${f.c};border:1px solid ${f.c}55">${esc(f.l)}</span>`:""};
 /* recibos del alumno solo para consultar (mostrador y Ainea): estado, forma de pago, día y hora */
-function vRecibosLectura(a){if(!a)return "";const r=[...(a.recibos||[])].filter(x=>x&&x.estado!=="anulado").sort((x,y)=>(x.estado==="pagado")-(y.estado==="pagado")||String(y.emitido).localeCompare(String(x.emitido)));
+/* 19/11/2026 (titular): en mostrador, botón «Cobrar» donde se ve al alumno (ficha y asistencia); lleva a la Caja con él ya elegido */
+function btnCobrar(id,a){if(!esMos()||S.pv||!id||String(id).startsWith("tok:")||typeof pendientesDe!=="function")return "";let p=[];try{p=pendientesDe(a,id)}catch(_){}if(!p.length)return "";
+  const t=Math.round(p.reduce((s,r)=>s+(+r.importe||0),0)*100)/100;
+  return `<button class="btn small primary" data-act="cobrarya" data-id="${esc(id)}" title="${p.length} recibo${p.length===1?"":"s"} pendiente${p.length===1?"":"s"}: ir a la Caja para cobrar">Cobrar ${eur(t)}</button>`}
+function vRecibosLectura(a,id){if(!a)return "";const r=[...(a.recibos||[])].filter(x=>x&&x.estado!=="anulado").sort((x,y)=>(x.estado==="pagado")-(y.estado==="pagado")||String(y.emitido).localeCompare(String(x.emitido)));
   const pend=r.filter(x=>x.estado!=="pagado"),tp=pend.reduce((s,x)=>s+(+x.importe||0),0);
   const hora=x=>{const t=x.caja&&x.caja.t?String(x.caja.t):String(x.pagado||"").length>10?String(x.pagado):"";if(!t)return "";const d=new Date(t);return isNaN(d)?"":d.toLocaleTimeString("es-ES",{hour:"2-digit",minute:"2-digit"})};
   const fila=x=>{const pag=x.estado==="pagado",fp=pag?String(x.pagado||(x.caja&&x.caja.t)||"").slice(0,10):"",h=pag?hora(x):"";
@@ -3958,7 +3979,7 @@ function vRecibosLectura(a){if(!a)return "";const r=[...(a.recibos||[])].filter(
       <span class="grow" style="white-space:normal;flex-basis:180px">${esc(x.concepto||x.curso||"Recibo")}${x.numero?` <span class="note">· ${esc(x.numero)}</span>`:""}</span>
       <b style="font-variant-numeric:tabular-nums;min-width:60px;text-align:right">${eur(x.importe==null?null:+x.importe)}</b>
       ${pag?`<span class="badge b-si">Pagado</span>${fpChip(x.forma)}<span class="note">${fp?fmtFecha(fp):""}${h?" · "+h:""}</span>`:`<span class="badge b-pend">Pendiente</span>`}</div>`};
-  return `<div><div class="bar" style="margin-bottom:4px"><b style="font-size:14px;margin-right:auto">Recibos</b>${pend.length?`<span class="badge b-pend">${pend.length} pendiente${pend.length===1?"":"s"} · ${eur(Math.round(tp*100)/100)}</span>`:r.length?`<span class="badge b-si">Al día</span>`:""}</div>
+  return `<div><div class="bar" style="margin-bottom:4px"><b style="font-size:14px;margin-right:auto">Recibos</b>${btnCobrar(id,a)}${pend.length?`<span class="badge b-pend">${pend.length} pendiente${pend.length===1?"":"s"} · ${eur(Math.round(tp*100)/100)}</span>`:r.length?`<span class="badge b-si">Al día</span>`:""}</div>
     ${r.length?r.slice(0,24).map(fila).join(""):`<p class="note">Sin recibos.</p>`}${r.length>24?`<p class="note">Se muestran los 24 más recientes.</p>`:""}</div>`}
 function vRecibosFicha(id,a){
   const r=[...(a.recibos||[])].sort((x,y)=>String(y.emitido).localeCompare(String(x.emitido)));
@@ -4009,7 +4030,7 @@ function vMatricula(a){
   const aviso=prueba+(hc!=null&&hc!==hh&&!a.sueltas?`<p class="note" style="color:var(--warn)">Tiene contratadas ${hc} h/semana y en el horario hay ${hh} h.</p>`:"");
   const mats=a.matriculas.map(m=>`<div class="row"><span class="grow">${esc(m.curso)}</span><span class="note">desde ${fmtFecha(m.alta)}</span><b style="font-variant-numeric:tabular-nums">${eur(m.cuota)}${m.cobro==="MENSUAL"?"/mes":m.cobro?" "+esc(m.cobro.toLowerCase()):""}</b></div>`).join("");
   const desf=a.baja&&a.argos==="activo"?`<p class="note" style="color:var(--warn)">En la app está de baja, pero en el último listado de cursos de Argos seguía activo. Si ya lo has dado de baja en Argos, sube el listado de cursos actualizado (Cuadre Argos).</p>`:"";
-  return `<div><div class="bar" style="margin-bottom:4px"><b style="font-size:14px;margin-right:auto">Matrícula</b>${est}</div>${mats||`<p class="note">Sin cursos activos en Argos.</p>`}${aviso}${desf}</div>`;
+  return `<div><div class="bar" style="margin-bottom:4px"><b style="font-size:14px;margin-right:auto">Cursos en Argos</b>${est}</div>${mats||`<p class="note">Sin cursos activos en Argos.</p>`}${aviso}${desf}</div>`;
 }
 const recArgosReciente=a=>(a.recibos||[]).some(r=>(r.origen==="argos"||r.numero)&&String(r.emitido)>=sumaDias(todayISO(),-62));
 function vArgos(){
@@ -4391,6 +4412,8 @@ document.addEventListener("click",async e=>{
     const cfg=S.recCfg||{},alias={};for(const [k,v] of Object.entries(cfg.alias||{}))alias[k]=v===bid?id:v;alias[nzN(b.nombre)]=id;
     const nums=new Set((a.recibos||[]).map(x=>x.numero));
     await guardarRecCfg({...cfg,alias,sinAlumno:(cfg.sinAlumno||[]).filter(x=>!nums.has(x.numero))});
+    /* 19/11/2026: las citas de la ficha repetida pasan a la buena (si no, seguirían apuntando a una ficha borrada) */
+    if(typeof EV!=="undefined")for(const x of EV.docs.filter(x=>x.alumno===bid)){try{await S.db.doc("eventos/"+x.id).update({alumno:id,nombre:a.nombre});x.alumno=id;x.nombre=a.nombre}catch(_){}}
     S.juntar=null;CONFC.l=null;SESC.al=null;S.sel=id;render();toast(`Fichas juntadas en ${titulo(a.nombre)}`)}
   else if(act==="quitarrepe"&&a&&S.role==="dir"){const clases=sinRepetidas(a.clases);t.disabled=true;
     if(await save(id,{clases})){a.clases=clases;CONFC.l=null;SESC.al=null;render();toast("Clase repetida quitada: "+titulo(a.nombre))}else t.disabled=false}
@@ -4480,6 +4503,7 @@ document.addEventListener("click",async e=>{
     const s=libresPara(m.id,m.a,m.c,E.dia,E.tipo).find(y=>String(y.ini)===String(E.v));if(!s){toast("Elige una hora libre");return}
     S.confEd=null;await aplicarCambio(m,s)}
   else if(act==="irrecibos"&&S.role==="dir"){S.view="recibos";render();scrollTo(0,0)}
+  else if(act==="cobrarya"&&S.role==="dir"&&!S.pv&&typeof GC!=="undefined"){if(typeof EV!=="undefined"){EV.ver=null;EV.form=null;EV.lista=null}GC.al=t.dataset.id;GC.sel=null;GC.q="";GC.ultimo=null;GC.forma=GC.forma||"";S.cell=null;$("#layer")&&($("#layer").innerHTML="");S.view="caja";render();scrollTo(0,0)}
   else if(act==="kiosko"&&S.role==="dir"&&!S.pv){abrirKiosko()}
   else if(act==="kpinok"&&S.role==="dir"){const p=digitos(($("#k-pin")||{}).value);if(p.length<4||p.length>6){toast("El PIN tiene que tener de 4 a 6 cifras");return}
     try{await S.db.doc("config/kiosko").set({pin:p});S.kiosk={pin:p};S.kpinSet=false;render()}catch(_){toast("No se ha podido guardar el PIN")}}
@@ -4688,6 +4712,7 @@ document.addEventListener("change",async e=>{
     const mal=nivelDe(a)==="Primaria"?a.clases.filter(c=>primariaMal("Primaria",c.profe,c.dia,c.hora,indDe(c.profe,c.dia,c.hora,c.tipo))):[];if(mal.length)toast(`Ojo: ${mal.length} clase${mal.length===1?"":"s"} de su horario no vale${mal.length===1?"":"n"} para primaria (${mal.map(c=>c.profe+" "+c.dia.toLowerCase()).join(", ")})`)}}
   if(t.dataset&&t.dataset.confed&&S.confEd){S.confEd[t.dataset.confed]=t.value;if(t.dataset.confed!=="v")S.confEd.v="";render()}
   if(t.dataset&&t.dataset.insexc&&S.ins){S.ins.exc=t.checked;render()}
+  if(t.dataset&&t.dataset.insforzar&&S.ins&&S.role==="dir"){S.ins.forzar=t.checked;render()}
   if(t.dataset&&t.dataset.inssel&&S.ins){S.ins.sel[t.dataset.inssel]=t.value;render()}
   if(t.dataset&&t.dataset.insc&&S.ins){S.ins.cons[t.dataset.insc]=t.checked}
   if(t.dataset&&(t.dataset.hxpc||t.dataset.hxpi)&&S.role==="dir"&&!esMos()){const P=pilotoHX(),id=t.dataset.hxpc||t.dataset.hxpi,pc={...P.porClase};
@@ -5025,6 +5050,7 @@ function suscribirBuzon(){
   subsBuzon.forEach(u=>{try{u()}catch(_){}});subsBuzon=[];
   subsBuzon.push(S.db.doc("buzon/"+S.me).onSnapshot(d=>{S.miBuzon=d.exists?d.data():null;S.miBuzonOk=true;trasLocales();rebuildOv();refrescar()},()=>{}));
   if(S.link.rol==="alumno")subsBuzon.push(S.db.doc("mensajes/"+S.me).onSnapshot(d=>{S.misMsgs=(d.exists&&d.data().msgs)||{};refrescar()},()=>{}));
+  if(S.link.rol==="alumno"&&window.__misCitas)subsBuzon.push(window.__misCitas(l=>{S.misCitas=l.filter(e=>e&&e.estado!=="anulado");refrescar()}));
   /* lista de espera de huecos: plazas de las profesoras de sesiones a medida */
   if(window.__plazas){const ps=S.link.rol==="profe"?(FLEX.has(S.link.profe)?[S.link.profe]:[]):[...FLEX];
     if(ps.length)subsBuzon.push(window.__plazas.escuchar({profes:ps},l=>{S.plazas=l;espLimpiar();refrescar()}))}
@@ -5075,7 +5101,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=18nov-v125"></script>
+<script src="gestion.js?v=20nov-v141"></script>
 
 
 </body></html>

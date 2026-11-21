@@ -1111,7 +1111,13 @@ function leerComprobante(items){
   const MES_TXT={enero:1,febrero:2,marzo:3,abril:4,mayo:5,junio:6,julio:7,agosto:8,septiembre:9,setiembre:9,octubre:10,noviembre:11,diciembre:12};
   /* 14/11/2026: también fechas escritas («12 noviembre 2026», «12 de noviembre de 2026»), como en las facturas de Amazon */
   const fTxt=[...t.toLowerCase().matchAll(/\b(\d{1,2})\s+(?:de\s+)?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\s+(?:de\s+)?(\d{4})\b/g)].map(m=>`${m[3]}-${String(MES_TXT[m[2]]).padStart(2,"0")}-${m[1].padStart(2,"0")}`);
-  const fechas=[...new Set([...[...t.matchAll(/(?<![\d.-])(\d{1,2})([-\/.])(\d{1,2})\2(\d{2}|\d{4})(?![\d-])/g)].map(m=>fechaBanco(m[0])),...fTxt].filter(Boolean))];
+  /* 21/11/2026: facturas en inglés (Anthropic, Google…): «November 23, 2026», «Nov 23, 2026», «23 November 2026» e importes «€21.78» / «21.78 EUR» */
+  const MES_EN={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12},mEn=x=>MES_EN[String(x).toLowerCase().slice(0,String(x).toLowerCase().startsWith("sept")?4:3)];
+  const RX_MES="(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept|sep|oct|nov|dec)";
+  const fEn=[...[...t.matchAll(new RegExp("\\b"+RX_MES+"\\.?\\s+(\\d{1,2}),?\\s+(\\d{4})\\b","gi"))].map(m=>`${m[3]}-${String(mEn(m[1])).padStart(2,"0")}-${m[2].padStart(2,"0")}`),
+    ...[...t.matchAll(new RegExp("\\b(\\d{1,2})\\s+"+RX_MES+"\\.?,?\\s+(\\d{4})\\b","gi"))].map(m=>`${m[3]}-${String(mEn(m[2])).padStart(2,"0")}-${m[1].padStart(2,"0")}`)].filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x)&&!x.includes("undefined"));
+  if(!importes.length)for(const m of t.matchAll(/(?:€|EUR)\s?(\d{1,3}(?:,\d{3})*\.\d{2})(?!\d)|(?<![\d.,])(\d{1,3}(?:,\d{3})*\.\d{2})\s?(?:€|EUR)/gi)){const v=+String(m[1]||m[2]).replace(/,/g,"");if(v>0&&!importes.includes(v))importes.push(v)}
+  const fechas=[...new Set([...[...t.matchAll(/(?<![\d.-])(\d{1,2})([-\/.])(\d{1,2})\2(\d{2}|\d{4})(?![\d-])/g)].map(m=>fechaBanco(m[0])),...fTxt,...fEn].filter(Boolean))];
   const refs=[...new Set([...t.matchAll(/\b\d{8,}\b/g)].map(m=>m[0]))];
   /* CIF del emisor de una factura (en los adeudos SEPA la referencia empieza por el CIF del acreedor: A3 → «B01726595…») */
   const cifs=[...new Set([...t.toUpperCase().matchAll(/\b([ABCDEFGHJNPQRSUVW])[-.\s]?(\d{7})([0-9A-J])\b/g)].map(m=>m[1]+m[2]+m[3]))];

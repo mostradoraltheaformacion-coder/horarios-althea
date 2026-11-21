@@ -2203,14 +2203,17 @@ const diasMesPv=m=>+sumaDias(mesSigPv(m)+"-01",-1).slice(8,10);
 const prevKey=m=>(m.cat||"pend")+"|"+String(m.concepto||"").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\d+/g," ").replace(/[^A-Z ]/g," ").replace(/\b(COMPRA|TARJ|TRANSFERENCIA|ADEUDO|RECIBO|A|DE|LA|EL|SL|SA|SLU)\b/g," ").replace(/\s+/g," ").trim().split(" ").slice(0,3).join(" ");
 function prevRecurrentes(){
   const hoy=todayISO();let m=hoy.slice(0,7);const meses=[];for(let i=0;i<4;i++){m=mesAntPv(m);meses.push(m)}
-  const l=movsTodos().filter(x=>x.importe<0&&meses.includes(String(x.fv).slice(0,7))&&catTipo(x.cat)==="g");
+  /* los impuestos van aparte (trimestrales, ver vPrevision); aquí solo los demás gastos */
+  const l=movsTodos().filter(x=>x.importe<0&&meses.includes(String(x.fv).slice(0,7))&&catTipo(x.cat)==="g"&&x.cat!=="impuestos"&&!/AEAT|AGENCIA TRIB|HACIENDA|^IMPUESTOS/i.test(x.concepto||""));
   const g=new Map();for(const x of l){const k=prevKey(x);if(!g.has(k))g.set(k,[]);g.get(k).push(x)}
   const out=[];for(const [k,xs] of g){const porMes={};for(const x of xs){const mm=String(x.fv).slice(0,7);porMes[mm]=(porMes[mm]||0)+(-x.importe)}
     const ms=Object.keys(porMes).sort();if(ms.length<2)continue;
     const dias=xs.map(x=>+String(x.fv).slice(8,10)).sort((a,b)=>a-b),dia=dias[Math.floor(dias.length/2)];
     const vals=ms.map(k=>porMes[k]),ult=vals[vals.length-1],med=vals.slice(-3).reduce((s,v)=>s+v,0)/Math.min(3,vals.length);
     const ultMov=xs.sort((a,b)=>String(a.fv).localeCompare(String(b.fv)))[xs.length-1];
-    out.push({k,cat:ultMov.cat,txt:ultMov.concepto,dia,imp:r2(["nominas","ssemp","ssaut","alquiler"].includes(ultMov.cat)?ult:med),n:ms.length,ult:r2(ult)})}
+    /* 21/11/2026: cada cuánto se paga (1 = todos los meses, 3 = trimestral…): la menor distancia entre meses con cargo */
+    const nm=k=>{const [y,m]=k.split("-").map(Number);return y*12+m},dif=ms.slice(1).map((k,i)=>nm(k)-nm(ms[i])),per=Math.max(1,Math.min(...dif));
+    out.push({k,cat:ultMov.cat,txt:ultMov.concepto,dia,imp:r2(["nominas","ssemp","ssaut","alquiler"].includes(ultMov.cat)?ult:med),n:ms.length,ult:r2(ult),per,ultMes:ms[ms.length-1],nm})}
   return out}
 /* fecha prevista de una línea en la ventana que empieza el día PV_INI del mes M */
 function prevFecha(x,M){const d=x.dia;if(d>=PV_INI){const mm=Math.min(d,diasMesPv(M));return `${M}-${String(mm).padStart(2,"0")}`}if(d<=PV_FIN){const N=mesSigPv(M);return `${N}-${String(d).padStart(2,"0")}`}return null}
@@ -2225,9 +2228,22 @@ function vPrevision(){gbEscuchar();imEscuchar();
   const meses=[];let M=hoy.slice(0,7);if(+hoy.slice(8,10)>PV_FIN&&+hoy.slice(8,10)<PV_INI){}for(let i=0;i<3;i++){meses.push(M);M=mesSigPv(M)}
   /* si hoy es del 1 al PV_FIN, la ventana del mes anterior aún está abierta */
   if(+hoy.slice(8,10)<=PV_FIN)meses.unshift(mesAntPv(hoy.slice(0,7))),meses.pop();
+  /* 21/11/2026 (titular): con las nóminas subidas, la Seguridad Social de empleadas (se carga a fin del mes siguiente) sale del listado
+     de costes (SS total) o, si solo están las nóminas, se estima con el bruto y la proporción SS/bruto del último listado; y cada
+     transferencia de nómina, con el líquido de su nómina */
+  const pal=t=>new Set(String(t||"").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").split(/[^A-Z]+/).filter(w=>w.length>2));
+  const nomL=m=>{try{return typeof nmListado==="function"?nmListado(m):null}catch(_){return null}},noms=m=>{try{return typeof nmDe==="function"?nmDe(m):[]}catch(_){return []}};
+  const ultL=(()=>{let m=hoy.slice(0,7);for(let i=0;i<6;i++){const L=nomL(m);if(L&&L.tot&&+L.tot.sstot>0&&+L.tot.bruto>0)return L;m=mesAntPv(m)}return null})();
+  const ajNom=x=>{const X=x.f.slice(0,7);
+    if(x.cat==="ssemp"){const P=mesAntPv(X),L=nomL(P);if(L&&L.tot&&+L.tot.sstot>0)return {...x,imp:r2(+L.tot.sstot),txt:`${x.txt} · según el listado de costes de ${mesTxt(P)}`,exacto:true};
+      const ns=noms(P).filter(n=>+n.bruto>0);if(ns.length&&ultL){const b=ns.reduce((s,n)=>s+(+n.bruto||0),0);return {...x,imp:r2(b*ultL.tot.sstot/ultL.tot.bruto),txt:`${x.txt} · estimada con las nóminas de ${mesTxt(P)}`,est:true}}return x}
+    if(x.cat==="nominas"){const P=+x.f.slice(8,10)>=PV_INI?X:mesAntPv(X),cw=pal(x.txt),n=noms(P).find(n=>{let k=0;for(const w of pal(n.nombre))if(cw.has(w))k++;return k>=2&&+n.liq>0});
+      if(n)return {...x,imp:r2(+n.liq),txt:`${x.txt} · nómina de ${mesTxt(P)}`,exacto:true}}
+    return x};
   const bloques=meses.map(M=>{
     const ini=`${M}-${PV_INI}`,fin=`${mesSigPv(M)}-${String(PV_FIN).padStart(2,"0")}`;
-    const lin=R.map(x=>({...x,f:prevFecha(x,M)})).filter(x=>x.f&&x.f>=ini&&x.f<=fin).sort((a,b)=>a.f.localeCompare(b.f));
+    const tocaPv=(x,f)=>{if(!x.per||x.per<=1)return true;const d=x.nm(f.slice(0,7))-x.nm(x.ultMes);return d>0&&d%x.per===0};
+    const lin=R.map(x=>({...x,f:prevFecha(x,M)})).filter(x=>x.f&&x.f>=ini&&x.f<=fin&&tocaPv(x,x.f)).sort((a,b)=>a.f.localeCompare(b.f));
     /* 21/11/2026 (titular): impuestos trimestrales (303, 130, 111, 115…), que se cargan hasta el día 20 de enero, abril, julio y octubre:
        los que ha puesto la asesoría (importe y día) y, si aún no los ha puesto, una estimación con lo cargado el trimestre anterior */
     const N=mesSigPv(M),finImp=`${N}-20`,esTri=["01","04","07","10"].includes(N.slice(5,7));
@@ -2235,7 +2251,7 @@ function vPrevision(){gbEscuchar();imEscuchar();
     if(esTri&&!imp.length){let q=N;for(let i=0;i<4;i++){q=mesAntPv(mesAntPv(mesAntPv(q)));const l=todos.filter(m=>m.importe<0&&String(m.fv).slice(0,7)===q&&+String(m.fv).slice(8,10)<=25&&(m.cat==="impuestos"||/AEAT|AGENCIA TRIB|HACIENDA|IMPUESTO/i.test(m.concepto||""))&&!/TGSS/i.test(m.concepto||""));
         if(l.length){for(const m of l)imp.push({k:"impest|"+prevKey(m),cat:"impuestos",txt:`${m.concepto} · estimado: lo cargado en ${mesTxt(q)}`,f:`${N}-20`,imp:r2(-m.importe),est:true});break}}
       if(!imp.length)imp.push({k:"impest|nada",cat:"impuestos",txt:`Impuestos del trimestre (303, 130, 111, 115…): sin datos todavía. Pide el importe a la asesoría.`,f:`${N}-20`,imp:0,est:true})}
-    const filas=[...lin,...imp].sort((a,b)=>a.f.localeCompare(b.f)).map(x=>({...x,hecho:x.f<=hoy&&!x.imp0&&pagado(x,x.f),fuera:no.has(x.k)}));
+    const filas=[...lin.map(ajNom),...imp].sort((a,b)=>a.f.localeCompare(b.f)).map(x=>({...x,hecho:x.f<=hoy&&!x.imp0&&pagado(x,x.f),fuera:no.has(x.k)}));
     const pend=r2(filas.filter(x=>!x.fuera&&!x.hecho).reduce((s,x)=>s+x.imp,0)),total=r2(filas.filter(x=>!x.fuera).reduce((s,x)=>s+x.imp,0));
     return {M,ini,fin,filas,pend,total}});
   const actual=bloques[0];
@@ -2243,7 +2259,7 @@ function vPrevision(){gbEscuchar();imEscuchar();
     <div class="stat"><b>${eur(actual.pend)}</b><span>Pagos que faltan del ${fmtFecha(actual.ini)} al ${fmtFecha(actual.fin)}</span></div>
     <div class="stat"><b style="color:${saldoTot-actual.pend<0?"var(--bad)":"var(--ok)"}">${saldoTot-actual.pend<0?"Faltan ":"Sobran "}${eur(Math.abs(r2(saldoTot-actual.pend)))}</b><span>${saldoTot-actual.pend<0?"Hay que ingresar antes de esos pagos (sin contar lo que se cobre mientras)":"Con el saldo actual llega (sin contar lo que se cobre)"}</span></div></div>`;
   const tabla=b=>`<div class="panel" style="margin-bottom:12px"><div class="bar" style="margin-bottom:6px"><b style="font-size:16px">Fin de ${esc(mesTxt(b.M))}</b><span class="note">del ${fmtFecha(b.ini)} al ${fmtFecha(b.fin)}</span><span style="margin-left:auto;font-weight:700">Hay que tener: ${eur(b.total)}</span></div>
-    ${b.filas.length?`<table class="pvt"><thead><tr><th>Día previsto</th><th>Pago</th><th>Tipo</th><th class="r">Importe</th><th></th></tr></thead><tbody>${b.filas.map(x=>`<tr style="${x.fuera?"opacity:.45;text-decoration:line-through":""}"><td>${fmtFecha(x.f)}</td><td>${esc(x.txt)}${x.n?` <span class="note">· ${x.n} de los últimos meses</span>`:""}${x.est?` <span class="badge b-pend">estimado</span>`:""}</td><td class="note">${esc(catTxt(x.cat))}</td><td class="r">${eur(x.imp)}${x.hecho?` <span class="badge b-si">pagado</span>`:""}</td><td>${x.imp0||x.k==="impest|nada"?"":`<label class="chk" style="margin:0" title="Quitar de la previsión"><input type="checkbox" data-gbprev="${esc(x.k)}" ${x.fuera?"":"checked"}><span>contar</span></label>`}</td></tr>`).join("")}</tbody></table>`:`<p class="note">No hay pagos que se repitan en esas fechas.</p>`}
+    ${b.filas.length?`<table class="pvt"><thead><tr><th>Día previsto</th><th>Pago</th><th>Tipo</th><th class="r">Importe</th><th></th></tr></thead><tbody>${b.filas.map(x=>`<tr style="${x.fuera?"opacity:.45;text-decoration:line-through":""}"><td>${fmtFecha(x.f)}</td><td>${esc(x.txt)}${x.n?` <span class="note">· ${x.per>1?`cada ${x.per} meses`:`${x.n} de los últimos meses`}</span>`:""}${x.est?` <span class="badge b-pend">estimado</span>`:""}${x.exacto?` <span class="badge b-si">real</span>`:""}</td><td class="note">${esc(catTxt(x.cat))}</td><td class="r">${eur(x.imp)}${x.hecho?` <span class="badge b-si">pagado</span>`:""}</td><td>${x.imp0||x.k==="impest|nada"?"":`<label class="chk" style="margin:0" title="Quitar de la previsión"><input type="checkbox" data-gbprev="${esc(x.k)}" ${x.fuera?"":"checked"}><span>contar</span></label>`}</td></tr>`).join("")}</tbody></table>`:`<p class="note">No hay pagos que se repitan en esas fechas.</p>`}
     ${b.pend!==b.total?`<p class="note" style="margin:6px 0 0">Ya pagado: ${eur(r2(b.total-b.pend))} · falta: <b>${eur(b.pend)}</b></p>`:""}</div>`;
   const css=`<style>.pvt{width:100%;border-collapse:collapse;font-size:14px}.pvt th{font:600 11px Inter,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}.pvt td{padding:7px 8px;border-bottom:1px solid var(--line)}.pvt .r{text-align:right;white-space:nowrap}</style>`;
   return `${css}<div class="rt">${back}<p class="note">Pagos que se repiten en los últimos meses (nóminas, Seguridad Social, alquiler, seguros, recibos…) y que caen <b>entre el día ${PV_INI} y el ${PV_FIN} del mes siguiente</b>. En los meses de impuestos (cargo hasta el 20 de enero, abril, julio y octubre) se suman los del trimestre: el importe de la asesoría si ya lo ha puesto o, si no, una <b>estimación</b> con lo cargado el trimestre anterior. Importes: el último (nóminas, SS, alquiler) o la media de los 3 últimos meses. Desmarca «contar» en los que no tocan. Los cobros que entren esos días no se restan.</p>

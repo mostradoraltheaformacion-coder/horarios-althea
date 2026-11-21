@@ -372,7 +372,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=20nov-v141"></script>
+<script type="module" src="fb.js?v=21nov-v144"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -1141,7 +1141,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="20nov-v141";
+const APP_VER="21nov-v144";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -1882,7 +1882,10 @@ function necesitaRecibo(a){
 }
 const sinReciboLista=()=>sortedAlumnos().filter(([,a])=>necesitaRecibo(a));
 const enArgos=a=>a.argos==="activo"||(a.recibos||[]).some(r=>r.origen==="argos"||(r.numero&&!r.extra&&!r.clase));
-const altasArgosLista=()=>sortedAlumnos().filter(([,a])=>!a.baja&&!a.exento&&!a.argosOk&&!enArgos(a)&&(a.altaApp||(a.clases.length&&!(a.recibos||[]).length&&a.argos!=="baja")));
+/* 20/11/2026 (titular): las fichas creadas por una cita (entrevista o sesión) que aún no tienen clases no hay que pasarlas a Argos;
+   si luego se les pone una clase, vuelven a salir */
+const soloCita=(id,a)=>{if(a.clases.length)return false;if(a.deCita||a.psico)return true;try{if(typeof evEscuchar==="function")evEscuchar()}catch(_){}return typeof EV!=="undefined"&&EV.docs.some(e=>e&&e.alumno===id)};
+const altasArgosLista=()=>sortedAlumnos().filter(([id,a])=>!a.baja&&!a.exento&&!a.argosOk&&!enArgos(a)&&(a.altaApp||(a.clases.length&&!(a.recibos||[]).length&&a.argos!=="baja"))&&!soloCita(id,a));
 function vAltasArgos(){
   const l=altasArgosLista(),hechos=sortedAlumnos().filter(([,a])=>a.argosOk&&String(a.argosOk.t)>=sumaDias(todayISO(),-60)).sort((x,y)=>String(y[1].argosOk.t).localeCompare(String(x[1].argosOk.t)));
   if(!l.length&&!hechos.length)return "";
@@ -5101,7 +5104,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=20nov-v141"></script>
+<script src="gestion.js?v=21nov-v144"></script>
 
 
 </body></html>

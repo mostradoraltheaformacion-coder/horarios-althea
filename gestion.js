@@ -790,7 +790,7 @@ function vEfectivoSem(mes,E){E=E||semanasEfectivo(mes);
     ${E.sem.map(w=>`<tr><td style="white-space:nowrap">${fmtFecha(w.desde).slice(0,5)}${w.hasta!==w.desde?` – ${fmtFecha(w.hasta).slice(0,5)}`:""}</td><td style="text-align:right">${eur(w.cob)}</td><td style="text-align:right">${w.ing?eur(w.ing):"—"}${w.nIng>1?` <span class="note">(${w.nIng})</span>`:""}</td><td style="text-align:right;${Math.abs(w.acum)>0.5?"color:var(--warn);font-weight:600":""}">${eurS(w.acum)}</td></tr>`).join("")}
     <tr style="font-weight:700"><td>Total del mes</td><td style="text-align:right">${eur(E.cob)}</td><td style="text-align:right">${eur(E.ing)}</td><td style="text-align:right">${eurS(E.sinIng)}</td></tr></tbody></table>`}
 function vGastos(){
-  if(!gbVer())return `<div class="empty">Solo dirección.</div>`;gbEscuchar();nmEscuchar();cajaEscuchar();if(typeof preEscuchar==="function")try{preEscuchar()}catch(_){}if(NM.ok&&GB.ok&&!NM.enl){NM.enl=true;setTimeout(nmEnlazarPendientes,1500)}imEscuchar();if(IM.ok&&GB.ok)setTimeout(imEnlazar,2500);if(GB.inf)return vInforme();if(GB.rent)return vRentabilidad();
+  if(!gbVer())return `<div class="empty">Solo dirección.</div>`;gbEscuchar();nmEscuchar();cajaEscuchar();if(typeof preEscuchar==="function")try{preEscuchar()}catch(_){}if(NM.ok&&GB.ok&&!NM.enl){NM.enl=true;setTimeout(nmEnlazarPendientes,1500)}imEscuchar();if(IM.ok&&GB.ok)setTimeout(imEnlazar,2500);if(GB.inf)return vInforme();if(GB.rent)return vRentabilidad();if(GB.prev)return vPrevision();
   const ms=mesesBanco();if(!GB.mes||!ms.includes(GB.mes)){const n=k=>Object.keys((GB.docs.find(d=>d.id===k)||{}).movs||{}).length;GB.mes=ms.find(k=>n(k)>=10)||ms[0]||""}const mes=GB.mes;
   const todos=movsTodos(),delMes=todos.filter(m=>m.mes===mes),cuentas=[...new Set(todos.map(m=>m.cuenta))].sort();
   const q=nzC(GB.q);
@@ -808,7 +808,7 @@ function vGastos(){
       <div class="row" style="gap:8px;margin-top:8px">${GB.imp.err||!GB.imp.res.some(x=>x.nuevos)?"":`<button class="btn small primary" data-gb="impok">Guardar ${GB.imp.res.reduce((s,x)=>s+x.nuevos,0)} movimientos nuevos</button>`}<button class="btn small" data-gb="impno">${GB.imp.err||!GB.imp.res.some(x=>x.nuevos)?"Cerrar":"Cancelar"}</button></div></div>`:"";
   return `<div class="bar"><h2>Gastos y banco</h2><span class="legend">Extractos del Banco Sabadell</span></div>
   ${GB.err?`<div class="aviso pend" style="display:block">${esc(GB.err)}</div>`:""}
-  <div class="bar" style="gap:8px;flex-wrap:wrap"><button class="btn" data-gb="rent" style="order:9;margin-left:auto">Rentabilidad</button><button class="btn" data-gb="inf" style="order:10">Informe del mes</button><label class="btn primary" style="cursor:pointer">Subir extractos del Sabadell (.xls)<input type="file" id="gb-file" accept=".xls,.xlsx" multiple hidden></label>
+  <div class="bar" style="gap:8px;flex-wrap:wrap"><button class="btn" data-gb="prev" style="order:8;margin-left:auto">Previsión fin de mes</button><button class="btn" data-gb="rent" style="order:9">Rentabilidad</button><button class="btn" data-gb="inf" style="order:10">Informe del mes</button><label class="btn primary" style="cursor:pointer">Subir extractos del Sabadell (.xls)<input type="file" id="gb-file" accept=".xls,.xlsx" multiple hidden></label>
     <label class="btn" style="cursor:pointer" title="Desde Argos: el PDF con todas las facturas del mes y el listado de facturas. Se pueden subir los dos a la vez.">Subir facturas de venta de Argos (PDF)<input type="file" id="gb-ventas" accept=".pdf,application/pdf" multiple hidden></label>
     <label class="btn" style="cursor:pointer" title="Argos → Caja → exportar a Excel (un día o varios). Sirve para cuadrar lo cobrado con tarjeta con las liquidaciones del TPV.">Subir caja de Argos (.xls)<input type="file" id="gb-acaja" accept=".xls,.xlsx" multiple hidden></label>
     <label class="btn" style="cursor:pointer" title="Justificantes del banco, facturas de proveedores, nóminas, listado de costes y TC1 de A3: todos juntos. Cada uno va a su movimiento.">Subir documentos (PDF)<input type="file" id="gb-justf" accept=".pdf,application/pdf" multiple hidden></label>
@@ -1794,7 +1794,9 @@ document.head.insertAdjacentHTML("beforeend",`<style>#informe h3{font-family:var
 @media print{body.printinf>*:not(main){display:none!important}body.printinf main>*:not(#informe){display:none!important}body.printinf .noprint{display:none!important}
 body.printinf #informe{border:0;box-shadow:none;padding:0}body.printinf{background:#fff}body.printinf #informe .stat{border:1px solid #ccc}@page{margin:14mm}}</style>`);
 document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.closest("[data-gb]");if(!t||!gbVer())return;const act=t.dataset.gb;
-  if(act==="rent"){e.preventDefault();GB.rent=true;GB.inf=false;render();scrollTo(0,0);return}
+  if(act==="rent"){e.preventDefault();GB.rent=true;GB.inf=false;GB.prev=false;render();scrollTo(0,0);return}
+  if(act==="prev"){e.preventDefault();GB.prev=true;GB.rent=false;GB.inf=false;render();scrollTo(0,0);return}
+  if(act==="prevno"){e.preventDefault();GB.prev=false;render();return}
   if(act==="rentno"){e.preventDefault();GB.rent=false;render();return}
   if(act==="inf"){e.preventDefault();GB.inf=true;GB.verAse="";render();scrollTo(0,0)}else if(act==="infno"){e.preventDefault();GB.inf=false;render()}
   else if(act==="infprint"){e.preventDefault();document.body.classList.add("printinf");const fin=()=>{document.body.classList.remove("printinf");removeEventListener("afterprint",fin)};addEventListener("afterprint",fin);setTimeout(()=>window.print(),50)}
@@ -2190,6 +2192,58 @@ function rtDesglose(k,L){const ms=new Set(L.map(x=>x.mes)),l=movsTodos().filter(
     <b style="min-width:80px;text-align:right;font-variant-numeric:tabular-nums">${eur(r2(-m.importe))}</b><span style="min-width:120px;text-align:right">${(()=>{const {j,d}=docsMov(m),f=faltas(m);return [j?`<a href="#" data-blob="${esc(j.id)}">🏦</a>`:f.j?`<span class="badge b-pend">Falta just.</span>`:"",d?`<a href="#" data-blob="${esc(d.id)}">📄</a>`:f.d?`<span class="badge b-pend">Falta ${esc((DOC_TXT[docReq(m)]||"").toLowerCase().replace(/ \(.*/,""))}</span>`:""].filter(Boolean).join(" ")||`<span class="note">—</span>`})()}</span>
     <select data-gbcat="${esc(m.mes)}|${esc(m.id)}" aria-label="Categoría" style="max-width:180px;font-size:12px">${CATS.filter(([c])=>c!=="pend").map(([c,lb])=>`<option value="${c}" ${c===m.cat?"selected":""}>${esc(lb)}</option>`).join("")}</select></div>`).join("")||`<p class="note">Sin movimientos.</p>`}
     <p class="note" style="margin:4px 0 0">${l.length} movimiento${l.length===1?"":"s"}. Puedes cambiar la categoría aquí mismo.</p></div>`}
+/* ---------- Previsión de fin de mes (21/11/2026, titular; solo dirección) ----------
+   «Cuánto dinero debo tener al final de cada mes para afrontar los pagos»: con el historial del banco busca los gastos que se repiten
+   (mismo tipo de gasto y concepto en al menos 2 de los últimos 4 meses cerrados), su día habitual y su importe (media de los últimos;
+   nóminas y SS, el último). Suma los que caen entre el día PV_INI de un mes y el PV_FIN del siguiente (nóminas, Seguridad Social,
+   alquiler, recibos…) más los impuestos domiciliados que haya puesto la asesoría. Se puede quitar una línea (config/banco.prevNo). */
+const PV_INI=20,PV_FIN=10;
+const mesAntPv=m=>sumaDias(m+"-01",-1).slice(0,7),mesSigPv=m=>sumaDias(m+"-28",5).slice(0,7);
+const diasMesPv=m=>+sumaDias(mesSigPv(m)+"-01",-1).slice(8,10);
+const prevKey=m=>(m.cat||"pend")+"|"+String(m.concepto||"").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\d+/g," ").replace(/[^A-Z ]/g," ").replace(/\b(COMPRA|TARJ|TRANSFERENCIA|ADEUDO|RECIBO|A|DE|LA|EL|SL|SA|SLU)\b/g," ").replace(/\s+/g," ").trim().split(" ").slice(0,3).join(" ");
+function prevRecurrentes(){
+  const hoy=todayISO();let m=hoy.slice(0,7);const meses=[];for(let i=0;i<4;i++){m=mesAntPv(m);meses.push(m)}
+  const l=movsTodos().filter(x=>x.importe<0&&meses.includes(String(x.fv).slice(0,7))&&catTipo(x.cat)==="g");
+  const g=new Map();for(const x of l){const k=prevKey(x);if(!g.has(k))g.set(k,[]);g.get(k).push(x)}
+  const out=[];for(const [k,xs] of g){const porMes={};for(const x of xs){const mm=String(x.fv).slice(0,7);porMes[mm]=(porMes[mm]||0)+(-x.importe)}
+    const ms=Object.keys(porMes).sort();if(ms.length<2)continue;
+    const dias=xs.map(x=>+String(x.fv).slice(8,10)).sort((a,b)=>a-b),dia=dias[Math.floor(dias.length/2)];
+    const vals=ms.map(k=>porMes[k]),ult=vals[vals.length-1],med=vals.slice(-3).reduce((s,v)=>s+v,0)/Math.min(3,vals.length);
+    const ultMov=xs.sort((a,b)=>String(a.fv).localeCompare(String(b.fv)))[xs.length-1];
+    out.push({k,cat:ultMov.cat,txt:ultMov.concepto,dia,imp:r2(["nominas","ssemp","ssaut","alquiler"].includes(ultMov.cat)?ult:med),n:ms.length,ult:r2(ult)})}
+  return out}
+/* fecha prevista de una línea en la ventana que empieza el día PV_INI del mes M */
+function prevFecha(x,M){const d=x.dia;if(d>=PV_INI){const mm=Math.min(d,diasMesPv(M));return `${M}-${String(mm).padStart(2,"0")}`}if(d<=PV_FIN){const N=mesSigPv(M);return `${N}-${String(d).padStart(2,"0")}`}return null}
+function vPrevision(){gbEscuchar();imEscuchar();
+  const back=`<div class="bar"><h2>Previsión de fin de mes</h2><span class="legend"><button class="btn small" data-gb="prevno">← Volver a Gastos</button></span></div>`;
+  if(!GB.ok)return back+`<p class="note">Cargando el banco…</p>`;
+  const R=prevRecurrentes(),no=new Set((GB.cfg&&GB.cfg.prevNo)||[]),hoy=todayISO(),todos=movsTodos();
+  /* saldo: el último movimiento con saldo de cada cuenta */
+  const ult={};for(const x of todos)if(x.saldo!=null&&x.cuenta!=="caja"&&(!ult[x.cuenta]||String(x.fo||x.fv)>=String(ult[x.cuenta].fo||ult[x.cuenta].fv)))ult[x.cuenta]=x;
+  const saldoTot=r2(Object.values(ult).reduce((s,x)=>s+(+x.saldo||0),0));
+  const pagado=(x,f)=>todos.some(m=>m.importe<0&&prevKey(m)===x.k&&Math.abs(difDias(m.fv,f))<=6);
+  const meses=[];let M=hoy.slice(0,7);if(+hoy.slice(8,10)>PV_FIN&&+hoy.slice(8,10)<PV_INI){}for(let i=0;i<3;i++){meses.push(M);M=mesSigPv(M)}
+  /* si hoy es del 1 al PV_FIN, la ventana del mes anterior aún está abierta */
+  if(+hoy.slice(8,10)<=PV_FIN)meses.unshift(mesAntPv(hoy.slice(0,7))),meses.pop();
+  const bloques=meses.map(M=>{
+    const ini=`${M}-${PV_INI}`,fin=`${mesSigPv(M)}-${String(PV_FIN).padStart(2,"0")}`;
+    const lin=R.map(x=>({...x,f:prevFecha(x,M)})).filter(x=>x.f&&x.f>=ini&&x.f<=fin).sort((a,b)=>a.f.localeCompare(b.f));
+    const imp=(IM.docs||[]).filter(x=>+x.importe>0&&x.fecha&&x.fecha>=ini&&x.fecha<=fin&&!/centro|presencial|nrc/i.test(String(x.quien||""))&&!(typeof imCargo==="function"&&imCargo(x))).map(x=>({k:"imp|"+x.id,cat:"impuestos",txt:`Impuesto ${x.modelo} (asesoría)`,f:x.fecha,imp:+x.importe,imp0:true}));
+    const filas=[...lin,...imp].sort((a,b)=>a.f.localeCompare(b.f)).map(x=>({...x,hecho:x.f<=hoy&&!x.imp0&&pagado(x,x.f),fuera:no.has(x.k)}));
+    const pend=r2(filas.filter(x=>!x.fuera&&!x.hecho).reduce((s,x)=>s+x.imp,0)),total=r2(filas.filter(x=>!x.fuera).reduce((s,x)=>s+x.imp,0));
+    return {M,ini,fin,filas,pend,total}});
+  const actual=bloques[0];
+  const caja=`<div class="stats" style="margin:8px 0 14px"><div class="stat"><b>${eur(saldoTot)}</b><span>Saldo en el banco según el último extracto${Object.values(ult).length?` (${Object.values(ult).map(x=>"…"+esc(String(x.cuenta).slice(-4))+" "+fmtFecha(x.fo||x.fv)).join(" · ")})`:""}</span></div>
+    <div class="stat"><b>${eur(actual.pend)}</b><span>Pagos que faltan del ${fmtFecha(actual.ini)} al ${fmtFecha(actual.fin)}</span></div>
+    <div class="stat"><b style="color:${saldoTot-actual.pend<0?"var(--bad)":"var(--ok)"}">${saldoTot-actual.pend<0?"Faltan ":"Sobran "}${eur(Math.abs(r2(saldoTot-actual.pend)))}</b><span>${saldoTot-actual.pend<0?"Hay que ingresar antes de esos pagos (sin contar lo que se cobre mientras)":"Con el saldo actual llega (sin contar lo que se cobre)"}</span></div></div>`;
+  const tabla=b=>`<div class="panel" style="margin-bottom:12px"><div class="bar" style="margin-bottom:6px"><b style="font-size:16px">Fin de ${esc(mesTxt(b.M))}</b><span class="note">del ${fmtFecha(b.ini)} al ${fmtFecha(b.fin)}</span><span style="margin-left:auto;font-weight:700">Hay que tener: ${eur(b.total)}</span></div>
+    ${b.filas.length?`<table class="pvt"><thead><tr><th>Día previsto</th><th>Pago</th><th>Tipo</th><th class="r">Importe</th><th></th></tr></thead><tbody>${b.filas.map(x=>`<tr style="${x.fuera?"opacity:.45;text-decoration:line-through":""}"><td>${fmtFecha(x.f)}</td><td>${esc(x.txt)}${x.n?` <span class="note">· ${x.n} de los últimos meses</span>`:""}</td><td class="note">${esc(catTxt(x.cat))}</td><td class="r">${eur(x.imp)}${x.hecho?` <span class="badge b-si">pagado</span>`:""}</td><td>${x.imp0?"":`<label class="chk" style="margin:0" title="Quitar de la previsión"><input type="checkbox" data-gbprev="${esc(x.k)}" ${x.fuera?"":"checked"}><span>contar</span></label>`}</td></tr>`).join("")}</tbody></table>`:`<p class="note">No hay pagos que se repitan en esas fechas.</p>`}
+    ${b.pend!==b.total?`<p class="note" style="margin:6px 0 0">Ya pagado: ${eur(r2(b.total-b.pend))} · falta: <b>${eur(b.pend)}</b></p>`:""}</div>`;
+  const css=`<style>.pvt{width:100%;border-collapse:collapse;font-size:14px}.pvt th{font:600 11px Inter,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}.pvt td{padding:7px 8px;border-bottom:1px solid var(--line)}.pvt .r{text-align:right;white-space:nowrap}</style>`;
+  return `${css}<div class="rt">${back}<p class="note">Pagos que se repiten en los últimos meses (nóminas, Seguridad Social, alquiler, seguros, recibos…) y que caen <b>entre el día ${PV_INI} y el ${PV_FIN} del mes siguiente</b>, más los impuestos domiciliados que ha puesto la asesoría. Importes: el último (nóminas, SS, alquiler) o la media de los 3 últimos meses. Desmarca «contar» en los que no tocan. Los cobros que entren esos días no se restan.</p>
+    ${caja}${bloques.map(tabla).join("")}</div>`}
+document.addEventListener("change",async e=>{const t=e.target;if(!t||!t.dataset||t.dataset.gbprev==null||!gbVer())return;const k=t.dataset.gbprev,l=new Set((GB.cfg&&GB.cfg.prevNo)||[]);if(t.checked)l.delete(k);else l.add(k);
+  const cfg={...(GB.cfg||{}),prevNo:[...l]};try{await S.db.doc("config/banco").set(cfg);GB.cfg=cfg;render()}catch(_){toast("No se ha podido guardar")}});
 function vRentabilidad(){gbEscuchar();const T=datosRent();
   const pers=[...new Set(T.map(x=>trimDe(x.mes)))].sort().reverse(),anios=[...new Set(T.map(x=>x.mes.slice(0,4)))].sort().reverse();
   if(!RT.per||(RT.per!=="todo"&&!pers.includes(RT.per)&&!anios.includes(RT.per)))RT.per="todo";

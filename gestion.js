@@ -899,8 +899,23 @@ async function subirCajaArgos(files){try{await cargarJs(XLSXJS)}catch(_){toast("
   const ks=Object.keys(dias).sort();if(!ks.length){toast(malos?"No reconozco el archivo: tiene que ser el Excel de la caja de Argos":"El archivo no tiene cobros");return}
   try{for(const k of ks){const mes=k.slice(0,7),ref=S.db.doc("banco/"+mes),v={t:nowISO(),por:quienSoy(),f:dias[k].map(({dia,...x})=>x)};
       const sn=await ref.get();if(sn.exists)await ref.update({["argosCaja."+k]:v});else await ref.set({mes,argosCaja:{[k]:v}})}
-    ACJ.ver=true;toast(`Caja de Argos guardada: ${ks.length} día${ks.length===1?"":"s"} (${ks.map(k=>fmtFecha(k)).join(", ")})${malos?` · ${malos} archivo${malos===1?"":"s"} sin leer`:""}`);render()}
+    let nHX=0;try{nHX=await hxPagadosCajaArgos(dias)}catch(e){console.error(e)}
+    ACJ.ver=true;toast(`Caja de Argos guardada: ${ks.length} día${ks.length===1?"":"s"} (${ks.map(k=>fmtFecha(k)).join(", ")})${malos?` · ${malos} archivo${malos===1?"":"s"} sin leer`:""}${nHX?` · ${nHX} recibo${nHX===1?"":"s"} de clases sueltas pagado${nHX===1?"":"s"}`:""}`);render()}
   catch(e){console.error(e);toast("No se ha podido guardar la caja de Argos")}}
+/* 22/11/2026 (titular): recibos de clases sueltas de la app (HX). Recepción hace el mismo recibo a mano en Argos (otro número, misma
+   fecha, concepto «clase suelta»); cuando el cobro aparece en la caja de Argos, el de la app queda pagado. Se empareja por el número
+   de Argos (si ya se juntó con el listado) o por titular + importe + concepto «suelta», con el cobro el día del recibo o hasta 31 días después. */
+async function hxPagadosCajaArgos(dias){if(S.role!=="dir"||esMos()||typeof SUE_FIJA_DESDE==="undefined")return 0;let n=0;const usados=new Set();
+  const filas=Object.values(dias).flat().sort((x,y)=>(x.dia+x.h).localeCompare(y.dia+y.h));
+  for(const [id,a] of S.alumnos){if(!a||!a.sueltas)continue;let recibos=null;
+    const pend=(a.recibos||[]).filter(r=>r&&r.serie==="HX"&&r.origen==="app"&&r.estado!=="pagado"&&r.estado!=="anulado"&&String(r.emitido||"")>=SUE_FIJA_DESDE)
+      .sort((x,y)=>String(x.emitido).localeCompare(String(y.emitido)));
+    for(const r of pend){const em=String(r.emitido||"").slice(0,10),k=filas.findIndex((x,i)=>!usados.has(i)&&Math.abs(x.imp-(+r.importe||0))<0.005&&x.dia>=em&&x.dia<=sumaDias(em,31)
+        &&((r.argos&&x.num===r.argos)||(/suelt/i.test(x.c)&&(typeof idDeTitular==="function"&&idDeTitular(x.tit)===id))));
+      if(k<0)continue;usados.add(k);const x=filas[k];
+      recibos=(recibos||a.recibos).map(y=>y===r||(y&&y.id===r.id)?{...y,estado:"pagado",pagado:x.dia,forma:x.fp||"",cajaArgos:{dia:x.dia,h:x.h||"",num:x.num||""}}:y)}
+    if(recibos&&await save(id,{recibos})){n+=recibos.filter(y=>y&&y.cajaArgos&&!(a.recibos||[]).some(z=>z&&z.id===y.id&&z.estado==="pagado")).length;a.recibos=recibos}}
+  return n}
 /* Empareja por importe dos listas (multiconjunto): devuelve lo que sobra en cada una */
 function emparejarImp(a,b){const bb=b.map(x=>({...x,_u:false})),sa=[];
   for(const x of a){const j=bb.findIndex(y=>!y._u&&Math.abs(y.imp-x.imp)<0.005);if(j>=0)bb[j]._u=true;else sa.push(x)}
@@ -3609,7 +3624,7 @@ function pdTarjetas(){gbEscuchar();const hoy=todayISO(),hoyM=hoy.slice(0,7),L=[]
   return L}
 /* Avisos de alumnos y recibos: los mismos paneles que en Recibos y Alumnos (con sus botones). Solo los que piden algo. */
 function pdPaneles(){const mes=todayISO().slice(0,7),out=[];
-  for(const [k,f] of [["pre",()=>vPreLista()],["msg",()=>vMensajesDir()],["altas",()=>vAltasArgos()],["sinrec",()=>vSinRecibo()],["nocuad",()=>vNoCuadran(mes)],["extras",()=>vExtrasDir()],["sinal",()=>vSinAlumno()]]){
+  for(const [k,f] of [["pre",()=>vPreLista()],["msg",()=>vMensajesDir()],["altas",()=>vAltasArgos()],["sinrec",()=>vSinRecibo()],["nocuad",()=>vNoCuadran(mes)],["extras",()=>vExtrasDir()],["sinal",()=>vSinAlumno()],["hxwa",()=>typeof vHxEnviar==="function"?vHxEnviar():""]]){
     const h=pdTry(f,"");if(h&&/class="aviso (pend|no)\b/.test(h))out.push(h)}
   return out}
 function pdContar(){if(S.role!=="dir"||esMos())return 0;if(PD.cache&&Date.now()-PD.t<20000)return PD.cache;

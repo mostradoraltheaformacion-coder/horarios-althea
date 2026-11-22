@@ -372,7 +372,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=22nov-v148"></script>
+<script type="module" src="fb.js?v=22nov-v150"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -972,8 +972,11 @@ const pilotoHX=()=>{const c=(S.recCfg&&S.recCfg.pilotoHX)||null;return {profes:c
    el recibo de esa clase (serie HX, clase = "fecha|hora"); si se cambia a falta y el recibo sigue pendiente, se quita. Solo clases
    desde «desde» (el día en que se activa) y con las profesoras de la prueba. No necesitan recibo mensual de Argos. */
 function porClaseDe(a){const P=pilotoHX();for(const [id,v] of Object.entries(P.porClase))if(v&&S.alumnos.get(id)===a&&P.alumnos.includes(id))return {id,...v};return null}
-/* 22/11/2026: desde este día, las clases del horario de los alumnos de clases sueltas crean su recibo HX al marcar «Asistió» */
-const SUE_FIJA_DESDE="2026-11-19";
+/* 22/11/2026 (titular): desde este día, las clases del horario de los alumnos de clases sueltas crean su recibo HX al marcar
+   «Asistió»; la app avisa para mandarlo por WhatsApp y recepción hace a mano el mismo recibo en Argos (misma fecha, concepto
+   «clase suelta»). Al cargar el listado de Argos, ese recibo se junta con el de la app (no sale dos veces) y, al cargar la caja
+   de Argos, el de la app queda pagado. */
+const SUE_FIJA_DESDE="2026-11-23";
 const hxActivo=(id,e)=>{const al=S.alumnos.get(id);if(al&&al.sueltas)return true;if(!cajaPrueba())return true;const P=pilotoHX();return P.alumnos.includes(id)&&P.profes.includes(e.profe)};
 let hxCorriendo=false;
 /* 14/11/2026 (titular): si el alumno ya tiene un recibo de la app (HX) pendiente, la nueva clase suelta u hora extra se añade a ese
@@ -984,11 +987,13 @@ const hxRehacer=(r0,l)=>{const {extra:_e,clase:_c,...r}=r0;if(l.length===1){if(l
 const hxPendiente=recibos=>recibos.filter(r=>r&&r.serie==="HX"&&r.origen==="app"&&r.estado!=="pagado").sort((x,y)=>String(x.emitido).localeCompare(String(y.emitido)))[0]||null;
 const hxTiene=(recibos,k,v)=>recibos.some(r=>r&&(r[k]===v||(Array.isArray(r.lineas)&&r.lineas.some(x=>x&&x[k]===v))));
 /* añade una línea: al recibo HX pendiente, o en un recibo nuevo. Devuelve {recibos, r, nuevo} */
-function hxAnadir(a,recibos,linea,f){const p=hxPendiente(recibos);
+function hxAnadir(a,recibos,linea,f,solo){const p=solo?null:hxPendiente(recibos);
   if(p){const r=hxRehacer(p,[...hxLineas(p),linea]);return {recibos:recibos.map(x=>x===p?r:x),r,nuevo:false}}
   const y=+String(f||todayISO()).slice(0,4);let max=0;for(const [,x] of S.alumnos)for(const r of (x===a?recibos:x.recibos)||[])if(r&&r.serie==="HX"&&+r.anio===y)max=Math.max(max,+r.num||0);
   const r={id:uid(),numero:`HX${String(y).slice(2)}-${String(max+1).padStart(4,"0")}`,serie:"HX",num:max+1,anio:y,emitido:f||todayISO(),concepto:linea.txt,importe:+linea.imp,estado:"pendiente",pagado:"",forma:"",origen:"app",...(linea.extra?{extra:linea.extra}:{}),...(linea.clase?{clase:linea.clase}:{})};
   return {recibos:[...recibos,r],r,nuevo:true}}
+/* 22/11/2026: con clases sueltas, un recibo por clase (se manda por WhatsApp y se hace igual en Argos) */
+const hxSolo=a=>!!(a&&a.sueltas);
 /* quita las líneas que cumplan f de los recibos HX pendientes; los recibos que se quedan sin líneas desaparecen */
 function hxQuitar(recibos,f){let cambia=false;const out=[];for(const r of recibos){
     if(!(r&&r.serie==="HX"&&r.estado!=="pagado")){out.push(r);continue}const l=hxLineas(r),q=l.filter(x=>!f(x));
@@ -1016,14 +1021,14 @@ async function recibosHX(){if(S.role!=="dir"||S.pv||S.ro||hxCorriendo||!S.alOk||
         for(const x of asistTodas(a)){const k=x.f+"|"+x.h;if(x.e!=="si"||!x.f||x.f<SUE_FIJA_DESDE||x.f>todayISO()||exK.has(k)||hxTiene(recibos,"clase",k)||argosDia(x.f))continue;
           const p=x.p||((a.sueltas.profes||[])[0])||"",imp=tarifaDe(a,{profe:p,fecha:x.f,hora:x.h});if(imp==null||!(imp>0))continue;
           const c=(a.clases.find(z=>z.dia===diaDe(x.f)&&z.hora===x.h)||{}),hr=c.ini?c.ini:(HSHORT[x.h]||x.h);
-          const o=hxAnadir(a,recibos,{txt:`Clase del ${fmtFecha(x.f)} · ${hr}${p?" con "+p:""}`,imp,clase:k,p},x.f);recibos=o.recibos;nuevos.push(o.r);cambia=true}
+          const o=hxAnadir(a,recibos,{txt:`Clase suelta del ${fmtFecha(x.f)} · ${hr}${p?" con "+p:""}`,imp,clase:k,p},x.f,true);recibos=o.recibos;nuevos.push(o.r);cambia=true}
         if(!mos){const q=hxQuitar(recibos,l=>l.clase&&!exK.has(l.clase)&&(()=>{const [f,h]=String(l.clase).split("|");return f>=SUE_FIJA_DESDE&&asistDe(a,f,h,l.p||((a.asist||{})[l.clase]||{}).p||"")!=="si"})());if(q){recibos=q;cambia=true}}
         if(cambia&&await save(id,{recibos})){a.recibos=recibos;for(const r of nuevos)toast(`Recibo ${r.numero}: ${titulo(a.nombre)}, ${eur(r.importe)}`)}}
       /* 14/11/2026 (titular): el recibo se crea cuando la profesora confirma la clase («Asistió»), no al apuntarla */
       for(const e of a.extras||[]){if(!e||!e.id||e.anulada||e.cobro||!hxActivo(id,e))continue;
         if(hxTiene(a.recibos||[],"extra",e.id))continue;const imp=tarifaDe(a,e);if(imp==null)continue;
         if(asistDe(a,e.fecha,e.hora||keyDeMin(extraIni(e)),e.profe)!=="si")continue;
-        const o=hxAnadir(a,a.recibos||[],{txt:`${a.sueltas?"Clase":"Hora extra"} · ${extraTxt(e)}`,imp,extra:e.id},e.fecha),r=o.r;
+        const o=hxAnadir(a,a.recibos||[],{txt:`${a.sueltas?"Clase suelta":"Hora extra"} · ${extraTxt(e)}`,imp,extra:e.id},e.fecha,hxSolo(a)),r=o.r;
         const recibos=o.recibos,extras=(a.extras||[]).map(x=>x&&x.id===e.id?{...x,cobro:{recibo:r.numero,t:nowISO(),por:"app"}}:x);
         if(await save(id,{recibos,extras})){a.recibos=recibos;a.extras=extras;toast(o.nuevo?`Recibo ${r.numero} creado: ${titulo(a.nombre)}, ${extraTxt(e)} (${eur(imp)})`:`Añadida al recibo ${r.numero} de ${titulo(a.nombre)}: ${extraTxt(e)} (total ${eur(r.importe)})`)}}}}
   finally{hxCorriendo=false}}
@@ -1155,7 +1160,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="22nov-v148";
+const APP_VER="22nov-v150";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -1618,7 +1623,7 @@ function vRecibosDir(){
     <button class="stat" data-act="recfil" data-v="todos" aria-pressed="${f==="todos"}"><b>${eur(suma(l))}</b><span>Total de ${MESES[mm-1]} · ${l.length} recibo${l.length===1?"":"s"}</span></button>
     <button class="stat" data-act="recfil" data-v="atrasados" aria-pressed="${f==="atrasados"}"><b>${nAtr}</b><span><b style="display:inline;font-size:inherit;font-weight:700">Atrasados</b> · alumno${nAtr===1?"":"s"} con recibos de meses anteriores sin pagar (desde ${MESES[+ATR_DESDE().slice(5)-1]} ${ATR_DESDE().slice(0,4)}). Pulsa para ver la lista y avisar por WhatsApp</span></button>
     <button class="stat" data-act="recfil" data-v="becas" aria-pressed="${f==="becas"}"><b>${eur(suma(bec))}</b><span><b style="display:inline;font-size:inherit;font-weight:700">Esperando beca</b> · ${bec.length} recibo${bec.length===1?"":"s"} de ${nBecAl} alumno${nBecAl===1?"":"s"}, de todos los meses. No se les reclama</span></button>
-  </div>${vImport()}${vMensajesDir()}${vAltasArgos()}${vSinRecibo()}${vNoCuadran(S.recMes||todayISO().slice(0,7))}${vExtrasDir()}${vSinAlumno()}
+  </div>${vHxEnviar()}${vImport()}${vMensajesDir()}${vAltasArgos()}${vSinRecibo()}${vNoCuadran(S.recMes||todayISO().slice(0,7))}${vExtrasDir()}${vSinAlumno()}
   ${f==="atrasados"||f==="becas"?"":`<div class="bar"><input type="search" id="rq" placeholder="Buscar alumno o nº de recibo…" value="${esc(S.recQ||"")}" style="flex:1 1 240px" aria-label="Buscar recibo"></div>`}
   ${f==="atrasados"?vAtrasados():f==="becas"?vBecas():tabla}
   <p class="note">Cada alumno ve sus recibos en su perfil, pestaña Recibos. Para ponerlos al día, saca en Argos el listado de «Albaranes» (PDF o Excel) y súbelo con «Cargar listado de Argos»: lo que diga Argos sustituye a lo que hay en la app. También puedes marcar un recibo como pagado aquí a mano.</p>`;
@@ -1693,9 +1698,21 @@ function reciboArgos(a,r,prev){
     /* cobrado en la Caja de la app: se mantiene aunque Argos aún lo tenga pendiente */
     ...(prev&&prev.caja&&prev.caja.id?{caja:prev.caja,...(r.estado!=="pagado"?{estado:"pagado",pagado:prev.pagado||"",forma:prev.forma||""}:{})}:{})};
 }
+/* 22/11/2026: recibo de clase suelta hecho a mano en Argos (otro número, misma fecha e importe) → se junta con el HX de la app */
+const hxDeArgos=(l,r)=>l.findIndex(x=>x&&x.serie==="HX"&&x.origen==="app"&&x.argos===r.numero);
+const hxParaArgos=(a,l,r)=>!a||!a.sueltas||r.estado==="anulado"?-1:l.findIndex(x=>x&&x.serie==="HX"&&x.origen==="app"&&!x.argos&&x.estado!=="anulado"
+  &&Math.abs((+x.importe||0)-(+r.importe||0))<0.005&&String(x.emitido||"").slice(0,10)<=r.fecha&&r.fecha<=sumaDias(String(x.emitido||"").slice(0,10),3));
+function hxConArgos(x,r){const n={...x,argos:r.numero};
+  if(r.estado==="pagado"&&x.estado!=="pagado")return {...n,estado:"pagado",pagado:r.fechaPago||r.fecha||"",forma:r.forma||"",pagoArgos:true};
+  if(r.estado!=="pagado"&&x.estado==="pagado"&&x.pagoArgos){const {pagoArgos:_p,...m}=n;return {...m,estado:"pendiente",pagado:"",forma:""}}
+  return n}
 function mezclarRecibos(a,rs,st){
   const l=[...(a.recibos||[])];let cambios=0;
-  for(const r of rs){const i=l.findIndex(x=>x.numero===r.numero);
+  for(const r of rs){
+    {let j=hxDeArgos(l,r);if(j<0&&l.findIndex(x=>x.numero===r.numero)<0)j=hxParaArgos(a,l,r);
+      if(j>=0){const o=l[j];let n;if(r.estado==="anulado"){const {argos:_a,...m}=o;n=m}else n=hxConArgos(o,r);
+        if(stable(o)!==stable(n)){if(o.estado!=="pagado"&&n.estado==="pagado")st.pagados++;else st.otros++;l[j]=n;cambios++}continue}}
+    const i=l.findIndex(x=>x.numero===r.numero);
     if(r.estado==="anulado"){if(i>=0){l.splice(i,1);st.quitados++;cambios++}continue}
     const n=reciboArgos(a,r,i>=0?l[i]:null);
     if(i<0){l.push(n);st.nuevos++;cambios++;continue}
@@ -1799,6 +1816,24 @@ function vBecas(){
     <td class="note">${a.beca==="si"?"Marcado a mano":"Tiene recibos pagados con beca"}</td>
     <td><button class="btn small" data-act="becano" data-id="${esc(id)}">Avisar de nuevo</button></td></tr>`).join("")}</tbody></table></div>`;
 }
+/* 22/11/2026 (titular): recibos de clases sueltas que crea la app → se mandan por WhatsApp para que la familia lo vea en la app
+   y lo pague. Quién lo mandó se guarda en alumnos/<id>.waRec = {<id del recibo>: fecha}, que recepción también puede escribir. */
+const APP_URL="https://horarios.altheaformacion.com";
+function mensajeReciboHX(a,r){return `Hola, le escribimos de Althea Formación. Ya tiene disponible el recibo ${r.numero} de ${titulo(a.nombre)}: ${r.concepto} (${eur(+r.importe)}). Puede verlo en la app (${APP_URL}) y pagarlo en el centro o por Bizum al ${BIZUM_TXT}, poniendo en el concepto ${r.numero}. Muchas gracias.`}
+function hxPorEnviar(){const out=[];for(const [id,a] of sortedAlumnos()){if(!a.sueltas)continue;const w=a.waRec||{};
+    for(const r of a.recibos||[])if(r&&r.serie==="HX"&&r.origen==="app"&&r.estado!=="pagado"&&r.estado!=="anulado"&&String(r.emitido||"")>=SUE_FIJA_DESDE&&!w[r.id])out.push({id,a,r})}
+  return out}
+function vHxEnviar(){if(S.role!=="dir"||S.ro)return "";const l=hxPorEnviar();if(!l.length)return "";
+  return `<div class="aviso pend" style="display:block"><b>Recibos de clases sueltas para mandar por WhatsApp (${l.length})</b>
+    <p class="note" style="margin:4px 0">Los ha creado la app al marcar «Asistió». Mándalos a la familia y haz el mismo recibo en Argos (misma fecha, concepto «clase suelta»): al cargar el listado de Argos se juntan, y al cargar la caja de Argos queda pagado.</p>
+    ${l.map(({id,a,r})=>{const tel=digitos((a.telefonos||[])[0]||"").slice(-9);return `<div class="row" style="flex-wrap:wrap;gap:8px"><span class="grow"><a href="#" data-act="ir" data-id="${esc(id)}" style="color:inherit"><b>${esc(titulo(a.nombre))}</b></a> · ${esc(r.numero)} · ${esc(r.concepto||"")} · <b>${eur(+r.importe)}</b>${r.argos?` <span class="note">· Argos ${esc(r.argos)}</span>`:` <span class="note">· falta en Argos</span>`}</span>
+      ${tel.length===9?`<button class="btn small primary" data-act="hxwa" data-id="${esc(id)}" data-r="${esc(r.id)}">Enviar por WhatsApp</button>`:`<span class="note">Sin teléfono</span>`}
+      <button class="btn small" data-act="hxwaok" data-id="${esc(id)}" data-r="${esc(r.id)}" title="Ya se ha mandado de otra forma">Ya enviado</button></div>`}).join("")}</div>`}
+async function hxMarcarEnviado(id,rid){const a=S.alumnos.get(id);if(!a)return;const waRec={...(a.waRec||{}),[rid]:nowISO()};if(await save(id,{waRec})){a.waRec=waRec;render()}}
+document.addEventListener("click",e=>{const t=e.target.closest&&e.target.closest('[data-act="hxwa"],[data-act="hxwaok"]');if(!t)return;e.preventDefault();
+  const id=t.dataset.id,a=S.alumnos.get(id),r=a&&(a.recibos||[]).find(x=>x&&x.id===t.dataset.r);if(!r)return;
+  if(t.dataset.act==="hxwa"){const tel=digitos((a.telefonos||[])[0]||"").slice(-9);window.open(`https://wa.me/34${tel}?text=${encodeURIComponent(mensajeReciboHX(a,r))}`,"_blank","noopener")}
+  hxMarcarEnviado(id,r.id)});
 function vAtrasados(){
   const cuenta={};for(const [,a] of sortedAlumnos()){if(esperaBeca(a))continue;for(const r of (a.recibos||[]).filter(atrasado)){const m=String(r.emitido).slice(0,7);cuenta[m]=(cuenta[m]||0)+1}}
   const meses=Object.keys(cuenta).sort();if(S.atrMes&&!cuenta[S.atrMes])S.atrMes="";
@@ -5122,7 +5157,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=22nov-v148"></script>
+<script src="gestion.js?v=22nov-v150"></script>
 
 
 </body></html>

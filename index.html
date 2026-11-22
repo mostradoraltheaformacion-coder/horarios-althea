@@ -372,7 +372,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=21nov-v147"></script>
+<script type="module" src="fb.js?v=22nov-v148"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -972,6 +972,8 @@ const pilotoHX=()=>{const c=(S.recCfg&&S.recCfg.pilotoHX)||null;return {profes:c
    el recibo de esa clase (serie HX, clase = "fecha|hora"); si se cambia a falta y el recibo sigue pendiente, se quita. Solo clases
    desde «desde» (el día en que se activa) y con las profesoras de la prueba. No necesitan recibo mensual de Argos. */
 function porClaseDe(a){const P=pilotoHX();for(const [id,v] of Object.entries(P.porClase))if(v&&S.alumnos.get(id)===a&&P.alumnos.includes(id))return {id,...v};return null}
+/* 22/11/2026: desde este día, las clases del horario de los alumnos de clases sueltas crean su recibo HX al marcar «Asistió» */
+const SUE_FIJA_DESDE="2026-11-19";
 const hxActivo=(id,e)=>{const al=S.alumnos.get(id);if(al&&al.sueltas)return true;if(!cajaPrueba())return true;const P=pilotoHX();return P.alumnos.includes(id)&&P.profes.includes(e.profe)};
 let hxCorriendo=false;
 /* 14/11/2026 (titular): si el alumno ya tiene un recibo de la app (HX) pendiente, la nueva clase suelta u hora extra se añade a ese
@@ -1004,6 +1006,18 @@ async function recibosHX(){if(S.role!=="dir"||S.pv||S.ro||hxCorriendo||!S.alOk||
           if(v.e==="si"&&!ya){const c=(a.clases.find(z=>z.dia===diaDe(f)&&z.hora===h)||{}),hr=c.ini?c.ini:(HSHORT[h]||h);
             const o=hxAnadir(a,recibos,{txt:`Clase del ${fmtFecha(f)} · ${hr} con ${v.p}`,imp:+pcl.importe,clase:k},f);recibos=o.recibos;nuevos.push(o.r);cambia=true}
           else if(!mos&&v.e!=="si"&&ya){const q=hxQuitar(recibos,x=>x.clase===k);if(q){recibos=q;cambia=true}}}
+        if(cambia&&await save(id,{recibos})){a.recibos=recibos;for(const r of nuevos)toast(`Recibo ${r.numero}: ${titulo(a.nombre)}, ${eur(r.importe)}`)}}
+      /* 22/11/2026 (titular): alumnos de clases sueltas con su hora puesta en el horario (p. ej. Antonio Verdugo con Ainea):
+         al marcar «Asistió» se crea el recibo HX de esa clase, igual que con las horas extra; con falta, dirección lo quita
+         si sigue pendiente. Desde SUE_FIJA_DESDE. Si ese día ya hay un recibo de Argos, no se crea (para no duplicar). */
+      if(a.sueltas&&!pcl){let recibos=[...(a.recibos||[])],cambia=false;const nuevos=[];
+        const exK=new Set((a.extras||[]).filter(e=>e&&!e.anulada&&e.fecha).map(e=>e.fecha+"|"+(e.hora||keyDeMin(extraIni(e)))));
+        const argosDia=f=>recibos.some(r=>r&&r.serie!=="HX"&&r.estado!=="anulado"&&(+r.importe||0)>0&&String(r.emitido||"").slice(0,10)===f);
+        for(const x of asistTodas(a)){const k=x.f+"|"+x.h;if(x.e!=="si"||!x.f||x.f<SUE_FIJA_DESDE||x.f>todayISO()||exK.has(k)||hxTiene(recibos,"clase",k)||argosDia(x.f))continue;
+          const p=x.p||((a.sueltas.profes||[])[0])||"",imp=tarifaDe(a,{profe:p,fecha:x.f,hora:x.h});if(imp==null||!(imp>0))continue;
+          const c=(a.clases.find(z=>z.dia===diaDe(x.f)&&z.hora===x.h)||{}),hr=c.ini?c.ini:(HSHORT[x.h]||x.h);
+          const o=hxAnadir(a,recibos,{txt:`Clase del ${fmtFecha(x.f)} · ${hr}${p?" con "+p:""}`,imp,clase:k,p},x.f);recibos=o.recibos;nuevos.push(o.r);cambia=true}
+        if(!mos){const q=hxQuitar(recibos,l=>l.clase&&!exK.has(l.clase)&&(()=>{const [f,h]=String(l.clase).split("|");return f>=SUE_FIJA_DESDE&&asistDe(a,f,h,l.p||((a.asist||{})[l.clase]||{}).p||"")!=="si"})());if(q){recibos=q;cambia=true}}
         if(cambia&&await save(id,{recibos})){a.recibos=recibos;for(const r of nuevos)toast(`Recibo ${r.numero}: ${titulo(a.nombre)}, ${eur(r.importe)}`)}}
       /* 14/11/2026 (titular): el recibo se crea cuando la profesora confirma la clase («Asistió»), no al apuntarla */
       for(const e of a.extras||[]){if(!e||!e.id||e.anulada||e.cobro||!hxActivo(id,e))continue;
@@ -1141,7 +1155,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="21nov-v147";
+const APP_VER="22nov-v148";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -4603,6 +4617,10 @@ document.addEventListener("click",async e=>{
     S.fichaMsg="";if(await save(id,{usuario:u,clave:c})){a.usuario=u;a.clave=c;render();toast("Acceso guardado")}}
   else if(act==="recadd"){const imp=parseFloat($("#rc-importe").value.replace(",","."));const con=$("#rc-concepto").value.trim();
     if(!con){toast("Escribe el concepto");return}
+    /* 22/11/2026: no se guardan recibos sin importe (Julia Moreno tenía uno vacío) y se avisa si ya hay uno igual sin pagar */
+    if(isNaN(imp)||imp<=0){toast("Escribe el importe del recibo");return}
+    {const igual=(a.recibos||[]).find(r=>r&&r.estado!=="pagado"&&r.estado!=="anulado"&&Math.abs((+r.importe||0)-imp)<0.005&&String(r.concepto||"").toLowerCase().startsWith(con.toLowerCase().split("·")[0].trim()));
+     if(igual&&!confirm(`Ya tiene un recibo pendiente de ${eur(imp)} (${igual.concepto}${igual.numero?" · "+igual.numero:""}). ¿Añadir otro igualmente?`))return}
     const num=normNumRec((($("#rc-num")||{}).value)||"");if(num){const otro=[...S.alumnos].find(([,x])=>(x.recibos||[]).some(r=>r.numero===num));if(otro){toast(`El recibo ${num} ya está en la ficha de ${titulo(otro[1].nombre)}`);return}}
     const recibos=[...(a.recibos||[]),{id:uid(),...(num?{numero:num}:{}),concepto:con,emitido:$("#rc-fecha").value||todayISO(),importe:isNaN(imp)?null:imp,estado:"pendiente",pagado:""}];
     if(await save(id,{recibos})){a.recibos=recibos;render();toast("Recibo añadido")}}
@@ -5104,7 +5122,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=21nov-v147"></script>
+<script src="gestion.js?v=22nov-v148"></script>
 
 
 </body></html>

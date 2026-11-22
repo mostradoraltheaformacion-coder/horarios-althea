@@ -372,7 +372,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=22nov-v150"></script>
+<script type="module" src="fb.js?v=22nov-v151"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -1160,7 +1160,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="22nov-v150";
+const APP_VER="22nov-v151";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -2874,26 +2874,85 @@ async function quitarFotoAlumno(aid){
 /* ---------- copia de seguridad (protocolo: al menos semanal) ----------
    Dirección descarga un JSON con todo lo guardado; la fecha queda en config/copias. */
 const diasDesde=f=>f?Math.floor((Date.parse(todayISO())-Date.parse(String(f).slice(0,10)))/864e5):9999;
+/* 22/11/2026 (titular): copia completa para guardar en un pen. Un .zip con todo lo necesario para reconstruir la app igual:
+   datos (JSON de todas las colecciones), código (app/), reglas, plan de continuidad y manual técnico (config/continuidad, que
+   dirección actualiza subiendo «documentacion-althea.zip»), programa de restauración y, si se marca, los PDF y fotos. */
+const COPIA_COLS=["alumnos","privado","config","publico","claves","cuentas","altas","buzon","buzonProf","buzonAl","mensajes","preins","eventos","eventosNotas","citas","plazas","caja","banco","ventas","facturas","facturasPrueba","facturasTaller","nominas","fichajes","fichPin","impuestos","asesoria","archivos"];
+const COPIA_APP=["index.html","gestion.js","fb.js","manifest.webmanifest","icono.png","icono-192.png","fachada.jpg","ayuda-alumnos.mp4","ayuda-asesoria.mp4","_headers"];
+const RESTAURAR_MJS="// Restaurar una copia completa de la app de Althea en Firebase (22/11/2026).\n// Uso:  node restaurar.mjs <clave-cuenta-servicio.json> <carpeta-de-la-copia-descomprimida> [--si]\n// Sin --si solo cuenta lo que haría (prueba). Con --si escribe de verdad.\n// Requiere: Node.js 18 o superior y, en esta carpeta, «npm install firebase-admin».\nimport fs from \"node:fs\";\nimport path from \"node:path\";\nimport admin from \"firebase-admin\";\n\nconst [, , claveArch, carpeta, si] = process.argv;\nif (!claveArch || !carpeta) { console.log(\"Uso: node restaurar.mjs clave.json carpeta-copia [--si]\"); process.exit(1); }\nconst escribir = si === \"--si\";\nadmin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(claveArch, \"utf8\"))) });\nconst db = admin.firestore();\n\nconst dirDatos = path.join(carpeta, \"datos\");\nconst json = fs.readdirSync(dirDatos).find(f => f.endsWith(\".json\"));\nif (!json) { console.log(\"No encuentro el .json en la carpeta datos/\"); process.exit(1); }\nconst copia = JSON.parse(fs.readFileSync(path.join(dirDatos, json), \"utf8\"));\nconsole.log(`Copia del ${copia.fecha} · ${Object.keys(copia.colecciones).length} colecciones · ${escribir ? \"ESCRIBIENDO\" : \"PRUEBA (añade --si para escribir)\"}`);\n\n// Campos de alumnos/<id> (los ven sus profesoras); el resto va a privado/<id>. Igual que CORE en fb.js.\nconst CORE = new Set([\"nombre\",\"clases\",\"clasesHist\",\"telRel\",\"pagador\",\"faltas\",\"asist\",\"token\",\"trasHechos\",\"foto\",\"telefonos\",\"bloqueado\",\"actualizado\",\"puntuales\",\"confOk\",\"extras\",\"waRec\"]);\nconst NO = new Set([\"cuentas\"]); // dependen de la cuenta de Auth: se crean solas al entrar\n\n// Fechas de Firestore guardadas en el JSON como {seconds, nanoseconds} → Timestamp\nfunction fechas(v) {\n  if (Array.isArray(v)) return v.map(fechas);\n  if (v && typeof v === \"object\") {\n    const k = Object.keys(v);\n    if (typeof v.seconds === \"number\" && typeof v.nanoseconds === \"number\" && k.every(x => [\"seconds\", \"nanoseconds\", \"type\"].includes(x)))\n      return new admin.firestore.Timestamp(v.seconds, v.nanoseconds);\n    const o = {}; for (const [a, b] of Object.entries(v)) o[a] = fechas(b); return o;\n  }\n  return v;\n}\n\nlet lote = db.batch(), enLote = 0, total = 0;\nasync function poner(ruta, datos) {\n  total++; if (!escribir) return;\n  lote.set(db.doc(ruta), fechas(datos)); enLote++;\n  if (enLote >= 400) { await lote.commit(); lote = db.batch(); enLote = 0; }\n}\n\nfor (const [col, docs] of Object.entries(copia.colecciones)) {\n  if (NO.has(col) || col === \"archivos\") continue;\n  let n = 0;\n  for (const [id, d] of Object.entries(docs)) {\n    if (col === \"alumnos\") { // la copia trae el alumno completo: solo los campos CORE van a alumnos/\n      const c = {}; for (const [k, v] of Object.entries(d)) if (CORE.has(k)) c[k] = v;\n      await poner(`alumnos/${id}`, { ...c, profes: [], _d: {} }); // profes y _d los recalcula dirección al abrir la app\n    } else await poner(`${col}/${id}`, d);\n    n++;\n  }\n  console.log(`  ${col}: ${n}`);\n}\n\n// Archivos (PDF y fotos): datos en archivos/<id>.* si la copia los lleva; si no, solo se restaura su ficha.\nconst TROZO = 700000, dirArch = path.join(carpeta, \"archivos\");\nconst sueltos = fs.existsSync(dirArch) ? fs.readdirSync(dirArch) : [];\nlet na = 0, sinDatos = 0;\nfor (const [id, meta] of Object.entries((copia.colecciones.archivos) || {})) {\n  const f = sueltos.find(x => x.startsWith(id + \".\"));\n  if (!f) { sinDatos++; continue; } // sin el archivo no se puede restaurar (la ficha sola rompería la app)\n  const url = `data:${meta.tipo || \"application/octet-stream\"};base64,` + fs.readFileSync(path.join(dirArch, f)).toString(\"base64\");\n  const n = Math.ceil(url.length / TROZO), { d: _d, ...base } = meta;\n  if (n === 1) await poner(`archivos/${id}`, { ...base, n: 1, d: url });\n  else { await poner(`archivos/${id}`, { ...base, n }); for (let i = 0; i < n; i++) await poner(`archivos/${id}/p/${i}`, { d: url.slice(i * TROZO, (i + 1) * TROZO) }); }\n  na++;\n}\nconsole.log(`  archivos: ${na} restaurados${sinDatos ? ` · ${sinDatos} sin datos en la copia (haz la copia con «Incluir PDFs y fotos»)` : \"\"}`);\n\nif (escribir && enLote) await lote.commit();\nconsole.log(`${escribir ? \"Escritos\" : \"Se escribirían\"} ${total} documentos.`);\nconsole.log(\"Después: entra en la app como dirección (recalcula qué alumnos ve cada profesora) y haz una copia nueva.\");\n";
+const RESTAURAR_LEEME="CÓMO RESTAURAR LOS DATOS DE ESTA COPIA EN FIREBASE\n==================================================\n\nEsto lo hace mejor alguien que sepa algo de ordenadores. Tiempo: unos 20 minutos.\n\n1. Instala Node.js (versión 18 o superior) desde https://nodejs.org\n\n2. Descomprime la copia (botón derecho sobre el .zip → Extraer todo).\n   Dentro verás: datos/, app/, reglas/, restaurar/, archivos/ (si la copia lleva PDFs y fotos)...\n\n3. Consigue la clave de la cuenta de servicio de Firebase:\n   Firebase (https://console.firebase.google.com) → el proyecto → engranaje\n   «Configuración del proyecto» → «Cuentas de servicio» → «Generar nueva clave privada».\n   Se descarga un .json. ¡Es como una llave maestra! No lo compartas y bórralo al acabar.\n\n4. Abre una ventana de comandos (Windows: tecla Windows, escribe «cmd») y ve a la carpeta\n   restaurar/ de la copia descomprimida. Por ejemplo:\n       cd \"C:\\Users\\...\\althea-copia-2026-11-22\\restaurar\"\n\n5. Instala lo que necesita el programa (solo la primera vez):\n       npm install firebase-admin\n\n6. Prueba primero (no escribe nada, solo cuenta):\n       node restaurar.mjs \"C:\\ruta\\clave.json\" ..\n\n7. Si los números cuadran, restaura de verdad:\n       node restaurar.mjs \"C:\\ruta\\clave.json\" .. --si\n\n8. Publica las reglas (reglas/firestore.rules) en Firebase → Firestore → Reglas, si no lo estaban.\n\n9. Entra en la app como dirección. Al abrirla, la app recalcula qué alumnos ve cada\n   profesora. Cada persona entra con su usuario y clave de siempre (la app le crea el acceso).\n\n10. Haz una copia nueva desde la app y borra el .json de la clave del paso 3.\n\nImportante: restaurar SUSTITUYE los documentos por los de la copia. Lo hecho después de la\nfecha de la copia hay que volver a meterlo a mano.\n";
+async function contLeer(){if(S.cont!==undefined||!S.db)return;S.cont=null;try{const d=await S.db.doc("config/continuidad").get();S.cont=d.exists?d.data():null}catch(_){S.cont=null}render()}
 function vCopias(){
-  const u=S.copias&&S.copias.ultima, d=diasDesde(u);
+  const u=S.copias&&S.copias.ultima, d=diasDesde(u);if(S.cont===undefined)setTimeout(contLeer,0);
+  const C=S.cont,dd=C&&C.t?diasDesde(C.t):null;
   return `<section class="card"><h3>Copia de seguridad</h3>
-  <p class="note">El protocolo del centro pide una copia al menos cada semana, guardada fuera de este sistema (por ejemplo, en el ordenador del centro y en una memoria o servicio cifrado). El archivo lleva datos personales: guárdalo con cuidado.</p>
+  <p class="note">El protocolo del centro pide una copia al menos cada semana, guardada fuera de este sistema (en un pen cifrado con BitLocker y en la nube). Es un .zip con todo lo necesario para reconstruir la app igual: los datos, el código, las reglas de la base de datos, el plan de continuidad, el manual técnico y el programa para restaurarlo. Lleva datos personales y las claves de la app: guárdalo con cuidado.</p>
   ${u?`<p>Última copia: <b>${fmtFecha(String(u).slice(0,10))}</b>${d>7?` <span class="badge b-pend">hace ${d} días</span>`:""}</p>`:`<p><span class="badge b-pend">Todavía no se ha hecho ninguna copia</span></p>`}
-  <button class="btn primary" data-act="copia">Descargar copia</button></section>`;
+  <p class="note" style="margin:4px 0">${C&&C.files?`Plan de continuidad y documentación: versión del <b>${fmtFecha(String(C.t).slice(0,10))}</b> (${C.files.length} archivo${C.files.length===1?"":"s"})${dd>90?` <span class="badge b-pend">hace ${dd} días: pide la versión nueva</span>`:""}.`:`<span class="badge b-pend">Falta el plan de continuidad</span> Sube «documentacion-althea.zip» para que vaya en cada copia.`}
+    ${S.ro||esMos()?"":`<label class="btn small" style="cursor:pointer;margin-left:6px">Actualizar plan y documentación (.zip)<input type="file" id="cont-file" accept=".zip,application/zip" hidden></label>`}</p>
+  <label class="chk" style="margin:6px 0"><input type="checkbox" id="copia-pdf" ${S.copiaPdf?"checked":""}><span>Incluir PDFs y fotos (justificantes, facturas, nóminas…). Tarda más y ocupa más: una vez al trimestre.</span></label>
+  <button class="btn primary" data-act="copia">Descargar copia completa (.zip)</button></section>`;
 }
+document.addEventListener("change",e=>{if(e.target&&e.target.id==="copia-pdf")S.copiaPdf=e.target.checked;
+  if(e.target&&e.target.id==="cont-file"&&e.target.files&&e.target.files[0]){const f=e.target.files[0];e.target.value="";subirContinuidad(f)}});
+async function subirContinuidad(file){if(S.role!=="dir"||esMos()||S.ro)return;
+  try{await cargarZip();const z=await window.JSZip.loadAsync(await file.arrayBuffer()),files=[];
+    const ns=Object.keys(z.files).filter(n=>!z.files[n].dir&&/\.(md|txt|rules)$/i.test(n)&&!/(^|\/)(__MACOSX|\.)/.test(n));
+    const tops=new Set(ns.map(n=>n.split("/")[0])),quita=tops.size===1&&ns.every(n=>n.includes("/"))?[...tops][0]+"/":"";
+    for(const n of ns)files.push({n:n.slice(quita.length),txt:await z.files[n].async("string")});
+    if(!files.some(f=>/PLAN-DE-CONTINUIDAD/i.test(f.n))){toast("Ese .zip no trae el PLAN-DE-CONTINUIDAD.md");return}
+    const doc={t:nowISO(),por:quienSoy?quienSoy():"",files};if(JSON.stringify(doc).length>900000){toast("La documentación es demasiado grande (más de 900 KB)");return}
+    await S.db.doc("config/continuidad").set(doc);S.cont=doc;render();toast(`Plan y documentación actualizados (${files.length} archivos)`)}
+  catch(e){console.error(e);toast("No se ha podido leer el .zip de la documentación")}}
 async function hacerCopia(){
   const dl=await window.claude.use("downloads");if(!dl){toast("Desde aquí no se pueden descargar archivos");return}
+  const conPdf=!!S.copiaPdf,dia=todayISO(),raiz=`althea-copia-${dia}/`;
   setStatus("Preparando copia…");
-  try{const out={app:"Horarios Althea",fecha:nowISO(),colecciones:{}};
-    /* 14/11/2026: también todo lo de la fase 2 (banco, caja, recibos y facturas, nóminas, fichajes, impuestos, asesoría…).
-       Los PDF y fotos (archivos) no van: ocuparían cientos de MB. Si una colección no se puede leer, se apunta y se sigue. */
-    out.errores=[];
-    for(const c of ["alumnos","privado","config","publico","claves","buzon","buzonProf","buzonAl","mensajes","preins","eventos","citas","caja","banco","ventas","facturas","facturasPrueba","facturasTaller","nominas","fichajes","impuestos","asesoria"]){
-      try{setStatus("Copia: "+c+"…");const q=await S.db.collection(c).limit(5000).get();out.colecciones[c]={};q.docs.forEach(d=>{out.colecciones[c][d.id]=d.data()})}catch(e){out.errores.push(c)}}
+  try{await cargarZip();const zip=new window.JSZip();
+    const out={app:"Horarios Althea",version:typeof APP_VER!=="undefined"?APP_VER:"",fecha:nowISO(),colecciones:{},errores:[]};
+    /* Si una colección no se puede leer, se apunta y se sigue. De archivos solo va la ficha (sin el contenido, que va aparte). */
+    for(const c of COPIA_COLS){
+      try{setStatus("Copia: "+c+"…");const q=await S.db.collection(c).limit(5000).get();out.colecciones[c]={};
+        q.docs.forEach(d=>{let x=d.data();if(c==="archivos"&&x&&"d" in x){const {d:_d,...m}=x;x=m}out.colecciones[c][d.id]=x})}catch(e){out.errores.push(c)}}
+    zip.file(raiz+`datos/copia-althea-${dia}.json`,JSON.stringify(out,null,1));
+    /* código de la app, tal como está publicado ahora */
+    const faltan=[];for(const n of COPIA_APP){try{setStatus("Copia: "+n+"…");const r=await fetch(n+"?copia="+Date.now(),{cache:"no-store"});if(!r.ok)throw 0;zip.file(raiz+"app/"+n,await r.arrayBuffer())}catch(_){if(n!=="_headers")faltan.push(n)}}
+    zip.file(raiz+"app/CNAME",location.hostname+"\n");
+    /* plan, manual y reglas (config/continuidad) */
+    if(S.cont===undefined)await contLeer();const C=S.cont;
+    for(const f of (C&&C.files)||[])zip.file(raiz+f.n,f.txt);
+    zip.file(raiz+"restaurar/restaurar.mjs",RESTAURAR_MJS);zip.file(raiz+"restaurar/LEEME.txt",RESTAURAR_LEEME);
+    /* PDF y fotos (opcional) */
+    let nArch=0,malArch=0;const ext=t=>({"application/pdf":"pdf","image/jpeg":"jpg","image/png":"png","image/webp":"webp","image/gif":"gif"}[t]||(String(t).split("/")[1]||"bin").replace(/[^a-z0-9]/gi,"").slice(0,6)||"bin");
+    if(conPdf){const F=window.__fb,L=Object.entries(out.colecciones.archivos||{}),idx=[["id","clase","tipo","alumno","profe","fecha"]];
+      for(const [id,m] of L){try{setStatus(`Copia: PDF y fotos ${++nArch}/${L.length}…`);const url=await F.blob(id);zip.file(raiz+`archivos/${id}.${ext(m.tipo)}`,await (await fetch(url)).arrayBuffer());idx.push([id,m.clase||"",m.tipo||"",m.alumno||"",m.profe||"",String(m.t||"").slice(0,10)])}catch(_){malArch++;nArch--}}
+      zip.file(raiz+"archivos/indice.csv",idx.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";")).join("\n"))}
+    const cuenta=Object.entries(out.colecciones).map(([k,v])=>`  ${k}: ${Object.keys(v).length}`).join("\n");
+    zip.file(raiz+"LEEME-PRIMERO.txt",`COPIA COMPLETA DE LA APP DE ALTHEA FORMACIÓN
+Fecha: ${fmtFecha(dia)} · versión de la app: ${out.version} · ${location.hostname}
+
+Qué hay en esta copia:
+  PLAN-DE-CONTINUIDAD.md  qué hacer si algo falla y cómo reconstruir la app (léelo primero)
+  documentacion/          manual técnico para un programador
+  reglas/                 reglas de seguridad de la base de datos (Firebase)
+  datos/                  todos los datos de la app (JSON)
+  app/                    el código de la app (los archivos que se suben a GitHub)
+  restaurar/              programa para volver a meter los datos en Firebase
+${conPdf?"  archivos/               PDF y fotos (justificantes, facturas, nóminas…) e indice.csv\n":"  (esta copia NO lleva los PDF y fotos: marca «Incluir PDFs y fotos» para que vayan)\n"}
+${C&&C.files?`Plan y documentación: versión del ${fmtFecha(String(C.t).slice(0,10))}.`:"AVISO: esta copia NO lleva el plan de continuidad ni la documentación (súbelos en Accesos → Copia de seguridad)."}
+${out.errores.length?`AVISO: no se han podido leer: ${out.errores.join(", ")}.\n`:""}${faltan.length?`AVISO: no se han podido copiar estos archivos de la app: ${faltan.join(", ")}.\n`:""}${malArch?`AVISO: ${malArch} PDF o fotos no se han podido copiar.\n`:""}
+Documentos por colección:
+${cuenta}
+
+Esta copia lleva datos personales y las claves de acceso de la app. Guárdala cifrada.
+`);
+    setStatus("Comprimiendo copia…");
+    const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:6}});
     setStatus("Al día");
-    await dl.save({filename:`copia-althea-${todayISO()}.json`,data:new Blob([JSON.stringify(out,null,1)],{type:"application/json"})});
-    const c={ultima:nowISO()};await S.db.doc("config/copias").set(c);S.copias=c;render();toast("Copia descargada")}
-  catch(e){setStatus("Al día");toast(e&&e.code==="declined"?"Descarga cancelada":"No se ha podido hacer la copia")}
+    await dl.save({filename:`althea-copia-${conPdf?"completa-":""}${dia}.zip`,data:blob});
+    const c={ultima:nowISO(),...(conPdf?{ultimaPdf:nowISO()}:(S.copias&&S.copias.ultimaPdf?{ultimaPdf:S.copias.ultimaPdf}:{}))};await S.db.doc("config/copias").set(c);S.copias=c;render();
+    toast(`Copia descargada${out.errores.length||faltan.length||malArch?" (con avisos: mira LEEME-PRIMERO.txt)":""}`)}
+  catch(e){console.error(e);setStatus("Al día");toast(e&&e.code==="declined"?"Descarga cancelada":"No se ha podido hacer la copia")}
 }
 /* ---------- conservación y bloqueo (protocolo de conservación; art. 32 LOPDGDD) ----------
    Alumnos de baja o antiguos sin recibos pendientes: se bloquean sus datos. Se borran horario, faltas, asistencia,
@@ -5157,7 +5216,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=22nov-v150"></script>
+<script src="gestion.js?v=22nov-v151"></script>
 
 
 </body></html>

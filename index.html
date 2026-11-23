@@ -46,7 +46,8 @@ nav{display:flex;gap:4px;background:var(--sunk);padding:4px;border-radius:999px;
 nav button{border:0;background:transparent;color:var(--muted);font:600 14px var(--body);padding:7px 16px;border-radius:999px;cursor:pointer}
 nav button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
 body:not(.dir) .dironly{display:none!important}
-body.plus #t-desc{display:inline-block!important}
+body.plus #t-desc,body.plus #t-avisos{display:inline-block!important}
+body.mos #t-avisos{display:none!important}
 body:not(.profe) .profonly{display:none!important}
 body.dir:not(.mos) .accal{display:none!important}
 .seg button.on.tab{background:var(--sunk);color:var(--ink)}
@@ -348,6 +349,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
     <button role="tab" id="t-asistencia" data-v="asistencia" aria-selected="false">Asistencia</button>
     <button role="tab" id="t-conflictos" data-v="conflictos" aria-selected="false">Conflictos</button>
     <button role="tab" id="t-mensajes" data-v="mensajes" aria-selected="false">Mensajes</button>
+    <button role="tab" id="t-avisos" class="dironly avtab" data-v="avisos" aria-selected="false">Avisos</button>
     <button role="tab" id="t-nominas" class="profonly" data-v="nominas" aria-selected="false">Mis nóminas</button>
     <button role="tab" id="t-misfich" class="profonly" data-v="misfich" aria-selected="false">Mis fichajes</button>
     <button role="tab" id="t-accal" class="accal" data-v="accal" aria-selected="false">Acceso alumnos</button>
@@ -373,7 +375,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=23nov-v157"></script>
+<script type="module" src="fb.js?v=23nov-v158"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -1162,7 +1164,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="23nov-v157";
+const APP_VER="23nov-v158";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -1195,6 +1197,8 @@ function render0(){
   if(esMos()&&["argos","accesos","calendario","recibos","mensajes","tarifas","gastos","descuadres","facturacion","pendientes"].includes(S.view))S.view="semana";
   if(S.view==="recibos"){app.innerHTML=vRecibosDir();return}
   if(S.view==="tarifas"){app.innerHTML=vTarifas();return}
+  if(S.view==="avisos"){if(typeof vAvisos==="function"&&((S.role==="dir"&&!esMos())||esPlus())){app.innerHTML=vAvisos();return}S.view="semana"}
+  try{if(typeof avEscuchar==="function"){avEscuchar();avTab()}}catch(_){}
   if(S.view==="caja"){app.innerHTML=vCaja();return}
   if(S.view==="cobros"){app.innerHTML=typeof vCobros==="function"?vCobros():"";return}
   if(S.role==="dir"&&!esMos()){const tb=document.getElementById("t-desc");if(tb){const n=typeof descPend==="function"?descPend():0;tb.textContent="Descuadres"+(n?" · "+n:"")}const tp=document.getElementById("t-pend");if(tp){const n=typeof pdContar==="function"?(()=>{try{return pdContar()}catch(_){return 0}})():0;tp.textContent="Pendientes"+(n?" · "+n:"")}}
@@ -2880,7 +2884,7 @@ const diasDesde=f=>f?Math.floor((Date.parse(todayISO())-Date.parse(String(f).sli
 /* 22/11/2026 (titular): copia completa para guardar en un pen. Un .zip con todo lo necesario para reconstruir la app igual:
    datos (JSON de todas las colecciones), código (app/), reglas, plan de continuidad y manual técnico (config/continuidad, que
    dirección actualiza subiendo «documentacion-althea.zip»), programa de restauración y, si se marca, los PDF y fotos. */
-const COPIA_COLS=["alumnos","privado","config","publico","claves","cuentas","altas","buzon","buzonProf","buzonAl","mensajes","preins","eventos","eventosNotas","citas","plazas","caja","banco","ventas","facturas","facturasPrueba","facturasTaller","nominas","fichajes","fichPin","impuestos","asesoria","archivos"];
+const COPIA_COLS=["alumnos","privado","config","publico","claves","cuentas","altas","buzon","buzonProf","buzonAl","mensajes","preins","eventos","eventosNotas","citas","plazas","caja","banco","ventas","facturas","facturasPrueba","facturasTaller","nominas","fichajes","fichPin","impuestos","asesoria","avisosProf","archivos"];
 const COPIA_APP=["index.html","gestion.js","fb.js","manifest.webmanifest","icono.png","icono-192.png","fachada.jpg","ayuda-alumnos.mp4","ayuda-asesoria.mp4","_headers"];
 const RESTAURAR_MJS="// Restaurar una copia completa de la app de Althea en Firebase (22/11/2026).\n// Uso:  node restaurar.mjs <clave-cuenta-servicio.json> <carpeta-de-la-copia-descomprimida> [--si]\n// Sin --si solo cuenta lo que haría (prueba). Con --si escribe de verdad.\n// Requiere: Node.js 18 o superior y, en esta carpeta, «npm install firebase-admin».\nimport fs from \"node:fs\";\nimport path from \"node:path\";\nimport admin from \"firebase-admin\";\n\nconst [, , claveArch, carpeta, si] = process.argv;\nif (!claveArch || !carpeta) { console.log(\"Uso: node restaurar.mjs clave.json carpeta-copia [--si]\"); process.exit(1); }\nconst escribir = si === \"--si\";\nadmin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(claveArch, \"utf8\"))) });\nconst db = admin.firestore();\n\nconst dirDatos = path.join(carpeta, \"datos\");\nconst json = fs.readdirSync(dirDatos).find(f => f.endsWith(\".json\"));\nif (!json) { console.log(\"No encuentro el .json en la carpeta datos/\"); process.exit(1); }\nconst copia = JSON.parse(fs.readFileSync(path.join(dirDatos, json), \"utf8\"));\nconsole.log(`Copia del ${copia.fecha} · ${Object.keys(copia.colecciones).length} colecciones · ${escribir ? \"ESCRIBIENDO\" : \"PRUEBA (añade --si para escribir)\"}`);\n\n// Campos de alumnos/<id> (los ven sus profesoras); el resto va a privado/<id>. Igual que CORE en fb.js.\nconst CORE = new Set([\"nombre\",\"clases\",\"clasesHist\",\"telRel\",\"pagador\",\"faltas\",\"asist\",\"token\",\"trasHechos\",\"foto\",\"telefonos\",\"bloqueado\",\"actualizado\",\"puntuales\",\"confOk\",\"extras\",\"waRec\"]);\nconst NO = new Set([\"cuentas\"]); // dependen de la cuenta de Auth: se crean solas al entrar\n\n// Fechas de Firestore guardadas en el JSON como {seconds, nanoseconds} → Timestamp\nfunction fechas(v) {\n  if (Array.isArray(v)) return v.map(fechas);\n  if (v && typeof v === \"object\") {\n    const k = Object.keys(v);\n    if (typeof v.seconds === \"number\" && typeof v.nanoseconds === \"number\" && k.every(x => [\"seconds\", \"nanoseconds\", \"type\"].includes(x)))\n      return new admin.firestore.Timestamp(v.seconds, v.nanoseconds);\n    const o = {}; for (const [a, b] of Object.entries(v)) o[a] = fechas(b); return o;\n  }\n  return v;\n}\n\nlet lote = db.batch(), enLote = 0, total = 0;\nasync function poner(ruta, datos) {\n  total++; if (!escribir) return;\n  lote.set(db.doc(ruta), fechas(datos)); enLote++;\n  if (enLote >= 400) { await lote.commit(); lote = db.batch(); enLote = 0; }\n}\n\nfor (const [col, docs] of Object.entries(copia.colecciones)) {\n  if (NO.has(col) || col === \"archivos\") continue;\n  let n = 0;\n  for (const [id, d] of Object.entries(docs)) {\n    if (col === \"alumnos\") { // la copia trae el alumno completo: solo los campos CORE van a alumnos/\n      const c = {}; for (const [k, v] of Object.entries(d)) if (CORE.has(k)) c[k] = v;\n      await poner(`alumnos/${id}`, { ...c, profes: [], _d: {} }); // profes y _d los recalcula dirección al abrir la app\n    } else await poner(`${col}/${id}`, d);\n    n++;\n  }\n  console.log(`  ${col}: ${n}`);\n}\n\n// Archivos (PDF y fotos): datos en archivos/<id>.* si la copia los lleva; si no, solo se restaura su ficha.\nconst TROZO = 700000, dirArch = path.join(carpeta, \"archivos\");\nconst sueltos = fs.existsSync(dirArch) ? fs.readdirSync(dirArch) : [];\nlet na = 0, sinDatos = 0;\nfor (const [id, meta] of Object.entries((copia.colecciones.archivos) || {})) {\n  const f = sueltos.find(x => x.startsWith(id + \".\"));\n  if (!f) { sinDatos++; continue; } // sin el archivo no se puede restaurar (la ficha sola rompería la app)\n  const url = `data:${meta.tipo || \"application/octet-stream\"};base64,` + fs.readFileSync(path.join(dirArch, f)).toString(\"base64\");\n  const n = Math.ceil(url.length / TROZO), { d: _d, ...base } = meta;\n  if (n === 1) await poner(`archivos/${id}`, { ...base, n: 1, d: url });\n  else { await poner(`archivos/${id}`, { ...base, n }); for (let i = 0; i < n; i++) await poner(`archivos/${id}/p/${i}`, { d: url.slice(i * TROZO, (i + 1) * TROZO) }); }\n  na++;\n}\nconsole.log(`  archivos: ${na} restaurados${sinDatos ? ` · ${sinDatos} sin datos en la copia (haz la copia con «Incluir PDFs y fotos»)` : \"\"}`);\n\nif (escribir && enLote) await lote.commit();\nconsole.log(`${escribir ? \"Escritos\" : \"Se escribirían\"} ${total} documentos.`);\nconsole.log(\"Después: entra en la app como dirección (recalcula qué alumnos ve cada profesora) y haz una copia nueva.\");\n";
 const RESTAURAR_LEEME="CÓMO RESTAURAR LOS DATOS DE ESTA COPIA EN FIREBASE\n==================================================\n\nEsto lo hace mejor alguien que sepa algo de ordenadores. Tiempo: unos 20 minutos.\n\n1. Instala Node.js (versión 18 o superior) desde https://nodejs.org\n\n2. Descomprime la copia (botón derecho sobre el .zip → Extraer todo).\n   Dentro verás: datos/, app/, reglas/, restaurar/, archivos/ (si la copia lleva PDFs y fotos)...\n\n3. Consigue la clave de la cuenta de servicio de Firebase:\n   Firebase (https://console.firebase.google.com) → el proyecto → engranaje\n   «Configuración del proyecto» → «Cuentas de servicio» → «Generar nueva clave privada».\n   Se descarga un .json. ¡Es como una llave maestra! No lo compartas y bórralo al acabar.\n\n4. Abre una ventana de comandos (Windows: tecla Windows, escribe «cmd») y ve a la carpeta\n   restaurar/ de la copia descomprimida. Por ejemplo:\n       cd \"C:\\Users\\...\\althea-copia-2026-11-22\\restaurar\"\n\n5. Instala lo que necesita el programa (solo la primera vez):\n       npm install firebase-admin\n\n6. Prueba primero (no escribe nada, solo cuenta):\n       node restaurar.mjs \"C:\\ruta\\clave.json\" ..\n\n7. Si los números cuadran, restaura de verdad:\n       node restaurar.mjs \"C:\\ruta\\clave.json\" .. --si\n\n8. Publica las reglas (reglas/firestore.rules) en Firebase → Firestore → Reglas, si no lo estaban.\n\n9. Entra en la app como dirección. Al abrirla, la app recalcula qué alumnos ve cada\n   profesora. Cada persona entra con su usuario y clave de siempre (la app le crea el acceso).\n\n10. Haz una copia nueva desde la app y borra el .json de la clave del paso 3.\n\nImportante: restaurar SUSTITUYE los documentos por los de la copia. Lo hecho después de la\nfecha de la copia hay que volver a meterlo a mano.\n";
@@ -4040,6 +4044,7 @@ function vFicha(id){
     ${S.role==="dir"?(esMos()?"":vMatricula(a)+vTarifaAl(id,a)+vSueltas(id,a))+vAccesoFicha(id,a)+(esMos()?vRecibosLectura(a,id):vRecibosFicha(id,a))+vCambiosFicha(a)+(typeof vCitasFicha==="function"?vCitasFicha(id):""):esPlus()?(PLUS.m?vRecibosLectura(PLUS.m.get(id)):`<p class="note">${PLUS.err?esc(PLUS.err):"Cargando recibos…"}</p>`):""}
     ${S.role==="profe"&&recPend(a)?`<p style="margin:0">${marcaRec(a)} <span class="note">${recPend(a)===1?"Tiene 1 recibo pendiente de pago.":`Tiene ${recPend(a)} recibos pendientes de pago.`}</span></p>`:""}
     ${otras.length?`<p class="note" style="margin:0">También da clase con ${esc(otras.join(" y "))}.</p>`:""}
+    ${S.role==="profe"&&typeof vAvisoProfFicha==="function"?vAvisoProfFicha(id,a):""}
     <div><div class="mini">${mini}</div>${a.clases.some(c=>fdrag(id,c))?`<p class="note" style="margin:6px 0 0">Para mover una clase, arrástrala a otro día o púlsala.</p>`:""}</div>${vFichaMes(id,a)}${S.role==="profe"&&cuadFlag(a)?`<p class="note" style="margin:0;color:var(--warn)">● Dirección está revisando su recibo por un cambio de horario o una hora extra. Cuando esté ajustado, volverá a su color normal.</p>`:""}${vExtrasFicha(id,a)}${S.role==="profe"||(S.role==="dir"&&!S.ro&&!S.pv)?vAP(id,a):""}
     <div class="addbox ed"><b style="font-size:13px">Añadir una clase</b>
       <div class="r2">
@@ -5222,7 +5227,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=23nov-v157"></script>
+<script src="gestion.js?v=23nov-v158"></script>
 
 
 </body></html>

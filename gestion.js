@@ -3682,7 +3682,7 @@ function pdTarjetas(){gbEscuchar();const hoy=todayISO(),hoyM=hoy.slice(0,7),L=[]
   return L}
 /* Avisos de alumnos y recibos: los mismos paneles que en Recibos y Alumnos (con sus botones). Solo los que piden algo. */
 function pdPaneles(){const mes=todayISO().slice(0,7),out=[];
-  for(const [k,f] of [["pre",()=>vPreLista()],["msg",()=>vMensajesDir()],["altas",()=>vAltasArgos()],["sinrec",()=>vSinRecibo()],["nocuad",()=>vNoCuadran(mes)],["extras",()=>vExtrasDir()],["sinal",()=>vSinAlumno()],["hxwa",()=>typeof vHxEnviar==="function"?vHxEnviar():""]]){
+  for(const [k,f] of [["pre",()=>vPreLista()],["msg",()=>vMensajesDir()],["altas",()=>vAltasArgos()],["sinrec",()=>vSinRecibo()],["nocuad",()=>vNoCuadran(mes)],["extras",()=>vExtrasDir()],["sinal",()=>vSinAlumno()],["avisos",()=>typeof vAvisosPend==="function"?vAvisosPend():""],["hxwa",()=>typeof vHxEnviar==="function"?vHxEnviar():""]]){
     const h=pdTry(f,"");if(h&&/class="aviso (pend|no)\b/.test(h))out.push(h)}
   return out}
 function pdContar(){if(S.role!=="dir"||esMos())return 0;if(PD.cache&&Date.now()-PD.t<20000)return PD.cache;
@@ -3805,3 +3805,107 @@ function vAyudaAse(abierto){let o=abierto;try{const v=localStorage.getItem("alth
   <summary style="cursor:pointer"><b>▶ Vídeo: cómo funciona este apartado</b> <span class="note">(1 minuto, sin sonido)</span></summary>
   <video src="ayuda-asesoria.mp4" controls playsinline preload="metadata" style="width:100%;max-width:860px;display:block;margin-top:10px;border-radius:10px;background:#000"></video>
   <p class="note" style="margin-top:6px">Entrar · elegir el mes o el trimestre · rellenar los impuestos y subir el PDF · retenciones del alquiler · informe · movimientos con sus documentos · facturas emitidas y Excel. <a href="ayuda-asesoria.mp4" download>Descargar el vídeo</a></p></details>`}
+/* ---------- 23/11/2026 (titular): avisos de las profesoras a dirección y a Ainea ----------
+   Desde la ficha de un alumno, la profesora manda un aviso con plantilla: añade una clase, baja, pasa a otra profesora, reduce horario
+   (u otro). Dirección (o Ainea, con su usuario de profesora) lo ve en la pestaña «Avisos» con las comprobaciones: recibos pendientes,
+   si ha venido este mes, y cuánto sumar o restar al recibo del mes (clases que quedan × precio de la hora de su nivel). Hasta enero el
+   recibo se cambia a mano en Argos; los cambios de horario los hace dirección. Después se cierra el aviso.
+   Datos: avisosProf/<id> = {profe, uid, alumno, nombre, tipo, d:{…}, nota, t, estado:"abierto"|"cerrado"|"anulado", cierre:{t,por,nota}} */
+const AV={docs:[],sub:null,ok:false,err:"",modo:""};
+const avDir=()=>(S.role==="dir"&&!esMos())||esPlus();
+function avEscuchar(){const modo=avDir()?"todo":S.role==="profe"&&S.myProfe?"p:"+S.myProfe:"";if(!modo||!S.db)return;if(AV.sub&&AV.modo===modo)return;
+  try{AV.sub&&AV.sub()}catch(_){}AV.modo=modo;let c=S.db.collection("avisosProf");if(modo!=="todo")c=c.where("profe","==",S.myProfe);
+  AV.sub=c.onSnapshot(s=>{AV.docs=s.docs.map(d=>({id:d.id,...d.data()})).sort((x,y)=>String(y.t).localeCompare(String(x.t)));AV.ok=true;AV.err="";avTab();
+      if(S.view==="avisos"||(S.view==="alumnos"&&S.sel))render()},
+    e=>{AV.ok=true;AV.err="No se pueden leer los avisos: hay que publicar las reglas nuevas en Firebase (avisosProf).";if(S.view==="avisos")render()})}
+const avAbiertos=()=>AV.docs.filter(x=>x.estado==="abierto");
+function avTab(){const b=document.getElementById("t-avisos");if(!b)return;const n=avDir()?avAbiertos().length:0;b.textContent="Avisos"+(n?" · "+n:"")}
+const AVT={anade:"Añade una clase",reduce:"Quita una clase (reduce horario)",pasa:"Pasa una clase a otra profesora",baja:"Se da de baja",otro:"Otro aviso"};
+const avDias=["Lunes","Martes","Miércoles","Jueves","Viernes"];
+/* fecha «desde»: hoy, el lunes que viene o el día 1 del mes que viene */
+function avDesdeOpc(){const hoy=todayISO(),lun=(()=>{let f=sumaDias(hoy,1);while(diaDe(f)!=="Lunes")f=sumaDias(f,1);return f})(),m1=(()=>{const [y,m]=hoy.split("-").map(Number);return m===12?`${y+1}-01-01`:`${y}-${String(m+1).padStart(2,"0")}-01`})();
+  return [["hoy",hoy,"Desde hoy"],["lunes",lun,`Desde el lunes ${fmtFecha(lun)}`],["mes",m1,`Desde el 1 de ${MESES[+m1.slice(5,7)-1]}`]]}
+const clTxt=c=>`${c.dia} ${FLEX.has(c.profe)&&c.ini?c.ini:(HSHORT[c.hora]||c.hora)}`;
+/* ----- profesora: formulario en la ficha ----- */
+function vAvisoProfFicha(id,a){if(S.role!=="profe"||S.pv)return "";avEscuchar();
+  const F=S.avF&&S.avF.id===id?S.avF:null,mias=(a.clases||[]).filter(c=>c.profe===S.myProfe),mis=AV.docs.filter(x=>x.alumno===id).slice(0,5);
+  const est=x=>x.estado==="cerrado"?`<span class="badge b-si">Hecho${x.cierre&&x.cierre.t?" el "+fmtFecha(String(x.cierre.t).slice(0,10)):""}</span>${x.cierre&&x.cierre.nota?` <span class="note">· ${esc(x.cierre.nota)}</span>`:""}`:x.estado==="anulado"?`<span class="badge">Anulado</span>`:`<span class="badge b-pend">Enviado, pendiente</span> <a href="#" data-av="anular" data-i="${esc(x.id)}" class="note">anular</a>`;
+  const lista=mis.length?`<div style="margin-top:6px">${mis.map(x=>`<div class="row" style="flex-wrap:wrap"><span class="note">${fmtFecha(String(x.t).slice(0,10))}</span><span class="grow">${esc(avResumen(x))}</span>${est(x)}</div>`).join("")}</div>`:"";
+  if(!F)return `<div class="panel" style="padding:10px 14px"><div class="bar" style="margin:0"><b style="margin-right:auto">Avisar a dirección y a Ainea</b><span style="display:flex;gap:6px;flex-wrap:wrap">${Object.entries(AVT).map(([k,l])=>`<button class="btn small" data-av="nuevo" data-id="${esc(id)}" data-k="${k}">${l}</button>`).join("")}</span></div>${lista}</div>`;
+  const desde=avDesdeOpc(),dsel=`<label class="f" style="flex:1 1 220px">¿Desde cuándo?<select id="av-desde">${desde.map(([k,f,l])=>`<option value="${f}" ${F.desde===f?"selected":""}>${l}</option>`).join("")}<option value="otra" ${F.desde==="otra"?"selected":""}>Otra fecha…</option></select></label>${F.desde==="otra"?`<label class="f" style="flex:0 1 160px">Fecha<input type="date" id="av-fecha" value="${esc(F.fecha||todayISO())}"></label>`:""}`;
+  const selClase=mias.length?`<label class="f" style="flex:1 1 200px">¿Qué clase?<select id="av-clase">${mias.map((c,i)=>`<option value="${i}">${esc(clTxt(c))}</option>`).join("")}</select></label>`:`<p class="note">No tiene clases contigo.</p>`;
+  let campos="";
+  if(F.k==="anade")campos=`<label class="f" style="flex:1 1 130px">Día<select id="av-dia">${avDias.map(d=>`<option>${d}</option>`).join("")}</select></label><label class="f" style="flex:0 1 110px">De<input type="time" id="av-ini" step="900" value="17:00"></label><label class="f" style="flex:0 1 110px">A<input type="time" id="av-fin" step="900" value="18:00"></label><label class="f" style="flex:0 1 150px">Tipo<select id="av-ind"><option value="g">En grupo</option><option value="i">Individual</option></select></label>${dsel}`;
+  else if(F.k==="reduce")campos=selClase+dsel;
+  else if(F.k==="pasa")campos=selClase+`<label class="f" style="flex:1 1 160px">Pasa con<select id="av-aprofe">${EQUIPO.filter(p=>p!==S.myProfe).map(p=>`<option>${esc(p)}</option>`).join("")}</select></label>`+dsel;
+  else if(F.k==="baja")campos=`<label class="f" style="flex:1 1 200px">Motivo<select id="av-motivo">${["Fin de curso o ya no lo necesita","Económico","Horario","Cambio de centro","No está contento","Otro"].map(m=>`<option>${m}</option>`).join("")}</select></label><label class="f" style="flex:0 1 170px">Último día de clase<input type="date" id="av-fecha" value="${todayISO()}"></label>`;
+  return `<div class="panel" style="padding:10px 14px;border-left:4px solid var(--accent)"><div class="bar" style="margin:0 0 6px"><b style="margin-right:auto">${esc(titulo(a.nombre))}: ${esc(AVT[F.k])}</b><button class="btn small" data-av="cancelar">Cancelar</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">${campos}</div>
+    <label class="f" style="margin-top:6px">${F.k==="otro"?"Mensaje":"Nota (opcional)"}<input type="text" id="av-nota" maxlength="300" placeholder="${F.k==="baja"?"Lo que haya contado la familia":"Algo más que deba saber dirección"}"></label>
+    <button class="btn primary" style="margin-top:8px" data-av="enviar" data-id="${esc(id)}" ${(F.k==="reduce"||F.k==="pasa")&&!mias.length?"disabled":""}>Enviar a dirección y a Ainea</button></div>`}
+function avResumen(x){const d=x.d||{},desde=d.desde?` desde el ${fmtFecha(d.desde)}`:"";
+  if(x.tipo==="anade")return `Añade una clase: ${d.dia} ${d.ini}–${d.fin} (${d.ind==="i"?"individual":"en grupo"})${desde}`;
+  if(x.tipo==="reduce")return `Quita la clase del ${d.clase}${desde}`;
+  if(x.tipo==="pasa")return `Pasa la clase del ${d.clase} con ${d.aProfe}${desde}`;
+  if(x.tipo==="baja")return `Se da de baja (${d.motivo||""}); último día ${fmtFecha(d.ultimo||"")}`;
+  return x.nota||"Aviso"}
+async function avEnviar(id){const a=S.alumnos.get(id),F=S.avF;if(!a||!F)return;const v=s=>{const e=document.getElementById(s);return e?e.value:""};
+  const ds=v("av-desde"),desde=ds==="otra"?v("av-fecha"):ds,mias=(a.clases||[]).filter(c=>c.profe===S.myProfe),c=mias[+v("av-clase")]||null;const d={};
+  if(F.k==="anade"){Object.assign(d,{dia:v("av-dia"),ini:v("av-ini"),fin:v("av-fin"),ind:v("av-ind"),desde});if(!d.ini||!d.fin||d.fin<=d.ini){toast("Revisa la hora de la clase");return}}
+  if(F.k==="reduce"||F.k==="pasa"){if(!c){toast("Elige la clase");return}Object.assign(d,{clase:clTxt(c),cDia:c.dia,cHora:c.hora,cIni:c.ini||"",cTipo:c.tipo||"",desde})}
+  if(F.k==="pasa")d.aProfe=v("av-aprofe");
+  if(F.k==="baja")Object.assign(d,{motivo:v("av-motivo"),ultimo:v("av-fecha")||todayISO()});
+  const nota=v("av-nota").trim();if(F.k==="otro"&&!nota){toast("Escribe el mensaje");return}
+  if(desde&&desde!=="otra"&&!/^\d{4}-\d\d-\d\d$/.test(desde)){toast("Elige la fecha");return}
+  const doc={profe:S.myProfe,uid:(window.__fb&&window.__fb.CU&&window.__fb.CU.uid)||"",alumno:id,nombre:a.nombre,tipo:F.k,d,nota,t:nowISO(),estado:"abierto"};
+  try{const ref=S.db.collection("avisosProf").doc("av"+Date.now().toString(36)+Math.random().toString(36).slice(2,6));await ref.set(doc);S.avF=null;render();toast("Aviso enviado a dirección y a Ainea")}
+  catch(e){console.error(e);toast("No se ha podido enviar el aviso")}}
+/* ----- dirección / Ainea: comprobaciones ----- */
+const avRecibos=id=>{const a=S.alumnos.get(id);if(!a)return [];if(S.role==="dir")return a.recibos||[];const p=typeof PLUS!=="undefined"&&PLUS.m&&PLUS.m.get(id);return (p&&p.recibos)||[]};
+const avPrecio=(a,ind)=>{if(a&&a.sueltas&&+a.sueltas.precio>0)return +a.sueltas.precio;const v=tarifas()[nivelDe(a)+"|"+(ind?"i":"g")];return v==null||v===""||isNaN(+v)?null:+v};
+/* días de ese día de la semana desde «desde» hasta fin de su mes, sin festivos */
+function avQuedan(dia,desde){const l=[];if(!dia||!desde)return l;const m=desde.slice(0,7);for(let f=desde;f.slice(0,7)===m;f=sumaDias(f,1))if(diaDe(f)===dia&&!festivoDe(f))l.push(f);return l}
+function avComprobar(x){const a=S.alumnos.get(x.alumno);if(!a)return `<p class="note">El alumno ya no está en la app.</p>`;const d=x.d||{},R=avRecibos(x.alumno),out=[];
+  const pend=R.filter(r=>r&&r.estado!=="pagado"&&r.estado!=="anulado"&&String(r.emitido||"").slice(0,7)>=ATR_DESDE()).sort((u,v)=>String(u.emitido).localeCompare(String(v.emitido)));
+  const recTxt=r=>`${esc(nombreMes(r.emitido))}${r.numero?` (${esc(r.numero)})`:""} · ${eur(+r.importe||0)}`;
+  out.push(pend.length?`⚠️ Tiene <b>${pend.length} recibo${pend.length===1?"":"s"} pendiente${pend.length===1?"":"s"}</b>: ${pend.map(recTxt).join(" · ")}${typeof esperaBeca==="function"&&esperaBeca(a)?" <span class=\"badge b-pend\">espera beca</span>":""}`:`✓ No tiene recibos pendientes.`);
+  if(x.tipo==="baja"){const ult=d.ultimo||todayISO(),mes=ult.slice(0,7),A=asistTodas(a),si=A.filter(z=>z.e==="si"&&z.f.slice(0,7)===mes),fl=A.filter(z=>z.e!=="si"&&z.f.slice(0,7)===mes),ultV=A.filter(z=>z.e==="si").map(z=>z.f).sort().pop();
+    out.push(si.length?`📅 En ${esc(nombreMes(mes+"-01"))} <b>ha venido ${si.length} ${si.length===1?"vez":"veces"}</b>${fl.length?` (y ${fl.length} falta${fl.length===1?"":"s"})`:""}: el recibo de ${esc(nombreMes(mes+"-01"))} se cobra.`:`📅 En ${esc(nombreMes(mes+"-01"))} <b>no ha venido</b>${fl.length?` (${fl.length} falta${fl.length===1?"":"s"})`:""}${ultV?`; vino por última vez el ${fmtFecha(ultV)}`:""}: valora anular el recibo de ${esc(nombreMes(mes+"-01"))}.`);
+    const rm=R.find(r=>r&&r.serie!=="HX"&&!r.extra&&!r.clase&&r.estado!=="anulado"&&String(r.emitido||"").slice(0,7)===mes);
+    out.push(rm?`🧾 Recibo de ${esc(nombreMes(mes+"-01"))}: ${recTxt(rm)} · <b>${rm.estado==="pagado"?"pagado":"pendiente"}</b>.`:`🧾 No tiene recibo de ${esc(nombreMes(mes+"-01"))}.`);
+    out.push(`➡️ En la ficha: «Dar de baja». En Argos: baja del alumno${pend.length?" y reclamar o anular los pendientes":""}.`)}
+  if(x.tipo==="anade"||x.tipo==="reduce"||x.tipo==="pasa"){const dia=x.tipo==="anade"?d.dia:d.cDia,desde=d.desde||todayISO(),mes=desde.slice(0,7),q=avQuedan(dia,desde);
+    const ind=x.tipo==="anade"?d.ind==="i":indDe(x.profe,d.cDia,d.cHora,d.cTipo),pr=avPrecio(a,ind);
+    const rm=R.find(r=>r&&r.serie!=="HX"&&!r.extra&&!r.clase&&r.estado!=="anulado"&&String(r.emitido||"").slice(0,7)===mes);
+    if(x.tipo==="pasa")out.push(`🔁 Cambia de profesora: el recibo no cambia${ind?"":" (si con la nueva profesora pasa a ser individual, sí cambia el precio)"}.`);
+    else if(!q.length)out.push(`🧾 Desde el ${fmtFecha(desde)} no queda ningún ${esc(String(dia).toLowerCase())} en ${esc(nombreMes(mes+"-01"))}: el recibo de este mes no cambia. Cambia la tarifa para los meses siguientes.`);
+    else if(pr==null)out.push(`🧾 Queda${q.length===1?"":"n"} ${q.length} ${esc(String(dia).toLowerCase())}${q.length===1?"":"s"} en ${esc(nombreMes(mes+"-01"))} (${q.map(f=>f.slice(8,10)).join(", ")}), pero no sé el precio de la hora de su nivel${nivelDe(a)?"":" (no tiene nivel)"}: calcúlalo a mano.`);
+    else{const imp=r2(q.length*pr),mas=x.tipo==="anade";
+      out.push(`🧾 Queda${q.length===1?"":"n"} <b>${q.length} clase${q.length===1?"":"s"}</b> en ${esc(nombreMes(mes+"-01"))} (${q.map(f=>f.slice(8,10)).join(", ")}) × ${eur(pr)} (hora ${ind?"individual":"en grupo"} de ${esc(nivelDe(a)||"su nivel")}) = <b>${mas?"+":"−"}${eur(imp)}</b>.`);
+      out.push(rm?(mas?(rm.estado==="pagado"?`➡️ El recibo de ${esc(nombreMes(mes+"-01"))} (${recTxt(rm)}) está <b>pagado</b>: haz en Argos un <b>recibo nuevo de ${eur(imp)}</b> por las horas que se añaden.`:`➡️ El recibo de ${esc(nombreMes(mes+"-01"))} (${recTxt(rm)}) está <b>pendiente</b>: cámbialo en Argos a <b>${eur(r2((+rm.importe||0)+imp))}</b>.`)
+        :(rm.estado==="pagado"?`➡️ El recibo de ${esc(nombreMes(mes+"-01"))} (${recTxt(rm)}) ya está <b>pagado</b>: descuenta <b>${eur(imp)}</b> en el recibo del mes siguiente.`:`➡️ El recibo de ${esc(nombreMes(mes+"-01"))} (${recTxt(rm)}) está <b>pendiente</b>: cámbialo en Argos a <b>${eur(r2(Math.max(0,(+rm.importe||0)-imp)))}</b>.`))
+        :`➡️ No tiene recibo de ${esc(nombreMes(mes+"-01"))}: ${mas?`haz en Argos un recibo de ${eur(imp)}`:"no hay que descontar nada"}.`)}
+    out.push(`➡️ Horario: ${x.tipo==="anade"?`añadir el ${esc(d.dia)} ${esc(d.ini)} con ${esc(x.profe)}`:x.tipo==="reduce"?`quitar la clase del ${esc(d.clase)} con ${esc(x.profe)}`:`mover la clase del ${esc(d.clase)} de ${esc(x.profe)} a ${esc(d.aProfe)}`} (en la ficha, como dirección). Y revisar la tarifa del alumno para los meses siguientes.`)}
+  return `<div style="display:grid;gap:4px;margin:6px 0">${out.map(t=>`<div>${t}</div>`).join("")}</div>`}
+function vAvisos(){avEscuchar();if(!avDir())return `<div class="empty">Solo dirección y Ainea.</div>`;
+  const ab=avAbiertos(),ce=AV.docs.filter(x=>x.estado!=="abierto"&&String((x.cierre&&x.cierre.t)||x.t)>=sumaDias(todayISO(),-30));
+  const card=x=>{const cerr=x.estado!=="abierto";return `<div class="panel" style="padding:10px 14px;margin-bottom:10px;${cerr?"opacity:.7":"border-left:4px solid var(--warn)"}">
+    <div class="bar" style="margin:0;flex-wrap:wrap"><span class="pl" style="--pc:${pc(x.profe)}"><span class="dot"></span>${esc(x.profe)}</span><a href="#" data-act="ir" data-id="${esc(x.alumno)}" style="color:inherit"><b>${esc(titulo(x.nombre||""))}</b></a><span class="note" style="margin-left:auto">${fmtFecha(String(x.t).slice(0,10))} ${String(x.t).slice(11,16)}</span></div>
+    <div style="margin:4px 0"><b>${esc(AVT[x.tipo]||"Aviso")}</b> · ${esc(avResumen(x))}${x.nota&&x.tipo!=="otro"?`<br><span class="note">«${esc(x.nota)}»</span>`:""}</div>
+    ${cerr?`<p class="note" style="margin:0">${x.estado==="anulado"?"Anulado por la profesora":`Cerrado por ${esc((x.cierre&&x.cierre.por)||"")} el ${fmtFecha(String((x.cierre&&x.cierre.t)||"").slice(0,10))}${x.cierre&&x.cierre.nota?` · ${esc(x.cierre.nota)}`:""}`}</p>`
+      :`${x.tipo!=="otro"?avComprobar(x):""}<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:6px"><label class="f" style="flex:1 1 260px">Nota al cerrar (la ve la profesora)<input type="text" id="av-cn-${esc(x.id)}" maxlength="200" placeholder="Ej.: hecho en Argos, recibo A26/… cambiado a 70 €"></label>${S.role==="dir"?`<button class="btn small" data-act="ir" data-id="${esc(x.alumno)}">Abrir ficha</button>`:""}<button class="btn primary small" data-av="cerrar" data-i="${esc(x.id)}">Hecho: cerrar aviso</button></div>`}</div>`};
+  return `<div class="bar"><h2>Avisos de las profesoras</h2><span class="legend">${ab.length} abierto${ab.length===1?"":"s"}</span></div>
+  <p class="note" style="margin-top:0">Lo que avisan las profesoras desde la ficha de cada alumno. Haz los cambios (horario en la ficha como dirección, recibo en Argos) y pulsa «Hecho: cerrar aviso». La profesora ve que está hecho.</p>
+  ${AV.err?`<div class="aviso pend" style="display:block">${esc(AV.err)}</div>`:""}
+  ${!AV.ok?`<p class="note">Cargando…</p>`:ab.length?ab.map(card).join(""):`<div class="panel"><p class="note">No hay avisos abiertos.</p></div>`}
+  ${ce.length?`<details style="margin-top:12px"><summary class="note">Cerrados en los últimos 30 días (${ce.length})</summary><div style="margin-top:8px">${ce.map(card).join("")}</div></details>`:""}`}
+function vAvisosPend(){if(S.role!=="dir"||esMos())return "";avEscuchar();const n=avAbiertos().length;return n?`<div class="aviso pend" style="display:block"><b>${n} aviso${n===1?"":"s"} de las profesoras sin cerrar</b> (altas de clase, bajas, cambios de profesora…). <button class="btn small" data-av="ir">Ir a Avisos</button></div>`:""}
+document.addEventListener("change",e=>{if(e.target&&e.target.id==="av-desde"&&S.avF){S.avF.desde=e.target.value;if(e.target.value==="otra")render()}});
+document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.closest("[data-av]");if(!t)return;e.preventDefault();const k=t.dataset.av;
+  if(k==="nuevo"){S.avF={id:t.dataset.id,k:t.dataset.k,desde:todayISO()};render();return}
+  if(k==="cancelar"){S.avF=null;render();return}
+  if(k==="ir"){S.view="avisos";render();return}
+  if(k==="enviar"){t.disabled=true;await avEnviar(t.dataset.id);t.disabled=false;return}
+  if(k==="anular"){if(!confirm("¿Anular este aviso?"))return;try{await S.db.doc("avisosProf/"+t.dataset.i).update({estado:"anulado",cierre:{t:nowISO(),por:S.myProfe||quienSoy(),nota:"Anulado por la profesora"}})}catch(_){toast("No se ha podido anular")}return}
+  if(k==="cerrar"){const n=(document.getElementById("av-cn-"+t.dataset.i)||{}).value||"";t.disabled=true;
+    try{await S.db.doc("avisosProf/"+t.dataset.i).update({estado:"cerrado",cierre:{t:nowISO(),por:esPlus()?"Ainea":quienSoy(),nota:n.trim()}});toast("Aviso cerrado")}catch(_){t.disabled=false;toast("No se ha podido cerrar")}}});

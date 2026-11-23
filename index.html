@@ -375,7 +375,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=23nov-v159"></script>
+<script type="module" src="fb.js?v=23nov-v161"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -397,7 +397,8 @@ const HORARIO_PROFE={
   Lorena:tramos(L_V,"16:00-20:00"),
   Elena:unir(tramos(["Lunes","Miércoles","Viernes"],"15:45-20:00"),tramos(["Martes","Jueves"],"16:00-20:00")),
   Rosa:tramos(L_V,"15:45-20:30"),
-  Fani:unir(tramos(["Martes","Jueves"],"10:00-12:00"),tramos(["Lunes","Martes","Miércoles","Jueves"],"15:45-20:30"))};
+  /* 23/11/2026 (titular): Fani es la titular y puede acabar a las 21:00 */
+  Fani:unir(tramos(["Martes","Jueves"],"10:00-12:00"),tramos(["Lunes","Martes","Miércoles","Jueves"],"15:45-21:00"))};
 /* Horario de CONTRATO (10/11/2026): para horas extra y fichajes. Puede ser más corto que HORARIO_PROFE, que es donde se pueden
    poner clases (Ainea y Laura pueden dar clase hasta las 21:00, pero su contrato acaba a las 20:00: lo de después es hora extra). */
 const CONTRATO_PROFE={...HORARIO_PROFE,
@@ -584,7 +585,7 @@ function sesionesDia(p,dia){
       if(x.tipo==="grupo"&&y.tipo==="grupo"&&x.ini===y.ini)continue;
       if(y.ini>x.ini&&x.fin-y.ini<=15)continue;
       /* 23/11/2026: si dirección pulsó «Es correcto» en Conflictos, tampoco sale en rojo en Semana ni en Sesiones */
-      {const ok=`pisa|${p}|${dia}|`+[x,y].map(z=>`${z.id}@${z.ini}-${z.fin}`).sort().join("|");if((x.a.confOk||[]).includes(ok)||(y.a.confOk||[]).includes(ok))continue}
+      {const ok=`pisa|${p}|${dia}|`+[x,y].map(z=>`${z.id}@${z.ini}-${z.fin}`).sort().join("|");if((x.a.confOk||[]).includes(ok)||(y.a.confOk||[]).includes(ok)||confPend().has(ok))continue}
       if(!y.choca)y.choca=x;if(!x.choca)x.choca=y}
   }
   SESC.m.set(k,out);return out;
@@ -1166,7 +1167,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="23nov-v159";
+const APP_VER="23nov-v161";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -3726,15 +3727,25 @@ function vEditorConf(o){
       :`<p class="note">${esc(p)} no tiene ninguna hora libre el ${E.dia.toLowerCase()} que le venga bien a este alumno. Prueba otro día${fx?" u otro tipo de sesión":""}.</p><div class="petbtns"><button class="btn small" data-act="confcerrar">Cancelar</button></div>`}`}
   return `<div class="addbox" style="margin-top:10px"><b style="font-size:13px">¿Qué clase quieres cambiar?</b><div class="list" style="margin-top:6px">${filas}</div>${form}</div>`;
 }
+/* 23/11/2026 (titular): las profesoras también pueden pulsar «Es correcto» en sus solapes. Lo guardan en su buzón (confOk: [{ok,id,t}])
+   y la app de dirección o de recepción lo pasa a la ficha del alumno (a.confOk). Mientras tanto ya cuenta como correcto para todos. */
+function confPend(){const st=new Set(),add=d=>{for(const e of (d&&d.confOk)||[])if(e&&e.ok)st.add(e.ok)};add(S.miBuzon);for(const d of (S.buzon||new Map()).values())add(d);return st}
+let aplicandoConf=false;const confHechas=new Set();
+async function aplicarConfProfes(){if(S.role!=="dir"||S.ro||S.pv||aplicandoConf||!S.alOk)return;aplicandoConf=true;
+  try{const por=new Map();for(const d of (S.buzon||new Map()).values())for(const e of (d&&d.confOk)||[]){if(!e||!e.ok||!e.id||confHechas.has(e.id+"#"+e.ok))continue;
+      const a=S.alumnos.get(e.id);if(!a){confHechas.add(e.id+"#"+e.ok);continue}if((a.confOk||[]).includes(e.ok)){confHechas.add(e.id+"#"+e.ok);continue}
+      if(!por.has(e.id))por.set(e.id,[]);por.get(e.id).push(e.ok)}
+    for(const [id,oks] of por){const a=S.alumnos.get(id);const confOk=[...new Set([...(a.confOk||[]),...oks])];if(await save(id,{confOk})){a.confOk=confOk;for(const ok of oks)confHechas.add(id+"#"+ok)}}
+    if(por.size){CONFC.l=null;SESC.al=null;refrescar()}}finally{aplicandoConf=false}}
 const confFirma=(A,B)=>[A,B].map(z=>`${z.c.profe}@${z.c.dia}@${z.x.ini}-${z.x.fin}`).sort().join("|");
 function conflictos(){
   if(CONFC.al===S.alumnos&&CONFC.ov===S.sesOv&&CONFC.l)return CONFC.l;
-  const out=[],vistos=new Set(),add=o=>{if(vistos.has(o.k))return;vistos.add(o.k);out.push(o)};
+  const out=[],vistos=new Set(),add=o=>{if(vistos.has(o.k))return;vistos.add(o.k);out.push(o)},CP=confPend();
   // 1 y 2: logopedia que se pisa o queda fuera
   for(const p of FLEX)for(const d of DIAS)for(const x of sesionesDia(p,d)){
     if(x.choca){const y=x.choca,[m1,m2]=x.ini<=y.ini?[y,x]:[x,y];
       const ok=`pisa|${p}|${d}|`+[x,y].map(z=>`${z.id}@${z.ini}-${z.fin}`).sort().join("|");
-      if(!((x.a.confOk||[]).includes(ok)||(y.a.confOk||[]).includes(ok)))
+      if(!((x.a.confOk||[]).includes(ok)||(y.a.confOk||[]).includes(ok)||CP.has(ok)))
       add({k:"p|"+[x.id,y.id].sort().join("|")+"|"+p+"|"+d,ok,tipo:"pisa",profes:[p],dia:d,
         txt:`${titulo(m2.a.nombre)} (${sesTxt(m2)}) se pisa con ${titulo(m1.a.nombre)} (${sesTxt(m1)})${!m1.conf||!m2.conf?" · hora estimada, sin confirmar":""}`,cands:[{id:m1.id,a:m1.a,c:m1.c},{id:m2.id,a:m2.a,c:m2.c}]})}
     if(x.fuera&&!x.c.extra)add({k:"f|"+x.id+"|"+p+"|"+d+"|"+x.c.hora,tipo:"fuera",profes:[p],dia:d,txt:`${titulo(x.a.nombre)} (${sesTxt(x)}) queda fuera del horario de ${p} (${textoHorario(p)})`,cands:[{id:x.id,a:x.a,c:x.c}]})}
@@ -3751,7 +3762,7 @@ function conflictos(){
     for(let i=0;i<l.length;i++)for(let j=i+1;j<l.length;j++){const A=l[i],B=l[j];
       if(A.c.dia!==B.c.dia||A.c.profe===B.c.profe||!(A.x.ini<B.x.fin&&B.x.ini<A.x.fin))continue;
       const sol=Math.min(A.x.fin,B.x.fin)-Math.max(A.x.ini,B.x.ini);
-      const ok=confFirma(A,B);if((a.confOk||[]).includes(ok))continue;
+      const ok=confFirma(A,B);if((a.confOk||[]).includes(ok)||CP.has(ok))continue;
       const mv=FLEX.has(B.c.profe)&&!FLEX.has(A.c.profe)?B:FLEX.has(A.c.profe)&&!FLEX.has(B.c.profe)?A:(B.x.ini>=A.x.ini?B:A);
       add({k:"d|"+id+"|"+A.c.dia+"|"+[A.c.profe,B.c.profe].sort().join("|"),ok,tipo:"doble",profes:[A.c.profe,B.c.profe],dia:A.c.dia,leve:sol<=15,
         txt:`${titulo(a.nombre)}: ${A.c.dia.toLowerCase()} con ${A.c.profe} (${sesTxt(A.x)}) y con ${B.c.profe} (${sesTxt(B.x)}); se pisan ${sol} min`,cands:[{id,a,c:mv.c},{id,a,c:(mv===A?B:A).c}]})}}
@@ -3777,7 +3788,7 @@ function vConflictos(){
       ${o.sug&&mia?`<button class="btn small primary" data-act="confapl" data-k="${esc(o.k)}">Aplicar</button>`:""}
       ${o.sug&&!mia?`<span class="note">La sugerencia es para ${esc(o.mover.c.profe)}; también puedes cambiar tu clase.</span>`:""}
       ${o.tipo==="repe"&&S.role==="dir"&&!S.ro?`<button class="btn small primary" data-act="quitarrepe" data-id="${esc(o.cands[0].id)}">Quitar la repetida</button>`:""}${o.tipo!=="repe"&&o.cands.some(m=>S.role==="dir"||m.c.profe===S.myProfe)?`<button class="btn small" data-act="confabrir" data-k="${esc(o.k)}">${S.confEd&&S.confEd.k===o.k?"Cerrar":"Cambiar horario"}</button>`:""}
-      <button class="btn small" data-act="ir" data-id="${esc(o.mover?o.mover.id:"")}">Ver ficha</button>${(o.tipo==="doble"||o.tipo==="pisa")&&S.role==="dir"&&!S.ro&&!esMos()?`<button class="btn small" data-act="confok" data-id="${esc(o.cands[0].id)}" data-ok="${esc(o.ok)}" title="El horario es así a propósito: no avisar más mientras no cambien las horas">Es correcto</button>`:""}${vEditorConf(o)}</div>`};
+      <button class="btn small" data-act="ir" data-id="${esc(o.mover?o.mover.id:"")}">Ver ficha</button>${(o.tipo==="doble"||o.tipo==="pisa")&&S.role==="dir"&&!S.ro&&!esMos()?`<button class="btn small" data-act="confok" data-id="${esc(o.cands[0].id)}" data-ok="${esc(o.ok)}" title="El horario es así a propósito: no avisar más mientras no cambien las horas">Es correcto</button>`:""}${(o.tipo==="doble"||o.tipo==="pisa")&&S.role==="profe"&&!S.pv&&(o.profes||[]).includes(S.myProfe)?`<button class="btn small" data-act="confokp" data-id="${esc(o.cands[0].id)}" data-ok="${esc(o.ok)}" title="Las horas son así a propósito: no avisar más mientras no cambien">Es correcto</button>`:""}${vEditorConf(o)}</div>`};
   return `<div class="bar"><h2>Conflictos de horario</h2><span class="legend">${l.length?`${l.length} conflicto${l.length===1?"":"s"}`:"Ninguno"}</span></div>
     <p class="note">La app revisa sola los horarios: sesiones que se pisan, fuera de horario, grupos con más alumnos que plazas y alumnos que estarían en dos clases a la vez. Al corregirlos desaparecen de aquí. Los marcados «15 min» son solapes cortos: puede que sean intencionados, pero conviene revisarlos. Si un alumno en dos sitios o dos sesiones que se pisan son correctos a propósito (sale antes, llega tarde, comparten parte de la terapia), pulsa «Es correcto» y no volverá a avisar mientras no cambien esas horas.</p>
     ${filtro}${ver.length?ver.map(fila).join(""):`<div class="empty">Sin conflictos${fp?" para "+esc(fp):""}. 👍</div>`}`;
@@ -4543,6 +4554,9 @@ document.addEventListener("click",async e=>{
     if(await save(id,{clases})){a.clases=clases;CONFC.l=null;SESC.al=null;render();toast("Clase repetida quitada: "+titulo(a.nombre))}else t.disabled=false}
   else if(act==="confok"&&a&&S.role==="dir"&&!esMos()){const confOk=[...new Set([...(a.confOk||[]),t.dataset.ok])];t.disabled=true;
     if(await save(id,{confOk})){a.confOk=confOk;CONFC.l=null;render();toast("Marcado como correcto: "+titulo(a.nombre))}else t.disabled=false}
+  else if(act==="confokp"&&S.role==="profe"&&!S.pv){const ok=t.dataset.ok,lid=t.dataset.id;if(!ok||!lid)return;t.disabled=true;
+    try{const l=[...((S.miBuzon&&S.miBuzon.confOk)||[]).filter(e=>e&&e.ok!==ok),{ok,id:lid,t:nowISO()}].slice(-200);await guardarBuzonProfe({confOk:l});CONFC.l=null;SESC.al=null;render();toast("Marcado como correcto")}
+    catch(_){t.disabled=false;toast("No se ha podido guardar. Inténtalo de nuevo.")}}
   else if(act==="confquitar"&&a&&S.role==="dir"&&!esMos()){t.disabled=true;if(await save(id,{confOk:[]})){a.confOk=[];CONFC.l=null;render();toast("Volverá a avisar de sus solapes")}else t.disabled=false}
   else if(act==="renombrar"&&a&&S.role==="dir"){const v=prompt("Nombre y apellidos del alumno (como en Argos):",a.nombre);if(v==null)return;
     const n=v.replace(/\s+/g," ").trim().toUpperCase();if(!n||n===a.nombre)return;
@@ -4990,7 +5004,7 @@ function arrancarDireccion(db){
     const m=new Map();snap.docs.forEach(d=>m.set(d.id,norm(d.id,d.data())));
     S.alumnos=m;S.alOk=true;
     if(!S.completando){S.completando=true;completarUsuarios().finally(()=>{S.completando=false})}
-    quizasPublicar();revisarSolicitudes();aplicarSesProfes();aplicarAsisProfes();aplicarFestProfes();aplicarTraspasos();aplicarAnadidos();aplicarFotosAlumnos();revisarBajas();setTimeout(()=>{try{recibosHX()}catch(_){}},1500);
+    quizasPublicar();revisarSolicitudes();aplicarSesProfes();aplicarAsisProfes();aplicarConfProfes();aplicarFestProfes();aplicarTraspasos();aplicarAnadidos();aplicarFotosAlumnos();revisarBajas();setTimeout(()=>{try{recibosHX()}catch(_){}},1500);
     if(!S.argosSub){S.argosSub=db.doc("config/argos").onSnapshot(d=>{S.argos=d.exists?d.data():null;if(S.ready&&S.screen==="app"&&(S.view==="argos"||S.view==="tarifas"))render()},()=>{})}
     if(snap.empty&&S.view!=="accesos"){S.ready=true;if(S.screen==="app")$("#app").innerHTML=`<div class="empty">Todavía no hay alumnos. Si vienes de la app anterior, ve a <b>Accesos</b> y carga su copia de seguridad. Si empiezas de cero, ve a <b>Alumnos → Nuevo alumno</b>.</div>`;setStatus("Al día");quizasSync();return}
     pintarDatos(snap);quizasSync();
@@ -5008,7 +5022,7 @@ function arrancarDireccion(db){
   db.doc("config/intentos").onSnapshot(d=>{S.intentos=(d.exists&&d.data().cuentas)||{};S.intOk=true;revisarSolicitudes()},()=>{S.intOk=true});
   db.doc("publico/datos").onSnapshot(d=>{S.pub=d.exists?d.data():null;S.pubOk=true;quizasPublicar();if(S.view==="calendario")refrescar()},()=>{});
   if(!esMos()&&window.__plazas)window.__plazas.escuchar({desde:sumaDias(todayISO(),-60)},l=>{S.plazas=l;refrescar()});
-  db.collection("buzon").limit(1000).onSnapshot(snap=>{S.buzon=new Map(snap.docs.map(d=>[d.id,d.data()||{}]));rebuildOv();aplicarSesProfes();aplicarAsisProfes();aplicarFestProfes();aplicarTraspasos();aplicarAnadidos();aplicarFotosAlumnos();quizasPublicar();refrescar()},()=>{});
+  db.collection("buzon").limit(1000).onSnapshot(snap=>{S.buzon=new Map(snap.docs.map(d=>[d.id,d.data()||{}]));rebuildOv();aplicarSesProfes();aplicarAsisProfes();aplicarFestProfes();aplicarTraspasos();aplicarAnadidos();aplicarFotosAlumnos();aplicarConfProfes();quizasPublicar();refrescar()},()=>{});
   db.collection("solicitudes").limit(200).onSnapshot(snap=>{S.solic=snap.docs.map(d=>{const x=d.data()||{};return {id:d.id,fecha:x.fecha||"",rol:x.rol==="alumno"?"alumno":"profe",usuario:x.usuario||"",clave:x.clave||"",alta:typeof x.alta==="string"?x.alta:"",tel4:digitos(x.tel4).slice(0,4),revisada:!!x.revisada,error:x.error||""}});revisarSolicitudes();if(enAccesos())render()},()=>{});
 }
 
@@ -5229,7 +5243,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=23nov-v159"></script>
+<script src="gestion.js?v=23nov-v161"></script>
 
 
 </body></html>

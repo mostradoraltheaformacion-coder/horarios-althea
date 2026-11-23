@@ -372,7 +372,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=22nov-v154"></script>
+<script type="module" src="fb.js?v=23nov-v155"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -1123,6 +1123,7 @@ async function save(id,patch){
   if(Array.isArray(patch.clases))patch=conHistorial(S.alumnos.get(id),patch);
   setStatus("Guardando…");
   try{await S.db.collection("alumnos").doc(id).update({...patch,actualizado:todayISO()});setStatus("Guardado");SESC.al=null;
+    {const al=S.alumnos.get(id);if(al&&Array.isArray(patch.clases)){al.clases=patch.clases;if(patch.clasesHist)al.clasesHist=patch.clasesHist}}
     syncAlumno(id,{...S.alumnos.get(id),...patch});return true}
   catch(e){setStatus("Sin guardar");if(e&&e.code==="invalid_argument"){S.canWrite=false;toast("No tienes permiso para editar")}else toast("No se ha podido guardar. Inténtalo de nuevo.");return false}
 }
@@ -1160,7 +1161,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="22nov-v154";
+const APP_VER="23nov-v155";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -3901,7 +3902,10 @@ async function revisarSolicitudes(){return;
    (preinscripción o alta), y si no se sabe, siempre. */
 const clKey=c=>[c.dia,c.hora,c.profe,c.ini||""].join("|");
 function conHistorial(a,patch){if(!a)return patch;const hoy=todayISO(),ant=new Set((a.clases||[]).map(clKey)),nue=new Set(patch.clases.map(clKey));
-  const clases=patch.clases.map(c=>ant.has(clKey(c))||c.desde?c:{...c,desde:hoy});
+  /* 23/11/2026: la fecha «desde» se pone en el mismo objeto de la clase (no en una copia), para que la pantalla la tenga al momento:
+     antes, la clase nueva salía en todo el mes hasta recargar (caso Emmanuel Soto Alba) */
+  for(const c of patch.clases)if(c&&!ant.has(clKey(c))&&!c.desde)c.desde=hoy;
+  const clases=patch.clases;
   const ini=iniAl(a),quit=(a.clases||[]).filter(c=>!nue.has(clKey(c))&&(c.desde||ini||"")<hoy).map(c=>({...c,hasta:hoy}));
   const lim=sumaDias(hoy,-400),hist=[...(a.clasesHist||[]).filter(c=>c&&String(c.hasta||"")>=lim),...quit];
   return {...patch,clases,...(quit.length||(a.clasesHist||[]).length!==hist.length?{clasesHist:hist}:{})}}
@@ -5216,7 +5220,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=22nov-v154"></script>
+<script src="gestion.js?v=23nov-v155"></script>
 
 
 </body></html>

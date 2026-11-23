@@ -333,6 +333,52 @@ const cobrosDia=dia=>{const an=anulados();return deDia(dia,"cobro").map(d=>({...
 const cobradosPrueba=()=>{const an=anulados(),s=new Set();for(const d of GC.docs)if(d.tipo==="cobro"&&!an.has(d.id))for(const r of d.recibos||[])s.add(d.alumno+"|"+r.id);return s};
 const pendientesDe=(a,id)=>{const cp=cajaPrueba()?cobradosPrueba():null;
   return (a.recibos||[]).filter(r=>r&&r.estado!=="pagado"&&r.importe!=null&&!(cp&&cp.has(id+"|"+r.id))).sort((x,y)=>String(x.emitido).localeCompare(String(y.emitido)))};
+/* 23/11/2026 (titular): pestaña «Cobros pendientes» para el mostrador (y dirección).
+   - Por defecto, los alumnos que vienen hoy y tienen recibos pendientes, ordenados por hora.
+   - Buscador: cualquier alumno (también de baja) con sus recibos pendientes.
+   - «Para reclamar»: alumnos con 2 o más recibos pendientes, con WhatsApp para reclamarlos. Se apunta en alumnos/<id>.waRec.reclamo.
+   Cuentan los recibos sin pagar desde que la app lleva las cuentas (ATR_DESDE); los que esperan beca no se reclaman.
+   Los cobrados en la Caja de prueba dejan de salir (pendientesDe). */
+const nzS=s=>String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim().toUpperCase();
+const cbPend=(a,id)=>pendientesDe(a,id).filter(r=>r.estado!=="anulado"&&String(r.emitido||"").slice(0,7)>=ATR_DESDE());
+const cbTot=rs=>r2(rs.reduce((s,r)=>s+(+r.importe||0),0));
+function cbHoy(){const hoy=todayISO(),out=new Map();if(!DIAS.includes(diaDe(hoy))||festivoDe(hoy))return [];
+  for(const p of EQUIPO){let l=[];try{l=sesionesFecha(p,hoy)}catch(_){l=[]}
+    for(const {id,a,o} of l){let ini=KEY_INI[o.hora]??960;try{if(FLEX.has(p))ini=sesDe(a,o).ini}catch(_){}
+      const x=out.get(id);if(!x||ini<x.ini)out.set(id,{id,a,ini,profe:p,mas:x?[...x.mas,x.profe]:[]});else x.mas.push(p)}}
+  return [...out.values()].sort((u,v)=>u.ini-v.ini||String(u.a.nombre).localeCompare(String(v.a.nombre),"es"))}
+function cbReclamar(){const l=[];for(const [id,a] of sortedAlumnos()){if(typeof esperaBeca==="function"&&esperaBeca(a))continue;const rs=cbPend(a,id);if(rs.length>=2)l.push({id,a,rs,rec:(a.waRec||{}).reclamo||""})}
+  return l.sort((x,y)=>(!!x.rec-!!y.rec)||String(x.rec).localeCompare(String(y.rec))||cbTot(y.rs)-cbTot(x.rs))}
+function cbFila(id,a,rs,extra,conWa){const tel=(contactosAl(a)[0]||{}).tel||"",beca=typeof esperaBeca==="function"&&esperaBeca(a),rec=(a.waRec||{}).reclamo;
+  return `<div class="row" style="flex-wrap:wrap;gap:8px;align-items:flex-start;padding:8px 0">
+    <span style="flex:1 1 260px;min-width:0"><a href="#" data-act="ir" data-id="${esc(id)}" style="color:inherit"><b>${esc(titulo(a.nombre))}</b></a>${extra||""}${a.baja?` <span class="badge b-pend">de baja</span>`:""}${beca?` <span class="badge b-pend">espera beca</span>`:""}
+      <br>${rs.length?rs.map(r=>`<span class="note">${esc(nombreMes(r.emitido)||fmtFecha(r.emitido))}${r.curso||r.concepto?` · ${esc(r.curso||r.concepto)}`:""}${r.numero?` · ${esc(r.numero)}`:""} · <b>${eur(+r.importe||0)}</b></span>`).join("<br>"):`<span class="note">Al día: no tiene recibos pendientes.</span>`}
+      ${rec?`<br><span class="note">Reclamado por WhatsApp el ${fmtFecha(String(rec).slice(0,10))}</span>`:""}</span>
+    ${rs.length?`<b style="font-variant-numeric:tabular-nums;min-width:70px;text-align:right">${eur(cbTot(rs))}</b>
+      <span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn small primary" data-cb="cobrar" data-id="${esc(id)}">Cobrar</button>
+      ${conWa&&!beca?(tel?`<button class="btn small" data-cb="wa" data-id="${esc(id)}">WhatsApp</button>`:`<span class="note">sin teléfono</span>`)+`<button class="btn small" data-cb="ok" data-id="${esc(id)}" title="Ya se ha reclamado de otra forma">${rec?"Reclamado otra vez":"Ya reclamado"}</button>`:""}</span>`:""}</div>`}
+function vCobrosRes(){const q=nzS(S.cbQ);
+  if(q.length>=2){const l=sortedAlumnos().filter(([,x])=>nzS(x.nombre).includes(q)).slice(0,25);
+    if(!l.length)return `<div class="panel"><p class="note">No hay ningún alumno con ese nombre.</p></div>`;
+    return `<div class="panel"><b>Resultado de la búsqueda</b>${l.map(([id,a])=>cbFila(id,a,cbPend(a,id),"",true)).join("")}</div>`}
+  const hoy=cbHoy(),con=hoy.map(x=>({...x,rs:cbPend(x.a,x.id)})).filter(x=>x.rs.length);
+  return `<div class="panel"><div class="bar" style="margin:0 0 4px"><b style="margin-right:auto">Vienen hoy con recibos pendientes</b><span class="note">${hoy.length?`${con.length} de ${hoy.length} alumnos que vienen hoy · ${eur(r2(con.reduce((s,x)=>s+cbTot(x.rs),0)))}`:"Hoy no hay clases"}</span></div>
+    ${con.length?con.map(x=>cbFila(x.id,x.a,x.rs,` <span class="note">· ${hm(x.ini)} con ${esc([x.profe,...x.mas].join(", "))}</span>`,true)).join(""):`<p class="note">${hoy.length?"Todos los que vienen hoy están al día.":"No hay nadie que cobrar hoy."}</p>`}</div>`}
+function vCobros(){if(!cajaVer())return `<div class="empty">Solo dirección y mostrador.</div>`;cajaEscuchar();
+  const R=cbReclamar(),sin=R.filter(x=>!x.rec).length;
+  return `<div class="bar"><h2>Cobros pendientes</h2><span class="legend">${fmtFecha(todayISO())}</span></div>
+  <p class="note" style="margin-top:0">Recibos sin pagar desde ${esc(nombreMes(ATR_DESDE()+"-01"))}. Para cobrar, pulsa «Cobrar» (te lleva a la Caja con el alumno elegido).${cajaPrueba()?" Hasta enero, cobra también en Argos como siempre.":""}</p>
+  <label class="f" style="max-width:460px">Buscar alumno<input type="search" id="cb-q" value="${esc(S.cbQ||"")}" placeholder="Nombre o apellidos (deja vacío para ver los de hoy)" autocomplete="off"></label>
+  <div id="cb-res" style="margin-top:10px">${vCobrosRes()}</div>
+  <h3 class="sec">Para reclamar: 2 o más recibos pendientes <span class="note" style="font-weight:400">· ${R.length} alumno${R.length===1?"":"s"}${sin?` · ${sin} sin reclamar`:""}</span></h3>
+  <p class="note" style="margin-top:0">«WhatsApp» abre el chat de la familia con el mensaje escrito (los recibos y el Bizum). Los que esperan beca no salen.</p>
+  <div class="panel">${R.length?R.map(x=>cbFila(x.id,x.a,x.rs,"",true)).join(""):`<p class="note">Nadie tiene 2 o más recibos pendientes.</p>`}</div>`}
+document.addEventListener("input",e=>{if(e.target&&e.target.id==="cb-q"){S.cbQ=e.target.value;const el=document.getElementById("cb-res");if(el)el.innerHTML=vCobrosRes()}});
+async function cbMarcar(id){const a=S.alumnos.get(id);if(!a)return;const waRec={...(a.waRec||{}),reclamo:nowISO()};if(await save(id,{waRec})){a.waRec=waRec;render()}}
+document.addEventListener("click",e=>{const t=e.target.closest&&e.target.closest("[data-cb]");if(!t)return;e.preventDefault();const id=t.dataset.id,a=S.alumnos.get(id);if(!a)return;
+  if(t.dataset.cb==="cobrar"){GC.al=id;GC.sel=null;GC.q="";GC.ultimo=null;S.view="caja";render();return}
+  if(t.dataset.cb==="wa"){const tel=(contactosAl(a)[0]||{}).tel,rs=cbPend(a,id);if(!tel||!rs.length)return;window.open(`https://wa.me/34${tel}?text=${encodeURIComponent(mensajeAtrasados(a,rs))}`,"_blank","noopener");cbMarcar(id);return}
+  if(t.dataset.cb==="ok")cbMarcar(id)});
 /* Estado de la caja del día: la última apertura y lo que ha pasado después. */
 function estadoCaja(dia){
   dia=dia||todayISO();const ds=deDia(dia),an=anulados(),aps=ds.filter(d=>d.tipo==="apertura"),ap=aps[aps.length-1];

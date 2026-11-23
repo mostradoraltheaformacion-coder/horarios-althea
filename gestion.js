@@ -361,7 +361,7 @@ function vCobrosRes(){const q=nzS(S.cbQ);
   if(q.length>=2){const l=sortedAlumnos().filter(([,x])=>nzS(x.nombre).includes(q)).slice(0,25);
     if(!l.length)return `<div class="panel"><p class="note">No hay ningún alumno con ese nombre.</p></div>`;
     return `<div class="panel"><b>Resultado de la búsqueda</b>${l.map(([id,a])=>cbFila(id,a,cbPend(a,id),"",true)).join("")}</div>`}
-  const hoy=cbHoy(),con=hoy.map(x=>({...x,rs:cbPend(x.a,x.id)})).filter(x=>x.rs.length);
+  const hoy=cbHoy(),con=hoy.map(x=>({...x,rs:cbPend(x.a,x.id)})).filter(x=>x.rs.length&&!(typeof esperaBeca==="function"&&esperaBeca(x.a)));/* 23/11/2026: los que esperan beca van aparte */
   return `<div class="panel"><div class="bar" style="margin:0 0 4px"><b style="margin-right:auto">Vienen hoy con recibos pendientes</b><span class="note">${hoy.length?`${con.length} de ${hoy.length} alumnos que vienen hoy · ${eur(r2(con.reduce((s,x)=>s+cbTot(x.rs),0)))}`:"Hoy no hay clases"}</span></div>
     ${con.length?con.map(x=>cbFila(x.id,x.a,x.rs,` <span class="note">· ${hm(x.ini)} con ${esc([x.profe,...x.mas].join(", "))}</span>`,true)).join(""):`<p class="note">${hoy.length?"Todos los que vienen hoy están al día.":"No hay nadie que cobrar hoy."}</p>`}</div>`}
 function vCobros(){if(!cajaVer())return `<div class="empty">Solo dirección y mostrador.</div>`;cajaEscuchar();
@@ -372,7 +372,10 @@ function vCobros(){if(!cajaVer())return `<div class="empty">Solo dirección y mo
   <div id="cb-res" style="margin-top:10px">${vCobrosRes()}</div>
   <h3 class="sec">Para reclamar: 2 o más recibos pendientes <span class="note" style="font-weight:400">· ${R.length} alumno${R.length===1?"":"s"}${sin?` · ${sin} sin reclamar`:""}</span></h3>
   <p class="note" style="margin-top:0">«WhatsApp» abre el chat de la familia con el mensaje escrito (los recibos y el Bizum). Los que esperan beca no salen.</p>
-  <div class="panel">${R.length?R.map(x=>cbFila(x.id,x.a,x.rs,"",true)).join(""):`<p class="note">Nadie tiene 2 o más recibos pendientes.</p>`}</div>`}
+  <div class="panel">${R.length?R.map(x=>cbFila(x.id,x.a,x.rs,"",true)).join(""):`<p class="note">Nadie tiene 2 o más recibos pendientes.</p>`}</div>
+  ${(()=>{const B=typeof esperaBeca==="function"?sortedAlumnos().filter(([,a])=>esperaBeca(a)).map(([id,a])=>({id,a,rs:cbPend(a,id)})).filter(x=>x.rs.length):[];
+    return B.length?`<details style="margin-top:14px"${S.cbBecaOpen?" open":""} ontoggle="S.cbBecaOpen=this.open"><summary><h3 class="sec" style="display:inline">Esperando beca</h3> <span class="note">· ${B.length} alumno${B.length===1?"":"s"} · ${eur(r2(B.reduce((s,x)=>s+cbTot(x.rs),0)))} · no se reclaman</span></summary>
+      <p class="note">Sus recibos se cobran cuando llegue la beca (en Caja, forma «Beca»).</p><div class="panel">${B.map(x=>cbFila(x.id,x.a,x.rs,"",false)).join("")}</div></details>`:""})()}`}
 document.addEventListener("input",e=>{if(e.target&&e.target.id==="cb-q"){S.cbQ=e.target.value;const el=document.getElementById("cb-res");if(el)el.innerHTML=vCobrosRes()}});
 async function cbMarcar(id){const a=S.alumnos.get(id);if(!a)return;const waRec={...(a.waRec||{}),reclamo:nowISO()};if(await save(id,{waRec})){a.waRec=waRec;render()}}
 document.addEventListener("click",e=>{const t=e.target.closest&&e.target.closest("[data-cb]");if(!t)return;e.preventDefault();const id=t.dataset.id,a=S.alumnos.get(id);if(!a)return;

@@ -3862,11 +3862,11 @@ function avDesdeOpc(){const hoy=todayISO(),lun=(()=>{let f=sumaDias(hoy,1);while
   return [["hoy",hoy,"Desde hoy"],["lunes",lun,`Desde el lunes ${fmtFecha(lun)}`],["mes",m1,`Desde el 1 de ${MESES[+m1.slice(5,7)-1]}`]]}
 const clTxt=c=>`${c.dia} ${FLEX.has(c.profe)&&c.ini?c.ini:(HSHORT[c.hora]||c.hora)}`;
 /* ----- profesora: formulario en la ficha ----- */
-function vAvisoProfFicha(id,a){if(S.role!=="profe"||S.pv)return "";avEscuchar();
+function vAvisoProfFicha(id,a){if(S.role!=="profe")return "";avEscuchar();/* 25/11/2026: también en la vista previa, para verlo (ahí no se envía) */
   const F=S.avF&&S.avF.id===id?S.avF:null,mias=(a.clases||[]).filter(c=>c.profe===S.myProfe),mis=AV.docs.filter(x=>x.alumno===id).slice(0,5);
   const est=x=>x.estado==="cerrado"?`<span class="badge b-si">Hecho${x.cierre&&x.cierre.t?" el "+fmtFecha(String(x.cierre.t).slice(0,10)):""}</span>${x.cierre&&x.cierre.nota?` <span class="note">· ${esc(x.cierre.nota)}</span>`:""}`:x.estado==="anulado"?`<span class="badge">Anulado</span>`:`<span class="badge b-pend">Enviado, pendiente</span> <a href="#" data-av="anular" data-i="${esc(x.id)}" class="note">anular</a>`;
   const lista=mis.length?`<div style="margin-top:6px">${mis.map(x=>`<div class="row" style="flex-wrap:wrap"><span class="note">${fmtFecha(String(x.t).slice(0,10))}</span><span class="grow">${esc(avResumen(x))}</span>${est(x)}</div>`).join("")}</div>`:"";
-  if(!F)return `<div class="panel" style="padding:10px 14px"><div class="bar" style="margin:0"><b style="margin-right:auto">Avisar a dirección y a Ainea</b><span style="display:flex;gap:6px;flex-wrap:wrap">${Object.entries(AVT).map(([k,l])=>`<button class="btn small" data-av="nuevo" data-id="${esc(id)}" data-k="${k}">${l}</button>`).join("")}</span></div>${lista}</div>`;
+  if(!F)return `<div class="panel" style="padding:10px 14px"><div class="bar" style="margin:0"><b style="margin-right:auto">Avisar a dirección y a Ainea${S.pv?' <span class="note" style="font-weight:400">(vista previa: no se envía)</span>':""}</b><span style="display:flex;gap:6px;flex-wrap:wrap">${Object.entries(AVT).map(([k,l])=>`<button class="btn small" data-av="nuevo" data-id="${esc(id)}" data-k="${k}">${l}</button>`).join("")}</span></div>${lista}</div>`;
   const desde=avDesdeOpc(),dsel=`<label class="f" style="flex:1 1 220px">¿Desde cuándo?<select id="av-desde">${desde.map(([k,f,l])=>`<option value="${f}" ${F.desde===f?"selected":""}>${l}</option>`).join("")}<option value="otra" ${F.desde==="otra"?"selected":""}>Otra fecha…</option></select></label>${F.desde==="otra"?`<label class="f" style="flex:0 1 160px">Fecha<input type="date" id="av-fecha" value="${esc(F.fecha||todayISO())}"></label>`:""}`;
   const selClase=mias.length?`<label class="f" style="flex:1 1 200px">¿Qué clase?<select id="av-clase">${mias.map((c,i)=>`<option value="${i}">${esc(clTxt(c))}</option>`).join("")}</select></label>`:`<p class="note">No tiene clases contigo.</p>`;
   let campos="";
@@ -3940,7 +3940,7 @@ document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.c
   if(k==="nuevo"){S.avF={id:t.dataset.id,k:t.dataset.k,desde:todayISO()};render();return}
   if(k==="cancelar"){S.avF=null;render();return}
   if(k==="ir"){S.view="avisos";render();return}
-  if(k==="enviar"){t.disabled=true;await avEnviar(t.dataset.id);t.disabled=false;return}
+  if(k==="enviar"){if(S.pv){toast("Vista previa: no se envía nada");return}t.disabled=true;await avEnviar(t.dataset.id);t.disabled=false;return}
   if(k==="anular"){if(!confirm("¿Anular este aviso?"))return;try{await S.db.doc("avisosProf/"+t.dataset.i).update({estado:"anulado",cierre:{t:nowISO(),por:S.myProfe||quienSoy(),nota:"Anulado por la profesora"}})}catch(_){toast("No se ha podido anular")}return}
   if(k==="cerrar"){const n=(document.getElementById("av-cn-"+t.dataset.i)||{}).value||"";t.disabled=true;
     try{await S.db.doc("avisosProf/"+t.dataset.i).update({estado:"cerrado",cierre:{t:nowISO(),por:esPlus()?"Ainea":quienSoy(),nota:n.trim()}});toast("Aviso cerrado")}catch(_){t.disabled=false;toast("No se ha podido cerrar")}}});

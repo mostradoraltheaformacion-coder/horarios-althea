@@ -1393,6 +1393,14 @@ async function gbSubirJustificantes(files){
         GB.just.fix=(GB.just.fix||0)+1}
       else if(prev){GB.just.ya.push(`${quien} · ya estaba subido (${fmtFecha(prev.fv)} · ${eur(Math.abs(prev.importe))})`);GB.just.hecho++;continue}
       const m=buscarMov(c,usados);
+      /* 25/11/2026 (titular): el TC1 llega antes que el cargo de la Seguridad Social. Si el cargo aún no está en el banco, se guarda
+         en nominas/<AAAA-MM>_tc1 (mes de la liquidación): la previsión usa su importe real y se engancha solo al cargo al subir el extracto */
+      if(!m&&c.tipo==="TC1"&&c.importe>0){const T=items.map(i=>i.s).join(" "),pm=T.match(/Per[ií]odo de Liquidaci[oó]n:?\s*(\d{2})\/(\d{4})/i);
+        if(pm){const mes=pm[2]+"-"+pm[1],key=mes+"_tc1",prevT=NM.docs.find(d=>d.id===key);
+          if(prevT&&Math.abs((+prevT.imp||0)-c.importe)<0.005){GB.just.ya.push(`TC1 de ${mesTxt(mes)} · ya estaba subido (${eur(c.importe)})`);GB.just.hecho++;continue}
+          const r=await as.upload(f,{clase:"gasto"}),rec={mes,tipo:"tc1",profe:"",imp:r2(c.importe),arch:{id:r.id,n:f.name.slice(0,80)},firma,t:nowISO()};
+          await S.db.doc("nominas/"+key).set(rec);const ix=NM.docs.findIndex(d=>d.id===key);if(ix>=0)NM.docs[ix]={id:key,...rec};else NM.docs.push({id:key,...rec});
+          GB.just.ok.push(`TC1 de ${mesTxt(mes)} · ${eur(c.importe)} · el cargo de la Seguridad Social aún no está en el banco: se enganchará solo al subir el extracto`);GB.just.hecho++;continue}}
       if(!m)GB.just.sin.push(`${c.tipo} · ${quien} · ${c.importe!=null?eur(c.importe):"?"} · ${c.fv?fmtFecha(c.fv):"?"}`);
       else if(c.slot==="doc"){usados.add(m.id);const tipo=c.tipo==="TC1"?"tc":"factura";
         const dPrev=docsMov(m).d,sust=!!(dPrev&&dPrev.sinNif&&!c.sinNif);
@@ -1480,7 +1488,12 @@ async function nmEnganchar(key,rec,m){const o={id:rec.arch.id,n:rec.arch.n,t:now
   await S.db.doc("banco/"+m.mes).update(up);const dd=GB.docs.find(y=>y.id===m.mes);if(dd&&dd.movs[m.id])Object.assign(dd.movs[m.id],{doc:o,df:"nom:"+key,cat:"nominas"});
   await S.db.doc("nominas/"+key).update({mov:{mes:m.mes,id:m.id}})}
 /* Nóminas ya subidas cuya transferencia no estaba: se buscan otra vez (al subir un extracto y al abrir Gastos) */
-async function nmEnlazarPendientes(){if(!NM.ok||NM.busy)return;const l=NM.docs.filter(d=>d.tipo==="nomina"&&!d.mov&&d.arch);if(!l.length)return;NM.busy=true;
+async function tcEnlazarPendientes(){const l=NM.docs.filter(d=>d.tipo==="tc1"&&!d.mov&&d.arch);if(!l.length)return;
+  for(const d of l){const ms=mesSig(d.mes),m=movsTodos().find(x=>x.importe<0&&Math.abs(-x.importe-(+d.imp||0))<0.005&&(x.cat==="ssemp"||/TGSS/i.test(x.concepto||"")&&!/AUTONOMO/i.test(x.concepto||""))&&String(x.fv||"").slice(0,7)>=ms&&!docsMov(x).d);
+    if(!m)continue;const o={id:d.arch.id,n:d.arch.n,t:nowISO(),tipo:"tc"};
+    try{await S.db.doc("banco/"+m.mes).update({["movs."+m.id+".doc"]:o,["movs."+m.id+".df"]:d.firma||("tc1:"+d.mes)});const dd=GB.docs.find(y=>y.id===m.mes);if(dd&&dd.movs[m.id])Object.assign(dd.movs[m.id],{doc:o,df:d.firma||("tc1:"+d.mes)});
+      await S.db.doc("nominas/"+d.mes+"_tc1").update({mov:{mes:m.mes,id:m.id}});d.mov={mes:m.mes,id:m.id}}catch(_){}}}
+async function nmEnlazarPendientes(){try{await tcEnlazarPendientes()}catch(_){}if(!NM.ok||NM.busy)return;const l=NM.docs.filter(d=>d.tipo==="nomina"&&!d.mov&&d.arch);if(!l.length)return;NM.busy=true;
   try{const us=new Set(NM.docs.filter(d=>d.mov).map(d=>d.mov.id));for(const d of l){const m=movNomina(d,us);if(m){us.add(m.id);try{await nmEnganchar(d.id,d,m)}catch(_){}}}}finally{NM.busy=false}}
 async function paqueteA3(f,items){const T=NORM(items.map(i=>i.s).join(" "));
   if(/LIQUIDO\s*A\s*PERCIBIR/.test(T)&&/TRABAJADOR/.test(T)){await subirNominas(f);return true}
@@ -2310,7 +2323,9 @@ function vPrevision(){gbEscuchar();imEscuchar();
   const nomL=m=>{try{return typeof nmListado==="function"?nmListado(m):null}catch(_){return null}},noms=m=>{try{return typeof nmDe==="function"?nmDe(m):[]}catch(_){return []}};
   const ultL=(()=>{let m=hoy.slice(0,7);for(let i=0;i<6;i++){const L=nomL(m);if(L&&L.tot&&+L.tot.sstot>0&&+L.tot.bruto>0)return L;m=mesAntPv(m)}return null})();
   const ajNom=x=>{const X=x.f.slice(0,7);
-    if(x.cat==="ssemp"){const P=mesAntPv(X),L=nomL(P);if(L&&L.tot&&+L.tot.sstot>0)return {...x,imp:r2(+L.tot.sstot),txt:`${x.txt} · según el listado de costes de ${mesTxt(P)}`,exacto:true};
+    if(x.cat==="ssemp"){const P=mesAntPv(X),L=nomL(P),TC=NM.docs.find(d=>d.id===P+"_tc1");
+      if(TC&&+TC.imp>0)return {...x,imp:r2(+TC.imp),txt:`${x.txt} · según el TC1 de ${mesTxt(P)}`,exacto:true};
+      if(L&&L.tot&&+L.tot.sstot>0)return {...x,imp:r2(+L.tot.sstot),txt:`${x.txt} · según el listado de costes de ${mesTxt(P)}`,exacto:true};
       const ns=noms(P).filter(n=>+n.bruto>0);if(ns.length&&ultL){const b=ns.reduce((s,n)=>s+(+n.bruto||0),0);return {...x,imp:r2(b*ultL.tot.sstot/ultL.tot.bruto),txt:`${x.txt} · estimada con las nóminas de ${mesTxt(P)}`,est:true}}return x}
     if(x.cat==="nominas"){const P=+x.f.slice(8,10)>=PV_INI?X:mesAntPv(X),cw=pal(x.txt),n=noms(P).find(n=>{let k=0;for(const w of pal(n.nombre))if(cw.has(w))k++;return k>=2&&+n.liq>0});
       if(n)return {...x,imp:r2(+n.liq),txt:`${x.txt} · nómina de ${mesTxt(P)}`,exacto:true}}

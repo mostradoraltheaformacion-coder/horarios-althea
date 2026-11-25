@@ -2201,12 +2201,14 @@ async function facturacionExcel(){try{await cargarJs(XLSXJS)}catch(_){toast("No 
    movimientos del banco y sus justificantes, facturas de venta de Argos y sus PDF, copias enviadas a la asesoría y la caja de
    prueba. No toca alumnos, tarifas, contadores ni las reglas aprendidas del banco (config/banco.reglas).
    ============================================================================================ */
-const LP_HASTA="2027-01-01",LP={c:null,sel:{banco:true,ventas:true,ase:true,caja:true},busy:"",res:""};
-const LP_TXT={banco:"Movimientos del banco y sus justificantes",ventas:"Facturas de venta de Argos y sus PDF",ase:"Copias enviadas a la asesoría",caja:"Caja de prueba (cobros, aperturas, cierres…)"};
+/* 25/11/2026 (titular): el banco, las facturas de Argos y las copias a la asesoría desde octubre de 2026 son datos reales (informes
+   de A3, rentabilidad, previsión): ya no se ofrece borrarlos. Solo queda la caja de prueba. */
+const LP_HASTA="2027-01-01",LP={c:null,sel:{caja:true},busy:"",res:""};
+const LP_TXT={caja:"Caja de prueba (cobros, aperturas, cierres…)"};
 async function lpContar(){LP.busy="Contando…";LP.res="";render();const m=LP_HASTA.slice(0,7),c={};
-  try{const b=(await S.db.collection("banco").where("mes","<",m).get()).docs.map(d=>({id:d.id,...d.data()}));c.banco={docs:b.map(d=>"banco/"+d.id),arch:b.flatMap(d=>Object.values(d.movs||{}).flatMap(x=>[x.just&&x.just.id,x.doc&&x.doc.id]).filter(Boolean)),n:b.reduce((s2,d)=>s2+Object.keys(d.movs||{}).length,0),meses:b.map(d=>d.id).sort()}}catch(e){c.banco={err:true}}
-  try{const v=(await S.db.collection("ventas").get()).docs.map(d=>({id:d.id,...d.data()})).filter(d=>d.id<m);c.ventas={docs:v.map(d=>"ventas/"+d.id),arch:[...new Set(v.flatMap(d=>[...(d.pdfs||[]),...(d.lis||[])].map(x=>x.id)))],n:v.reduce((s2,d)=>s2+(d.l||[]).length,0),meses:v.map(d=>d.id).sort()}}catch(e){c.ventas={err:true}}
-  try{const a=(await S.db.collection("asesoria").get()).docs.filter(d=>d.id<m);c.ase={docs:a.map(d=>"asesoria/"+d.id),arch:[],n:a.length,meses:a.map(d=>d.id).sort()}}catch(e){c.ase={err:true}}
+  if(false)try{const b=(await S.db.collection("banco").where("mes","<",m).get()).docs.map(d=>({id:d.id,...d.data()}));c.banco={docs:b.map(d=>"banco/"+d.id),arch:b.flatMap(d=>Object.values(d.movs||{}).flatMap(x=>[x.just&&x.just.id,x.doc&&x.doc.id]).filter(Boolean)),n:b.reduce((s2,d)=>s2+Object.keys(d.movs||{}).length,0),meses:b.map(d=>d.id).sort()}}catch(e){c.banco={err:true}}
+  if(false)try{const v=(await S.db.collection("ventas").get()).docs.map(d=>({id:d.id,...d.data()})).filter(d=>d.id<m);c.ventas={docs:v.map(d=>"ventas/"+d.id),arch:[...new Set(v.flatMap(d=>[...(d.pdfs||[]),...(d.lis||[])].map(x=>x.id)))],n:v.reduce((s2,d)=>s2+(d.l||[]).length,0),meses:v.map(d=>d.id).sort()}}catch(e){c.ventas={err:true}}
+  if(false)try{const a=(await S.db.collection("asesoria").get()).docs.filter(d=>d.id<m);c.ase={docs:a.map(d=>"asesoria/"+d.id),arch:[],n:a.length,meses:a.map(d=>d.id).sort()}}catch(e){c.ase={err:true}}
   try{const k=(await S.db.collection("caja").where("dia","<",LP_HASTA).get()).docs;c.caja={docs:k.map(d=>"caja/"+d.id),arch:[],n:k.length,meses:[...new Set(k.map(d=>String(d.data().dia||"").slice(0,7)))].sort()}}catch(e){c.caja={err:true}}
   LP.c=c;LP.busy="";render()}
 async function lpBorrar(){const c=LP.c;if(!c)return;const ks=Object.keys(LP.sel).filter(k=>LP.sel[k]&&c[k]&&!c[k].err);if(!ks.length){toast("Marca qué quieres borrar");return}
@@ -2217,8 +2219,8 @@ async function lpBorrar(){const c=LP.c;if(!c)return;const ks=Object.keys(LP.sel)
   LP.busy="";LP.c=null;LP.res=`Borrados ${nd} documentos y ${na} archivos.${mal?` ${mal} no se han podido borrar${LP.permCaja?" (la caja necesita las reglas nuevas de Firebase)":""}.`:""}`;
   if(GB.sub)try{GB.sub()}catch(_){};GB.sub=null;render()}
 function vLimpieza(){if(S.role!=="dir"||esMos()||todayISO()>="2027-03-01")return "";const c=LP.c;
-  return `<div class="panel" style="grid-column:1/-1"><h3>Borrar los datos de prueba</h3>
-    <p class="note" style="margin-top:0">Antes del arranque real (1 de enero de 2027). Solo borra lo de <b>antes del 1/1/2027</b>. No toca alumnos, horarios, recibos de Argos, tarifas, contadores ni lo que el banco ya ha aprendido a clasificar.</p>
+  return `<div class="panel" style="grid-column:1/-1"><h3>Borrar la caja de prueba</h3>
+    <p class="note" style="margin-top:0">Para dejar la Caja vacía antes del arranque real (1 de enero de 2027): borra los cobros, aperturas y cierres de prueba de <b>antes del 1/1/2027</b>. El banco, las facturas de Argos, las nóminas y lo enviado a la asesoría son datos reales y no se tocan.</p>
     ${LP.res?`<p style="color:var(--ok)">${esc(LP.res)}</p>`:""}${LP.busy?`<p class="note">${esc(LP.busy)}</p>`:""}
     ${!c?`<button class="btn small" data-lp="contar" ${LP.busy?"disabled":""}>Ver qué hay de prueba</button>`:`
     ${Object.keys(LP_TXT).map(k=>{const x=c[k];return `<label class="chk" style="display:flex;margin:4px 0"><input type="checkbox" data-lpsel="${k}" ${LP.sel[k]?"checked":""} ${!x||x.err||!x.docs.length?"disabled":""}><span><b>${esc(LP_TXT[k])}</b> · ${!x||x.err?`<span style="color:var(--warn)">no se ha podido leer</span>`:!x.docs.length?"nada":`${x.n} ${(k==="banco"?["movimiento","movimientos"]:k==="ventas"?["factura","facturas"]:k==="ase"?["mes enviado","meses enviados"]:["apunte","apuntes"])[x.n===1?0:1]}${x.arch.length?` y ${x.arch.length} ${x.arch.length===1?"archivo":"archivos"}`:""} (${x.meses.map(mesTxt).join(", ")})`}</span></label>`}).join("")}

@@ -860,7 +860,7 @@ function vGastos(){
   <div class="bar" style="gap:8px;flex-wrap:wrap"><button class="btn" data-gb="prev" style="order:8;margin-left:auto">Previsión fin de mes</button><button class="btn" data-gb="rent" style="order:9">Rentabilidad</button><button class="btn" data-gb="inf" style="order:10">Informe del mes</button><label class="btn primary" style="cursor:pointer">Subir extractos del Sabadell (.xls)<input type="file" id="gb-file" accept=".xls,.xlsx" multiple hidden></label>
     <label class="btn" style="cursor:pointer" title="Desde Argos: el PDF con todas las facturas del mes y el listado de facturas. Se pueden subir los dos a la vez.">Subir facturas de venta de Argos (PDF)<input type="file" id="gb-ventas" accept=".pdf,application/pdf" multiple hidden></label>
     <label class="btn" style="cursor:pointer" title="Argos → Caja → exportar a Excel (un día o varios). Sirve para cuadrar lo cobrado con tarjeta con las liquidaciones del TPV.">Subir caja de Argos (.xls)<input type="file" id="gb-acaja" accept=".xls,.xlsx" multiple hidden></label>
-    <label class="btn" style="cursor:pointer" title="Justificantes del banco, facturas de proveedores, nóminas, listado de costes y TC1 de A3: todos juntos. Cada uno va a su movimiento.">Subir documentos (PDF)<input type="file" id="gb-justf" accept=".pdf,application/pdf" multiple hidden></label>
+    <label class="btn" style="cursor:pointer" title="Justificantes del banco, facturas de proveedores, nóminas, listado de costes (PDF o Excel) y TC1 de A3: todos juntos. Cada uno va a su movimiento.">Subir documentos (PDF)<input type="file" id="gb-justf" accept=".pdf,application/pdf,.xls,.xlsx" multiple hidden></label>
     <span class="note">Banca online → la cuenta → Movimientos → elige las fechas → Exportar a Excel. Puedes subir las dos cuentas a la vez; si un periodo ya estaba, solo se añaden los movimientos nuevos. En «Subir documentos» puedes arrastrar de una vez los justificantes del banco, las facturas y lo que manda A3 (nóminas, listado de costes y TC1): cada uno va a su movimiento.</span></div>
   ${imp}${vJustRes()}${vVentasRes()}${vCuadreTarjeta()}${(()=>{const sj=movsTodos().filter(necesitaJust),ms2=[...new Set(sj.map(m=>m.mes))].sort();return sj.length&&!GB.just?`<div class="aviso pend" style="display:block;margin-bottom:10px"><b>${sj.length} movimiento${sj.length===1?"":"s"} sin todos sus documentos</b> (justificante del banco y factura, nómina o TC1): ${ms2.map(k=>{const n=sj.filter(m=>m.mes===k).length;return `<a href="#" data-gb="versj" data-v="${k}">${mesTxt(k)} (${n})</a>`}).join(" · ")}. Súbelos todos juntos con «Subir documentos» o adjúntalos en cada movimiento.</div>`:""})()}
   ${!ms.length?`<div class="empty">${GB.ok?"Todavía no hay movimientos. Sube el primer extracto.":"Cargando…"}</div>`:`
@@ -1379,7 +1379,8 @@ async function gbSubirJustificantes(files){
   const reintentar=[];let vuelta=0;
   for(let k=0;k<files.length+reintentar.length;k++){const f=k<files.length?files[k]:reintentar[k-files.length];vuelta=k>=files.length?1:0;const sinAntes=GB.just.sin.length;
     if(vuelta){GB.just.n++;vistos.delete(f.__firma)}
-    try{const items=await leerPdfItems(f);
+    try{if(/\.xlsx?$/i.test(f.name)){await subirListado(f);GB.just.hecho++;continue}
+      const items=await leerPdfItems(f);
       if(await paqueteA3(f,items)){GB.just.hecho++;continue}
       const c=leerComprobante(items);c.slot=["Factura","TC1"].includes(c.tipo)?"doc":"just";const quien=c.ordenante||(c.tipo==="Factura"?"Factura "+f.name.replace(/\.pdf$/i,""):c.tipo)||f.name,firma=hashTxt([c.tipo,c.ibans.join(),c.ref,c.importe,c.fv,c.refs.join(),c.ordenante,c.obs,(c.tpv||[]).map(o=>o.f+o.imp+o.tarj).join()].join("|"));
       if(vistos.has(firma)){GB.just.ya.push(`${quien} · repetido en esta subida`);GB.just.hecho++;continue}vistos.add(firma);f.__firma=firma;
@@ -1499,7 +1500,17 @@ async function subirNominas(f){const J=GB.just,as=await window.claude.use("asset
     const m=movNomina(n,usados);if(m){usados.add(m.id);await nmEnganchar(key,rec,m);rec.mov={mes:m.mes,id:m.id}}
     J.ok.push(`Nómina de ${titulo(n.nombre)} (${mesTxt(n.mes)}) · ${eur(n.liq)}${profe?"":" · ⚠ no sé qué profesora es"}${m?` → transferencia del ${fmtFecha(m.fo||m.fv)}`:" · su transferencia todavía no está en el banco: se enganchará al subir el extracto"}`)}
   if(cambio){try{await S.db.doc("config/banco").set({...(GB.cfg||{}),dniProfe:mapa});GB.cfg={...(GB.cfg||{}),dniProfe:mapa}}catch(_){}}}
-async function subirListado(f){const J=GB.just,L=leerListado(await pdfLineas(f));
+/* 25/11/2026: A3 manda a veces el listado de costes en Excel (listado.xls): mismas columnas que el PDF */
+async function leerListadoXls(f){await cargarJs(XLSXJS);const wb=window.XLSX.read(await f.arrayBuffer(),{type:"array"}),filas=window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:""});
+  const txt=filas.map(r=>r.join(" ")).join(" "),per=NORM(txt).match(/DEL\s+\d{2}\/(\d{2})\/(\d{4})\s+AL/),mes=per?`${per[2]}-${per[1]}`:"";
+  const hi=filas.findIndex(r=>r.some(c=>/TRABAJADOR/i.test(String(c)))&&r.some(c=>/TOTAL\s*COST/i.test(String(c))));if(hi<0)return {mes:"",l:[],tot:{}};
+  const H=filas[hi].map(c=>NORM(String(c)).replace(/\s+/g," ").trim()),c=k=>H.findIndex(h=>h===k||h.startsWith(k));
+  const ci={nom:c("TRABAJADOR"),dni:c("N.I.F"),bruto:c("BRUTO"),liq:c("LIQUIDO"),ssemp:c("SS EMPRESA"),sstot:c("SS TOTAL"),coste:c("TOTAL COST")};
+  const num=v=>typeof v==="number"?v:(numBanco(String(v||""))||0),l=[];
+  for(const r of filas.slice(hi+1)){const dni=String(r[ci.dni]||"").trim().toUpperCase(),nombre=String(r[ci.nom]||"").trim();if(!/^\d{8}[A-Z]$/.test(dni)||!nombre)continue;
+    l.push({nombre,dni,profe:profeDeNomina(nombre,dni),bruto:r2(num(r[ci.bruto])),liq:r2(num(r[ci.liq])),ssemp:r2(num(r[ci.ssemp])),sstot:r2(num(r[ci.sstot])),coste:r2(num(r[ci.coste]))})}
+  const s=k=>r2(l.reduce((t,x)=>t+(x[k]||0),0));return {mes,l,tot:{bruto:s("bruto"),liq:s("liq"),ssemp:s("ssemp"),sstot:s("sstot"),coste:s("coste")}}}
+async function subirListado(f){const J=GB.just,L=/\.xlsx?$/i.test(f.name)?await leerListadoXls(f):leerListado(await pdfLineas(f));
   if(!L.mes||!L.l.length){J.err.push(`${f.name} · no se entiende el listado de costes`);return}
   const key=L.mes+"_listado",prev=nmListado(L.mes);
   if(prev&&prev.tot&&Math.abs(prev.tot.coste-L.tot.coste)<0.005){J.ya.push(`Listado de costes de ${mesTxt(L.mes)} · ya estaba subido`);return}

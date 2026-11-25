@@ -1185,7 +1185,8 @@ function leerComprobante(items){
   const refs=[...new Set([...t.matchAll(/\b\d{8,}\b/g)].map(m=>m[0]))];
   /* CIF del emisor de una factura (en los adeudos SEPA la referencia empieza por el CIF del acreedor: A3 → «B01726595…») */
   const cifs=[...new Set([...t.toUpperCase().matchAll(/\b([ABCDEFGHJNPQRSUVW])[-.\s]?(\d{7})([0-9A-J])\b/g)].map(m=>m[1]+m[2]+m[3]))];
-  const liqTC=tipo==="TC1"?numBanco((t.match(/LIQUIDO DE TOTALES\s*([\d.]+,\d{2})/i)||[])[1]||""):null;
+  /* 25/11/2026: en el PDF del TC1 el importe puede ir antes o después de «LIQUIDO DE TOTALES» */
+  const liqTC=tipo==="TC1"?numBanco((t.match(/LIQUIDO DE TOTALES\s*(\d{1,3}(?:\.\d{3})*,\d{2})/i)||t.match(/(\d{1,3}(?:\.\d{3})*,\d{2})\s*LIQUIDO DE TOTALES/i)||[])[1]||""):null;
   const ref=(campoBajo(items,"Referencia de intercambio").match(/\d{6,}/)||[""])[0];
   const per=(t.match(/PERIODO(?: LIQUIDACION)?:\s*([\d\/-]+)/i)||[])[1];
   const nombre=tipo==="Adeudo"?campoBajo(items,"Nombre del acreedor"):signo<0?campoBajo(items,"Beneficiario"):campoBajo(items,"Ordenante").replace(/\s*\d{2}-\d{2}-\d{2}.*$/,"");
@@ -1395,7 +1396,7 @@ async function gbSubirJustificantes(files){
       const m=buscarMov(c,usados);
       /* 25/11/2026 (titular): el TC1 llega antes que el cargo de la Seguridad Social. Si el cargo aún no está en el banco, se guarda
          en nominas/<AAAA-MM>_tc1 (mes de la liquidación): la previsión usa su importe real y se engancha solo al cargo al subir el extracto */
-      if(!m&&c.tipo==="TC1"&&c.importe>0){const T=items.map(i=>i.s).join(" "),pm=T.match(/Per[ií]odo de Liquidaci[oó]n:?\s*(\d{2})\/(\d{4})/i);
+      if(!m&&c.tipo==="TC1"&&c.importe>0){const T=items.map(i=>i.s).join(" "),pm=T.match(/Per[ií]odo de Liquidaci[oó]n:?\s*(\d{2})\/(\d{4})/i)||T.match(/\b(\d{2})\/(\d{4})\s*-\s*\d{2}\/\d{4}\b/);/* en el PDF el valor puede ir antes que la etiqueta */
         if(pm){const mes=pm[2]+"-"+pm[1],key=mes+"_tc1",prevT=NM.docs.find(d=>d.id===key);
           if(prevT&&Math.abs((+prevT.imp||0)-c.importe)<0.005){GB.just.ya.push(`TC1 de ${mesTxt(mes)} · ya estaba subido (${eur(c.importe)})`);GB.just.hecho++;continue}
           const r=await as.upload(f,{clase:"gasto"}),rec={mes,tipo:"tc1",profe:"",imp:r2(c.importe),arch:{id:r.id,n:f.name.slice(0,80)},firma,t:nowISO()};

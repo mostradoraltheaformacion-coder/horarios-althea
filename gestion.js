@@ -1168,7 +1168,9 @@ function campoBajo(items,etq){items=items.filter(i=>(i.p||1)===1);
    efectivo en cajero. Se sacan del texto todos los IBAN, importes, fechas y referencias, y del diseño los nombres y observaciones. */
 function leerComprobante(items){
   const t=items.map(i=>i.s).join(" ").replace(/\s+/g," ");
-  const tipo=/Recibo de Liquidaci[oó]n de Cotizaciones/i.test(t)?"TC1":/liquidaci[oó]n de remesas/i.test(t)?"Liquidación TPV":/bizum/i.test(t)?"Bizum":/INGRESO DE EFECTIVO/i.test(t)?"Ingreso de efectivo":/Adeudo directo/i.test(t)?"Adeudo":/Transferencia Emitida/i.test(t)?"Transferencia emitida":/Transferencia/i.test(t)&&/sabadell/i.test(t)?"Transferencia recibida":/factura|invoice|fattura|rechnung|recibo|receipt|abono|rectificativa/i.test(t)?"Factura":"Comprobante";
+  /* 25/11/2026: el PDF del TC1 de A3 puede traer los acentos separados («o» + tilde) y se leía como factura: se mira sin acentos */
+  const tN=t.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase(),esTC=/RECIBO DE LIQUIDACION DE COTIZACIONES/.test(tN)||(/LIQUIDO DE TOTALES/.test(tN)&&/COTIZACION/.test(tN)&&/CONTINGENCIAS COMUNES/.test(tN));
+  const tipo=esTC?"TC1":/liquidaci[oó]n de remesas/i.test(t)?"Liquidación TPV":/bizum/i.test(t)?"Bizum":/INGRESO DE EFECTIVO/i.test(t)?"Ingreso de efectivo":/Adeudo directo/i.test(t)?"Adeudo":/Transferencia Emitida/i.test(t)?"Transferencia emitida":/Transferencia/i.test(t)&&/sabadell/i.test(t)?"Transferencia recibida":/factura|invoice|fattura|rechnung|recibo|receipt|abono|rectificativa/i.test(t)?"Factura":"Comprobante";
   const signo={"TC1":-1,"Liquidación TPV":1,"Bizum":1,"Ingreso de efectivo":1,"Transferencia recibida":1,"Adeudo":-1,"Transferencia emitida":-1}[tipo]||0;
   const ibans=[...t.matchAll(/ES\d{2}(?:\s?\d{4}){5}/g)].map(m=>m[0].replace(/\s/g,""));
   const importes=[...new Set([...t.matchAll(/(?<![\d,.])\d{1,3}(?:\.\d{3})*,\d{2}(?![\d])/g)].map(m=>numBanco(m[0])).filter(n=>n>0))];

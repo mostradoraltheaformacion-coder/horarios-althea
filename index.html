@@ -267,7 +267,7 @@ body:not(.flex) .flexonly{display:none!important}
 .pcard:hover{border-color:var(--pc)}
 .pcard[aria-pressed="true"]{border-color:var(--pc);box-shadow:0 0 0 2px var(--pc)}
 .pcard .ava.sq{width:60px;height:60px;border-radius:10px;font-size:24px}
-.pcard .ava.todas{background:var(--sunk);color:var(--ink,#333)}
+.pcard .ava.todas{background:#fff;object-fit:contain;padding:3px}
 .chip .ava.xs{margin:-3px 2px -3px -4px}
 .pfoto{display:inline-flex;align-items:center;gap:5px;margin-right:8px}
 .fotoal{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -384,7 +384,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=25nov-v173"></script>
+<script type="module" src="fb.js?v=25nov-v174"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -1177,7 +1177,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="25nov-v173";
+const APP_VER="25nov-v174";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -3987,7 +3987,7 @@ function vSemana(){
   const arr=x=>mueve&&!x.mv&&!String(x.id).startsWith("tok:")?` draggable="true" data-drag="${esc(x.id)}|${x.dia||""}|${esc(x.hk)}|${esc(S.profe)}"`:"";
   let total=0; Object.values(m).forEach(v=>total+=(S.profe?v.filter(x=>x.profe===S.profe).length:v.length));
   /* 25/11/2026 (titular): profesoras como tarjetas cuadradas con su foto y el nombre debajo */
-  const filtro=S.role==="profe"?"":`<div class="pcards"><button class="pcard" data-act="fprofe" data-p="" aria-pressed="${!S.profe}" style="--pc:var(--ink,#333)"><span class="ava sq todas" aria-hidden="true">✱</span><span>Todas</span></button>`+
+  const filtro=S.role==="profe"?"":`<div class="pcards"><button class="pcard" data-act="fprofe" data-p="" aria-pressed="${!S.profe}" style="--pc:var(--ink,#333)"><img class="ava sq todas" src="icono-192.png" alt=""><span>Todas</span></button>`+
     ps.map(p=>`<button class="pcard" data-act="fprofe" data-p="${esc(p)}" aria-pressed="${S.profe===p}" style="--pc:${pc(p)}">${avatar(p,"sq")}<span>${esc(p)}</span></button>`).join("")+`</div>`;
   let rows="";
   const filas=HORAS.filter(h=>(h!=="3-4"||(S.profe?FLEX.has(S.profe):true))&&(h!=="9-10"||(S.profe?DIAS.some(d=>trabaja(S.profe,d,h)):true)));
@@ -5276,7 +5276,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=25nov-v173"></script>
+<script src="gestion.js?v=25nov-v174"></script>
 
 
 </body></html>

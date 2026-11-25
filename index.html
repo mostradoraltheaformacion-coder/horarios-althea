@@ -378,7 +378,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=25nov-v171"></script>
+<script type="module" src="fb.js?v=25nov-v172"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -1171,7 +1171,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="25nov-v171";
+const APP_VER="25nov-v172";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -2677,7 +2677,7 @@ async function aplicarTraspasos(){
    a buzon/<alumno>.profes para que ella lo reciba. La profesora contesta en buzon/<profesora>.chatR[rid] = {rid, to (cuenta del
    alumno), texto, creado, ges} (ges: marcado como gestionado). Cada uno ve la conversación completa; dirección, todas.
    Fotos de las profesoras: las sube dirección (capacidad assets) y se guardan en config/fotos; se publican en publico/datos.fotos. */
-const fotoDe=p=>{const mb=S.role==="profe"&&!S.pv&&p===S.myProfe&&S.miBuzon&&S.miBuzon.fotoProf;const f=((S.pub&&S.pub.fotos)||S.fotos||{})[p];
+const fotoDe=p=>{const mb=S.role==="profe"&&!S.pv&&p===S.myProfe&&S.miBuzon&&S.miBuzon.fotoProf;const f=(S.role==="dir"&&S.fotosOk?S.fotos:null||(S.pub&&S.pub.fotos)||S.fotos||{})[p];/* 25/11/2026: dirección usa sus fotos (config/fotos) aunque la copia pública aún no se haya actualizado */
   return mb&&idOk(mb.id)&&(!f||String(mb.t||"")>String(f.t||""))?mb:f};
 const avatar=(p,cls="")=>{const f=fotoDe(p);return f&&f.url?`<img class="ava ${cls}" src="${esc(f.url)}" alt="${esc(p)}">`:`<span class="ava ${cls}" style="--pc:${pc(p)}" aria-hidden="true">${esc(String(p).slice(0,1))}</span>`};
 const hFecha=t=>{const d=new Date(t);if(isNaN(d))return "";return fmtFecha(isoDe(d))+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")};
@@ -3918,7 +3918,7 @@ function quizasPublicar(){
   if(S.role!=="dir"||!S.alOk||!S.cfgOk||!S.pubOk)return;
   clearTimeout(pubT);pubT=setTimeout(async()=>{const d=datosPublicos();
     if(S.pub&&stable({ocupacion:S.pub.ocupacion,profesUid:S.pub.profesUid,festivos:S.pub.festivos,ses:S.pub.ses||{},recAct:S.pub.recAct||"",fotos:S.pub.fotos||{}})===stable(d))return;
-    try{await S.db.doc("publico/datos").set({...d,actualizado:todayISO()})}catch(_){}},1200);
+    try{await S.db.doc("publico/datos").set({...d,actualizado:todayISO()})}catch(e){console.warn("publicar",e)}},1200);
 }
 /* ---------- alta automática de alumnos con usuario y clave (la hace la página de dirección) ---------- */
 async function revisarSolicitudes(){return;
@@ -5269,7 +5269,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=25nov-v171"></script>
+<script src="gestion.js?v=25nov-v172"></script>
 
 
 </body></html>

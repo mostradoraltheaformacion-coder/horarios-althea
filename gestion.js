@@ -2313,7 +2313,11 @@ function vPrevision(){gbEscuchar();imEscuchar();
   if(!GB.ok)return back+`<p class="note">Cargando el banco…</p>`;
   const R=prevRecurrentes(),no=new Set((GB.cfg&&GB.cfg.prevNo)||[]),hoy=todayISO(),todos=movsTodos();
   /* saldo: el último movimiento con saldo de cada cuenta */
-  const ult={};for(const x of todos)if(x.saldo!=null&&x.cuenta!=="caja"&&(!ult[x.cuenta]||String(x.fo||x.fv)>=String(ult[x.cuenta].fo||ult[x.cuenta].fv)))ult[x.cuenta]=x;
+  /* 25/11/2026: saldo = el último movimiento de cada cuenta. Si el último día tiene varios movimientos, el último es el que deja el saldo
+     que no es el «saldo anterior» de ningún otro de ese día (antes se cogía uno cualquiera de ese día) */
+  const ult={};{const por={};for(const x of todos)if(x.saldo!=null&&x.cuenta!=="caja")(por[x.cuenta]=por[x.cuenta]||[]).push(x);
+    for(const [c,l] of Object.entries(por)){const fmax=l.reduce((m,x)=>String(x.fo||x.fv)>m?String(x.fo||x.fv):m,""),dia=l.filter(x=>String(x.fo||x.fv)===fmax);
+      const prev=new Set(dia.map(x=>r2(+x.saldo-(+x.importe||0)).toFixed(2)));ult[c]=dia.find(x=>!prev.has(r2(+x.saldo).toFixed(2)))||dia[dia.length-1]}}
   const saldoTot=r2(Object.values(ult).reduce((s,x)=>s+(+x.saldo||0),0));
   const pagado=(x,f)=>todos.some(m=>m.importe<0&&prevKey(m)===x.k&&Math.abs(difDias(m.fv,f))<=6);
   const meses=[];let M=hoy.slice(0,7);if(+hoy.slice(8,10)>PV_FIN&&+hoy.slice(8,10)<PV_INI){}for(let i=0;i<3;i++){meses.push(M);M=mesSigPv(M)}
@@ -2330,7 +2334,9 @@ function vPrevision(){gbEscuchar();imEscuchar();
       if(TC&&+TC.imp>0)return {...x,imp:r2(+TC.imp),txt:`${x.txt} · según el TC1 de ${mesTxt(P)}`,exacto:true};
       if(L&&L.tot&&+L.tot.sstot>0)return {...x,imp:r2(+L.tot.sstot),txt:`${x.txt} · según el listado de costes de ${mesTxt(P)}`,exacto:true};
       const ns=noms(P).filter(n=>+n.bruto>0);if(ns.length&&ultL){const b=ns.reduce((s,n)=>s+(+n.bruto||0),0);return {...x,imp:r2(b*ultL.tot.sstot/ultL.tot.bruto),txt:`${x.txt} · estimada con las nóminas de ${mesTxt(P)}`,est:true}}return x}
-    if(x.cat==="nominas"){const P=+x.f.slice(8,10)>=PV_INI?X:mesAntPv(X),cw=pal(x.txt),n=noms(P).find(n=>{let k=0;for(const w of pal(n.nombre))if(cw.has(w))k++;return k>=2&&+n.liq>0});
+    if(x.cat==="nominas"){const P=+x.f.slice(8,10)>=PV_INI?X:mesAntPv(X),cw=pal(x.txt),sinEsp=v=>String(v||"").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^A-Z]/g,""),cc=sinEsp(x.txt),n=noms(P).find(n=>{let k=0;for(const w of pal(n.nombre))if(cw.has(w))k++;
+        /* 25/11/2026: el banco a veces junta los apellidos («VERDUGOJURADO»): también vale si salen pegados */
+        const ap=sinEsp(String(n.nombre).split(",")[0]);return (k>=2||(k>=1&&ap.length>5&&cc.includes(ap)))&&+n.liq>0});
       if(n)return {...x,imp:r2(+n.liq),txt:`${x.txt} · nómina de ${mesTxt(P)}`,exacto:true}}
     return x};
   const bloques=meses.map(M=>{

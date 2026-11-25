@@ -3152,7 +3152,8 @@ function vTablaMes(p,mes,acciones){const ini=fcInicio(),hoy=todayISO();const fil
     <tr style="font-weight:700"><td>Total</td><td></td><td style="text-align:right">${mH(tot)}</td><td style="text-align:right">${mH(prv)} <span class="note">hasta hoy</span></td>${acciones?"<td></td>":""}</tr></tbody></table></div>
     <p class="note">* corregido por dirección. «Según horario» es su horario fijo de la app, como referencia.</p>`}
 const mesesOpc=sel=>{const o=[];for(let i=0;i<13;i++){const m=sumaDias(hoyMes()+"-15",-30.44*i).slice(0,7);o.push(m)}return [...new Set(o)].map(m=>`<option value="${m}" ${m===sel?"selected":""}>${esc(mesTxt(m))}</option>`).join("")};
-function vMisFichajes(){fcEscuchar();const p=S.myProfe;
+function vMisFichajes(){return (typeof vMiFotoProf==="function"?vMiFotoProf():"")+vMisFichajes0()}
+function vMisFichajes0(){fcEscuchar();const p=S.myProfe;
   if(!fichActivo())return `<div class="bar"><h2>Mis fichajes</h2></div><div class="aviso info" style="display:block">El fichaje en la app empieza el <b>${fmtFecha(FICH_DESDE)}</b>. Hasta entonces seguimos fichando en Argos.</div>
     <div class="panel" style="padding:10px 12px;margin-top:10px"><b>Pon ya tu PIN para fichar en el ordenador del mostrador</b><p class="note">Te servirá si algún día no llevas el móvil (4 a 6 cifras). Nadie más lo ve.</p>
     <div class="r2" style="align-items:flex-end"><label class="f">PIN nuevo<input type="password" id="fp-pin" inputmode="numeric" maxlength="6" autocomplete="new-password"></label><button class="btn small primary" data-act="fcpin">Guardar el PIN</button></div></div>`;

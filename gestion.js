@@ -175,7 +175,11 @@ function cursoParaHoras(curso,hh,TM){if(!hh)return null;const b=cursoSinHoras(cu
 function horasDescuadre(a,M,TM){if(!a||a.baja||a.sueltas||a.exento)return null;const hh=(a.clases||[]).length;if(M.horas==null||!hh||M.horas===hh)return null;
   const sug=M.l.length===1?cursoParaHoras(M.l[0].curso,hh,TM):null;return {tar:M.horas,hor:hh,sug}}
 function vTarifaAl(id,a){
-  if(!gtVer())return "";const TM=tfMapa(),dl=`<datalist id="gt-dl">${[...TM.values()].map(c=>`<option value="${esc(c.nombre)}">${c.precio!=null?eur(c.precio):""}</option>`).join("")}</datalist>`;
+  if(!gtVer())return "";
+  /* 26/11/2026 (titular): los alumnos de clases sueltas no tienen curso en Argos ni recibo mensual: cada clase del horario con
+     «Asistió» crea su recibo en la app, y ese recibo se hace a mano en Argos. Aquí no se propone tarifa mensual. */
+  if(a.sueltas)return `<div><div class="bar" style="margin-bottom:4px"><b style="font-size:14px;margin-right:auto">Tarifa del alumno</b><span class="badge">Clases sueltas</span></div>
+    <p class="note" style="margin:0">No tiene recibo mensual. Cada clase con «Asistió» crea su recibo en la app (${a.sueltas.precio?eur(+a.sueltas.precio)+" por clase":"con la tarifa de la hora de su nivel"}); después se hace a mano en Argos, con la misma fecha y el concepto «clase suelta».${a.argos==="activo"&&(a.matriculas||[]).some(m=>m&&+m.cuota>0)?` <b style="color:var(--warn)">En Argos todavía tiene un curso activo: dale de baja allí para que no le salga un recibo mensual.</b>`:""}</p></div>`;const TM=tfMapa(),dl=`<datalist id="gt-dl">${[...TM.values()].map(c=>`<option value="${esc(c.nombre)}">${c.precio!=null?eur(c.precio):""}</option>`).join("")}</datalist>`;
   if(GT.edit&&GT.edit.id===id){const l=GT.edit.l;
     return `<div><div class="bar" style="margin-bottom:4px"><b style="font-size:14px;margin-right:auto">Tarifa del alumno</b><span class="note">editando</span></div>
       ${l.map((y,i)=>{const t=(TM.get(nzC(y.curso))||{}).precio;return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;margin-bottom:6px">

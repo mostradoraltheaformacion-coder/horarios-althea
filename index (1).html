@@ -261,6 +261,15 @@ body:not(.flex) .flexonly{display:none!important}
 .ava{width:36px;height:36px;border-radius:50%;object-fit:cover;flex:none;background:var(--pc,var(--sunk));color:#fff;display:inline-flex;align-items:center;justify-content:center;font:700 14px var(--body)}
 .ava.lg{width:64px;height:64px;font-size:22px}
 .ava.sm{width:26px;height:26px;font-size:11px}
+.ava.xs{width:20px;height:20px;font-size:10px;vertical-align:middle}
+.pcards{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px}
+.pcard{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 6px 5px;width:78px;border:1px solid var(--line);border-radius:12px;background:var(--surface);cursor:pointer;font:600 12px var(--body);color:inherit}
+.pcard:hover{border-color:var(--pc)}
+.pcard[aria-pressed="true"]{border-color:var(--pc);box-shadow:0 0 0 2px var(--pc)}
+.pcard .ava.sq{width:60px;height:60px;border-radius:10px;font-size:24px}
+.pcard .ava.todas{background:#fff;object-fit:contain;padding:3px}
+.chip .ava.xs{margin:-3px 2px -3px -4px}
+.pfoto{display:inline-flex;align-items:center;gap:5px;margin-right:8px}
 .fotoal{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .priv{max-width:720px;margin:0 auto}.priv h2{margin:0 0 6px}.priv dl{margin:12px 0;display:grid;grid-template-columns:max-content 1fr;gap:6px 14px}.priv dt{font-weight:600}.priv dd{margin:0}
 .priv .chk{display:flex;gap:10px;align-items:flex-start;margin:10px 0}.priv .chk input{margin-top:3px;width:18px;height:18px;flex:none}
@@ -375,7 +384,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=25nov-v162"></script>
+<script type="module" src="fb.js?v=26nov-v178"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -395,7 +404,8 @@ const HORARIO_PROFE={
   Ainea:unir(tramos(["Martes","Jueves"],"10:00-12:00"),tramos(L_V,"16:00-22:00")),
   Laura:tramos(L_V,"16:00-22:00"),
   Lorena:tramos(L_V,"16:00-20:00"),
-  Elena:unir(tramos(["Lunes","Miércoles","Viernes"],"15:45-20:00"),tramos(["Martes","Jueves"],"16:00-20:00")),
+  /* 25/11/2026 (titular): Elena, los martes hasta las 20:30 */
+  Elena:unir(tramos(["Lunes","Miércoles","Viernes"],"15:45-20:00"),tramos(["Martes"],"16:00-20:30"),tramos(["Jueves"],"16:00-20:00")),
   Rosa:tramos(L_V,"15:45-20:30"),
   /* 23/11/2026 (titular): Fani es la titular y puede acabar a las 21:00 */
   Fani:unir(tramos(["Martes","Jueves"],"10:00-12:00"),tramos(["Lunes","Martes","Miércoles","Jueves"],"15:45-21:00"))};
@@ -1167,7 +1177,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="25nov-v162";
+const APP_VER="26nov-v178";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -1223,7 +1233,9 @@ function render0(){
   if(S.view==="alumnos") app.innerHTML=vAlumnos();
   if(S.view==="faltas") app.innerHTML=vFaltas();
   if(S.view==="argos") app.innerHTML=vArgos();
-  if(S.view==="accesos"){app.innerHTML=vImportar()+vAccesos()+`<div style="margin-top:16px">${vFotos()}</div><div style="margin-top:16px">${vPrivProfes()}</div><div style="margin-top:16px">${vQR()}</div><div style="margin-top:16px">${vCopias()}</div><div style="margin-top:16px">${vConservacion()}</div>`;ponerNombres()}
+  /* 25/11/2026 (titular): ya no hace falta «Cargar los datos de la app anterior» (la migración se hizo; y podía sustituir alumnos).
+     Para restaurar una copia está restaurar/ dentro de la copia de seguridad. */
+  if(S.view==="accesos"){app.innerHTML=vAccesos()+`<div style="margin-top:16px">${vFotos()}</div><div style="margin-top:16px">${vPrivProfes()}</div><div style="margin-top:16px">${vQR()}</div><div style="margin-top:16px">${vCopias()}</div><div style="margin-top:16px">${vConservacion()}</div>`;ponerNombres()}
 }
 /* ---------- inicio ---------- */
 function miRol(){if(S.esDir)return "dir";return S.link?S.link.rol:null}
@@ -1374,7 +1386,7 @@ function vAlumno(){
   const {a}=m, ps=[...new Set(a.clases.map(c=>c.profe))];
   const tabs=`<div class="atabs" role="tablist"><button role="tab" data-act="atab" data-v="horario" aria-selected="${S.aluTab==="horario"}">Mi horario</button><button role="tab" data-act="atab" data-v="recibos" aria-selected="${S.aluTab==="recibos"}">Recibos</button><button role="tab" data-act="atab" data-v="mensajes" aria-selected="${S.aluTab==="mensajes"}">Mensajes${nChatNuevos()?` · ${nChatNuevos()}`:""}</button><button role="tab" data-act="atab" data-v="condiciones" aria-selected="${S.aluTab==="condiciones"}">Condiciones</button></div>`;
   const nb=pendTodos(a), avisoBaja=a.baja?`<div class="aviso pend"><span>Te diste de baja el ${fmtFecha(a.baja)}. ${nb?`Tu acceso seguirá abierto mientras tengas recibos pendientes (${nb}). Cuando estén pagados, se cerrará.`:"Ya no tienes recibos pendientes: tu acceso se cerrará en breve."}</span></div>`:"";
-  return `${avisoBaja}<div class="bar"><span class="fotoal">${avatarAl(a,"lg")}${fotoAl(a)||S.fotoCons?`<label class="btn small" style="cursor:pointer">${fotoAl(a)?"Cambiar mi foto":"Subir mi foto"}<input type="file" accept="image/*" data-fotoal="1" hidden></label>`:`<label class="fotocons"><input type="checkbox" data-fotocons="1"><span>Quiero subir mi foto y acepto que el centro la use solo para identificarme en la app. Puedo quitarla cuando quiera.</span></label>`}${fotoAl(a)?`<button class="btn small" data-act="quitarfoto">Quitar foto</button>`:""}</span><h2>${esc(titulo(a.nombre))}</h2><span class="legend">${ps.length?"Profesora"+(ps.length>1?"s":"")+": "+esc(ps.join(", ")):"Sin profesora asignada"}</span></div>${vAyudaAl()}${tabs}${S.aluTab==="recibos"?vRecibos(a):S.aluTab==="mensajes"?vChatAlumno(a):S.aluTab==="condiciones"?vCondiciones(a):vMes(a)}`;
+  return `${avisoBaja}<div class="bar"><span class="fotoal">${avatarAl(a,"lg")}${fotoAl(a)||S.fotoCons?`<label class="btn small" style="cursor:pointer">${fotoAl(a)?"Cambiar mi foto":"Subir mi foto"}<input type="file" accept="image/*" data-fotoal="1" hidden></label>`:`<label class="fotocons"><input type="checkbox" data-fotocons="1"><span>Quiero subir mi foto y acepto que el centro la use solo para identificarme en la app. Puedo quitarla cuando quiera.</span></label>`}${fotoAl(a)?`<button class="btn small" data-act="quitarfoto">Quitar foto</button>`:""}</span><h2>${esc(titulo(a.nombre))}</h2><span class="legend">${ps.length?"Profesora"+(ps.length>1?"s":"")+": "+ps.map(p=>`<a href="#" class="pfoto" data-act="verprofe" data-p="${esc(p)}" title="Ver su presentación" style="color:inherit">${avatar(p,"sm")}${esc(p)}</a>`).join(""):"Sin profesora asignada"}</span></div>${S.verProfe&&ps.includes(S.verProfe)?vPerfilProf(S.verProfe):""}${vAyudaAl()}${tabs}${S.aluTab==="recibos"?vRecibos(a):S.aluTab==="mensajes"?vChatAlumno(a):S.aluTab==="condiciones"?vCondiciones(a):vMes(a)}`;
 }
 /* 15/11/2026 (titular): vídeo de ayuda para alumnos y familias (ayuda-alumnos.mp4, vertical, datos de ejemplo). Abierto la
    primera vez; después se recuerda si lo dejan abierto o cerrado. */
@@ -2673,7 +2685,8 @@ async function aplicarTraspasos(){
    a buzon/<alumno>.profes para que ella lo reciba. La profesora contesta en buzon/<profesora>.chatR[rid] = {rid, to (cuenta del
    alumno), texto, creado, ges} (ges: marcado como gestionado). Cada uno ve la conversación completa; dirección, todas.
    Fotos de las profesoras: las sube dirección (capacidad assets) y se guardan en config/fotos; se publican en publico/datos.fotos. */
-const fotoDe=p=>((S.pub&&S.pub.fotos)||S.fotos||{})[p];
+const fotoDe=p=>{const mb=S.role==="profe"&&!S.pv&&p===S.myProfe&&S.miBuzon&&S.miBuzon.fotoProf;const f=(S.role==="dir"&&S.fotosOk?S.fotos:null||(S.pub&&S.pub.fotos)||S.fotos||{})[p];/* 25/11/2026: dirección usa sus fotos (config/fotos) aunque la copia pública aún no se haya actualizado */
+  return mb&&idOk(mb.id)&&(!f||String(mb.t||"")>String(f.t||""))?mb:f};
 const avatar=(p,cls="")=>{const f=fotoDe(p);return f&&f.url?`<img class="ava ${cls}" src="${esc(f.url)}" alt="${esc(p)}">`:`<span class="ava ${cls}" style="--pc:${pc(p)}" aria-hidden="true">${esc(String(p).slice(0,1))}</span>`};
 const hFecha=t=>{const d=new Date(t);if(isNaN(d))return "";return fmtFecha(isoDe(d))+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")};
 function profesBuzon(a){const s=new Set((a?a.clases:[]).map(c=>c.profe));for(const m of Object.values((S.miBuzon&&S.miBuzon.chat)||{}))if(m&&m.para)s.add(m.para);return [...s]}
@@ -2758,11 +2771,30 @@ async function responderChat(uid,texto,ges){
 const nChatPendProfe=()=>S.role==="profe"&&S.myProfe&&!S.pv?hilosProfe(S.myProfe).filter(h=>h.pend).length:0;
 /* Dirección: fotos de las profesoras */
 function vFotos(){
-  return `<div class="panel"><h3>Fotos de las profesoras</h3><p class="note" style="margin-top:0">Salen a los alumnos al elegir a quién escribir.</p>
-    ${EQUIPO.map(p=>`<div class="row">${avatar(p)}<span class="grow"><b>${esc(p)}</b></span>
+  /* 25/11/2026 (titular): además de la foto, una presentación de cada profesora (titulación, formación y cómo es) que escribe dirección
+     y ven sus alumnos en la app. Se guarda en config/perfilesProf y se publica con los datos públicos. */
+  const ed=S.perfEd;
+  return `<div class="panel"><h3>Fotos y presentación de las profesoras</h3><p class="note" style="margin-top:0">La foto sale en los horarios, en los mensajes y a sus alumnos. La presentación la ven sus alumnos al pulsar en su foto, en la app.</p>
+    ${EQUIPO.map(p=>{const pf=perfilDe(p)||{};return `<div class="row" style="flex-wrap:wrap">${avatar(p)}<span class="grow"><b>${esc(p)}</b>${pf.tit?` <span class="note">· ${esc(pf.tit)}</span>`:""}${pf.pres||pf.form?"":` <span class="note">· sin presentación</span>`}</span>
       <label class="btn small" style="cursor:pointer">${fotoDe(p)?"Cambiar foto":"Subir foto"}<input type="file" accept="image/*" data-foto="${esc(p)}" hidden></label>
-      ${fotoDe(p)?`<button class="btn small" data-act="fotoquitar" data-p="${esc(p)}">Quitar</button>`:""}</div>`).join("")}</div>`;
+      ${fotoDe(p)&&!esMos()?`<button class="btn small" data-act="fotodesc" data-p="${esc(p)}" title="Descargar la foto a este ordenador">Descargar</button>`:""}
+      ${fotoDe(p)?`<button class="btn small" data-act="fotoquitar" data-p="${esc(p)}">Quitar</button>`:""}
+      ${!esMos()?`<button class="btn small" data-act="perfed" data-p="${esc(p)}">${ed===p?"Cerrar":"Presentación"}</button>`:""}</div>
+      ${ed===p?`<div class="panel" style="margin:4px 0 10px;padding:10px 12px;background:var(--sunk)">
+        <label class="f">Titulación<input type="text" id="pf-tit" maxlength="120" value="${esc(pf.tit||"")}" placeholder="Ej.: Graduada en Logopedia (Universidad de Cádiz)"></label>
+        <label class="f">Formación y especialidades<textarea id="pf-form" rows="3" maxlength="600" placeholder="Ej.: Máster en Atención Temprana · Especialista en dislexia y TDAH · Inglés C1">${esc(pf.form||"")}</textarea></label>
+        <label class="f">Presentación (cómo es, cómo trabaja)<textarea id="pf-pres" rows="4" maxlength="900" placeholder="Unas líneas cercanas para las familias">${esc(pf.pres||"")}</textarea></label>
+        <div style="display:flex;gap:8px;margin-top:6px"><button class="btn primary small" data-act="perfguardar" data-p="${esc(p)}">Guardar</button><button class="btn small" data-act="perfed" data-p="${esc(p)}">Cancelar</button></div></div>`:""}`}).join("")}</div>`;
 }
+const perfilDe=p=>(S.role==="dir"&&S.perfOk?S.perfiles:null||(S.pub&&S.pub.perfiles)||S.perfiles||{})[p];
+/* Tarjeta de la profesora para el alumno (al pulsar su foto) */
+function vPerfilProf(p){const pf=perfilDe(p)||{};
+  return `<div class="panel" style="padding:14px;margin:8px 0;border-left:4px solid ${pc(p)}"><div class="row" style="gap:14px;align-items:flex-start">${avatar(p,"lg")}
+    <span class="grow"><b style="font-size:17px">${esc(p)}</b>${pf.tit?`<br><span>${esc(pf.tit)}</span>`:""}
+      ${pf.form?`<p class="note" style="margin:6px 0 0;white-space:pre-line">${esc(pf.form)}</p>`:""}
+      ${pf.pres?`<p style="margin:8px 0 0;white-space:pre-line">${esc(pf.pres)}</p>`:""}
+      ${!pf.tit&&!pf.form&&!pf.pres?`<p class="note" style="margin:6px 0 0">Pronto podrás leer aquí su presentación.</p>`:""}</span>
+    <button class="btn small" data-act="verprofe" data-p="">Cerrar</button></div></div>`}
 async function reducirImagen(file,max=320){
   const url=URL.createObjectURL(file);
   try{const img=await new Promise((ok,ko)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=()=>ko(new Error("img"));i.src=url});
@@ -2798,6 +2830,22 @@ async function subirFotoAlumno(file,aid){
   catch(e){setStatus("Al día");toast("No se ha podido subir la foto"+(e&&e.code?` (${e.code})`:""))}
 }
 let aplicandoFotos=false;
+/* 25/11/2026 (titular): cada profesora puede subir su foto desde su usuario («Mis fichajes» → «Tu foto»). Se guarda en su buzón
+   (fotoProf) y la app de dirección la pasa a config/fotos, que se publica para todos (horarios, alumnos, mensajes). */
+let aplicandoFotosP=false;
+async function aplicarFotosProfes(){if(S.role!=="dir"||esMos()||S.pv||S.ro||aplicandoFotosP||!S.fotosOk)return;aplicandoFotosP=true;
+  try{let fotos={...(S.fotos||{})},cambia=false;for(const [u,d] of S.buzon){const p=d&&d.profe;if(!p||!EQUIPO.includes(p)||!d.fotoProf||!idOk(d.fotoProf.id))continue;
+      const f=fotos[p];if(f&&(f.id===d.fotoProf.id||String(f.t||"")>=String(d.fotoProf.t||"")))continue;fotos[p]={id:d.fotoProf.id,url:"#b="+d.fotoProf.id,t:d.fotoProf.t||nowISO()};cambia=true}
+    if(cambia){await S.db.doc("config/fotos").set({fotos});S.fotos=fotos;quizasPublicar();render()}}catch(e){console.warn("fotosProf",e)}finally{aplicandoFotosP=false}}
+async function subirFotoProf(file){if(S.role!=="profe"||S.pv||!file)return;const assets=await window.claude.use("assets");if(!assets){toast("No se pueden subir fotos desde aquí");return}
+  setStatus("Subiendo foto…");
+  try{const r=await assets.upload(await reducirImagen(file,400),{publico:true});if(!idOk(r.id))throw new Error("id");
+    await guardarBuzonProfe({fotoProf:{id:r.id,t:nowISO()}});render();toast("Foto guardada. La verán los demás en cuanto dirección abra la app.");setStatus("Al día")}
+  catch(e){setStatus("Al día");toast("No se ha podido subir la foto"+(e&&e.code?` (${e.code})`:""))}}
+function vMiFotoProf(){if(S.role!=="profe")return "";const p=S.myProfe;
+  return `<div class="panel" style="padding:10px 14px;margin-bottom:12px"><div class="row" style="gap:12px">${avatar(p,"lg")}<span class="grow"><b>Tu foto</b><br><span class="note">Sale en los horarios y a tus alumnos, para que te reconozcan.${S.pv?" (Vista previa: no se guarda.)":""}</span></span>
+    <label class="btn small" style="cursor:pointer">${fotoDe(p)?"Cambiar foto":"Subir foto"}<input type="file" accept="image/*" data-fotoprof="1" hidden ${S.pv?"disabled":""}></label></div>
+    ${(()=>{const pf=perfilDe(p)||{};return pf.tit||pf.form||pf.pres?`<div class="note" style="margin-top:8px;white-space:pre-line"><b>Tu presentación</b> (la ven tus alumnos; la escribe dirección):${pf.tit?"\n"+esc(pf.tit):""}${pf.form?"\n"+esc(pf.form):""}${pf.pres?"\n"+esc(pf.pres):""}</div>`:`<p class="note" style="margin:8px 0 0">Tu presentación para los alumnos (titulación, formación y cómo eres) la escribe dirección. Si quieres cambiar algo, díselo.</p>`})()}</div>`}
 async function aplicarFotosAlumnos(){
   if(S.role!=="dir"||aplicandoFotos||!S.alOk||!S.cfgAlOk||S.pv)return;aplicandoFotos=true;
   try{for(const [u,d] of S.buzon){const aid=S.cuentasAl[u];if(!aid||!d||!d.foto)continue;const a=S.alumnos.get(aid);
@@ -3889,15 +3937,15 @@ function datosPublicos(){
   const oc={};for(const a of S.alumnos.values())for(const c of a.clases){const k=c.profe+"|"+c.dia+"|"+c.hora;oc[k]=(oc[k]||0)+1}
   const pu={};for(const [u,p] of Object.entries(S.cuentas))(pu[p]??=[]).push(u);for(const k in pu)pu[k].sort();
   const ses={};for(const p of FLEX)for(const d of DIAS){const b=baseDe(p,d);if(b.length)ses[p+"|"+d]=b.map(x=>[x.ini,x.fin,x.cap,x.n,x.key])}
-  return {ocupacion:oc,profesUid:pu,festivos:festivos(),ses,recAct:(S.recCfg&&S.recCfg.ultima)||"",fotos:S.fotos||{}};
+  return {ocupacion:oc,profesUid:pu,festivos:festivos(),ses,recAct:(S.recCfg&&S.recCfg.ultima)||"",fotos:S.fotos||{},perfiles:S.perfiles||{}};
 }
 let pubT=null;
 function quizasPublicar(){
   syncDerivados();if(esMos())return;
   if(S.role!=="dir"||!S.alOk||!S.cfgOk||!S.pubOk)return;
   clearTimeout(pubT);pubT=setTimeout(async()=>{const d=datosPublicos();
-    if(S.pub&&stable({ocupacion:S.pub.ocupacion,profesUid:S.pub.profesUid,festivos:S.pub.festivos,ses:S.pub.ses||{},recAct:S.pub.recAct||"",fotos:S.pub.fotos||{}})===stable(d))return;
-    try{await S.db.doc("publico/datos").set({...d,actualizado:todayISO()})}catch(_){}},1200);
+    if(S.pub&&stable({ocupacion:S.pub.ocupacion,profesUid:S.pub.profesUid,festivos:S.pub.festivos,ses:S.pub.ses||{},recAct:S.pub.recAct||"",fotos:S.pub.fotos||{},perfiles:S.pub.perfiles||{}})===stable(d))return;
+    try{await S.db.doc("publico/datos").set({...d,actualizado:todayISO()})}catch(e){console.warn("publicar",e)}},1200);
 }
 /* ---------- alta automática de alumnos con usuario y clave (la hace la página de dirección) ---------- */
 async function revisarSolicitudes(){return;
@@ -3959,8 +4007,9 @@ function vSemana(){
   const ps=profes(), lun=S.semIni||lunesDe(todayISO()), m=ocupacion(lun), hoy=diaDe(todayISO()), mueve=!!S.profe&&puedeMover();
   const arr=x=>mueve&&!x.mv&&!String(x.id).startsWith("tok:")?` draggable="true" data-drag="${esc(x.id)}|${x.dia||""}|${esc(x.hk)}|${esc(S.profe)}"`:"";
   let total=0; Object.values(m).forEach(v=>total+=(S.profe?v.filter(x=>x.profe===S.profe).length:v.length));
-  const filtro=S.role==="profe"?"":`<div class="bar"><button class="chip" data-act="fprofe" data-p="" aria-pressed="${!S.profe}">Todas</button>`+
-    ps.map(p=>`<button class="chip" data-act="fprofe" data-p="${esc(p)}" aria-pressed="${S.profe===p}" style="--pc:${pc(p)}"><span class="dot"></span>${esc(p)}</button>`).join("")+`</div>`;
+  /* 25/11/2026 (titular): profesoras como tarjetas cuadradas con su foto y el nombre debajo */
+  const filtro=S.role==="profe"?"":`<div class="pcards"><button class="pcard" data-act="fprofe" data-p="" aria-pressed="${!S.profe}" style="--pc:var(--ink,#333)"><img class="ava sq todas" src="icono-192.png" alt=""><span>Todas</span></button>`+
+    ps.map(p=>`<button class="pcard" data-act="fprofe" data-p="${esc(p)}" aria-pressed="${S.profe===p}" style="--pc:${pc(p)}">${avatar(p,"sq")}<span>${esc(p)}</span></button>`).join("")+`</div>`;
   let rows="";
   const filas=HORAS.filter(h=>(h!=="3-4"||(S.profe?FLEX.has(S.profe):true))&&(h!=="9-10"||(S.profe?DIAS.some(d=>trabaja(S.profe,d,h)):true)));
   filas.forEach((h,i)=>{
@@ -4296,7 +4345,7 @@ function vAccesos(){
       <span class="confirm" id="q-${esc(u)}"><button class="btn danger small" data-act="quitar" data-u="${esc(u)}">Quitar acceso</button></span></div>`).join("")
     :`<p class="note">Ninguna profesora tiene acceso todavía.</p>`;
   const resumen=EQUIPO.map(p=>{const n=cuentas.filter(([,x])=>x===p).length;return `<div class="row"><span class="pl" style="--pc:${pc(p)}"><span class="dot"></span>${esc(p)}</span><span class="grow"></span><span class="note">${nAl(p)} alumnos</span>${n?`<span class="badge b-si">con acceso</span>`:`<span class="badge b-off">sin acceso</span>`}</div>`}).join("");
-  return `<div class="bar"><h2>Accesos</h2><span class="legend">${S.lastSync?`Revisado a las ${S.lastSync}`:""}</span><button class="btn" data-act="sincronizar">Revisar ahora</button></div>
+  return `<div class="bar"><h2>Accesos</h2></div>
   <div class="help"><b>Cómo entra cada uno</b>
     <ol><li><b>Equipo:</b> crea abajo el usuario de cada profesora (o de otra persona de dirección), pulsa <b>Copiar mensaje</b> y envíaselo. Entra en ${esc(URL_APP)} con su usuario y su clave.</li>
     <li><b>Alumnos:</b> envíales su usuario y su clave con <b>WhatsApp</b> o <b>Copiar mensaje</b> (en <b>Usuarios de alumnos</b>), o que escaneen el QR del mostrador: la primera vez pueden entrar con su nombre y su móvil. Las profesoras y el mostrador también pueden enviárselo desde su pestaña <b>Acceso alumnos</b>.</li>
@@ -4579,6 +4628,15 @@ document.addEventListener("click",async e=>{
   else if(act==="chatenviar"){t.disabled=true;await enviarChatAlumno();t.disabled=false}
   else if(act==="chatresp"){const tx=(($("#cr-"+t.dataset.u)||{}).value||"").trim().slice(0,1000);if(!tx){toast("Escribe la respuesta");return}t.disabled=true;await responderChat(t.dataset.u,tx,false)}
   else if(act==="chatges"){t.disabled=true;await responderChat(t.dataset.u,"",true)}
+  else if(act==="fotodesc"&&S.role==="dir"&&!esMos()){/* 25/11/2026: dirección descarga la foto de una profesora (para recortarla y volver a subirla) */
+    const p=t.dataset.p,f=fotoDe(p),id=f&&(f.id||String(f.url||"").replace(/^.*#b=/,""));if(!id){toast("No hay foto");return}
+    try{const url=await window.__fb.blob(id),b=await (await fetch(url)).blob(),dl=await window.claude.use("downloads");if(!dl){toast("Desde aquí no se pueden descargar archivos");return}
+      await dl.save({filename:`foto-${p.toLowerCase()}.${(b.type.split("/")[1]||"jpg").replace("jpeg","jpg")}`,data:b})}catch(e){if(!(e&&e.code==="declined"))toast("No se ha podido descargar la foto")}}
+  else if(act==="perfed"&&S.role==="dir"&&!esMos()){S.perfEd=S.perfEd===t.dataset.p?null:t.dataset.p;render()}
+  else if(act==="perfguardar"&&S.role==="dir"&&!esMos()){const p=t.dataset.p,v=i=>((document.getElementById(i)||{}).value||"").trim();
+    const perfiles={...(S.perfiles||{}),[p]:{tit:v("pf-tit"),form:v("pf-form"),pres:v("pf-pres"),t:nowISO()}};
+    try{await S.db.doc("config/perfilesProf").set({perfiles});S.perfiles=perfiles;S.perfEd=null;quizasPublicar();render();toast("Presentación de "+p+" guardada")}catch(_){toast("No se ha podido guardar")}}
+  else if(act==="verprofe"){S.verProfe=t.dataset.p||null;render()}
   else if(act==="fotoquitar"){const fotos={...(S.fotos||{})};delete fotos[t.dataset.p];try{await S.db.doc("config/fotos").set({fotos});S.fotos=fotos;quizasPublicar();render()}catch(_){toast("No se ha podido quitar")}}
   else if(act==="semnav"){const d=+t.dataset.d;S.semIni=d?sumaDias(S.semIni||lunesDe(todayISO()),d):lunesDe(todayISO());render()}
   else if(act==="mover"){const c0=S.cell;abrirMover(t.dataset.id,t.dataset.d,t.dataset.hk,t.dataset.p,t.dataset.d,(c0&&c0.h)||t.dataset.hk)}
@@ -4866,6 +4924,7 @@ document.addEventListener("change",async e=>{
   if(t.dataset&&t.dataset.fotoal&&t.files&&t.files[0]&&S.role==="alumno"&&!S.pv){await subirFotoAlumno(t.files[0])}
   if(t.dataset&&t.dataset.fotoficha&&t.files&&t.files[0]&&S.role==="dir"&&!S.pv){await subirFotoAlumno(t.files[0],t.dataset.fotoficha)}
   if(t.dataset&&t.dataset.foto&&t.files&&t.files[0]&&S.role==="dir"&&!S.pv){await subirFoto(t.dataset.foto,t.files[0])}
+  if(t.dataset&&t.dataset.fotoprof&&t.files&&t.files[0]){const f=t.files[0];t.value="";await subirFotoProf(f)}
   if(t.id==="mv-exc"&&S.cb&&S.cb.modo==="mover"){S.cb.exc=t.checked}
   else if(t.id&&t.id.startsWith("mv-")&&t.id!=="mv-nota"&&S.cb&&S.cb.modo==="mover"){const cb=S.cb;cb.nota=(($("#mv-nota")||{}).value||cb.nota||"");
     if(t.id==="mv-fde")cb.fDe=t.value;if(t.id==="mv-fa")cb.fA=t.value;if(t.id==="mv-dia")cb.aDia=t.value;if(t.id==="mv-h")cb.aH=t.value;
@@ -5016,13 +5075,14 @@ function arrancarDireccion(db){
   db.doc("config/profesoras").onSnapshot(d=>{S.cuentas=(d.exists&&d.data().cuentas)||{};S.cfgOk=true;quizasSync();quizasPublicar();if(enAccesos())render()},()=>{S.cfgOk=true;quizasSync()});
   db.doc("config/alumnos").onSnapshot(d=>{S.cuentasAl=(d.exists&&d.data().cuentas)||{};S.cfgAlOk=true;quizasSync();revisarSolicitudes();quizasAlta();if(enAccesos())render()},()=>{S.cfgAlOk=true;quizasSync()});
   db.collection("mensajes").limit(1000).onSnapshot(snap=>{S.mensajes=new Map(snap.docs.map(d=>[d.id,d.data()||{}]));marcaMensajesNav();if(S.view==="recibos")refrescar()},()=>{});
-  db.doc("config/fotos").onSnapshot(d=>{S.fotos=(d.exists&&d.data().fotos)||{};S.fotosOk=true;quizasPublicar();if(S.view==="accesos")render()},()=>{});
+  db.doc("config/perfilesProf").onSnapshot(d=>{S.perfiles=(d.exists&&d.data().perfiles)||{};S.perfOk=true;quizasPublicar();if(S.view==="accesos")render()},()=>{S.perfOk=true});
+  db.doc("config/fotos").onSnapshot(d=>{S.fotos=(d.exists&&d.data().fotos)||{};S.fotosOk=true;quizasPublicar();try{aplicarFotosProfes()}catch(_){}if(S.view==="accesos")render()},()=>{});
   db.doc("config/recibos").onSnapshot(d=>{S.recCfg=d.exists?d.data():{};quizasPublicar();if(S.view==="recibos"||S.view==="tarifas")refrescar()},()=>{});
   if(!esMos())db.doc("config/sinficha").onSnapshot(d=>{S.sinFicha=d.exists?d.data():null;if(S.view==="gastos")refrescar()},()=>{});
   db.doc("config/intentos").onSnapshot(d=>{S.intentos=(d.exists&&d.data().cuentas)||{};S.intOk=true;revisarSolicitudes()},()=>{S.intOk=true});
   db.doc("publico/datos").onSnapshot(d=>{S.pub=d.exists?d.data():null;S.pubOk=true;quizasPublicar();if(S.view==="calendario")refrescar()},()=>{});
   if(!esMos()&&window.__plazas)window.__plazas.escuchar({desde:sumaDias(todayISO(),-60)},l=>{S.plazas=l;refrescar()});
-  db.collection("buzon").limit(1000).onSnapshot(snap=>{S.buzon=new Map(snap.docs.map(d=>[d.id,d.data()||{}]));rebuildOv();aplicarSesProfes();aplicarAsisProfes();aplicarFestProfes();aplicarTraspasos();aplicarAnadidos();aplicarFotosAlumnos();aplicarConfProfes();quizasPublicar();refrescar()},()=>{});
+  db.collection("buzon").limit(1000).onSnapshot(snap=>{S.buzon=new Map(snap.docs.map(d=>[d.id,d.data()||{}]));rebuildOv();aplicarSesProfes();aplicarAsisProfes();aplicarFestProfes();aplicarTraspasos();aplicarAnadidos();aplicarFotosAlumnos();aplicarConfProfes();aplicarFotosProfes();quizasPublicar();refrescar()},()=>{});
   db.collection("solicitudes").limit(200).onSnapshot(snap=>{S.solic=snap.docs.map(d=>{const x=d.data()||{};return {id:d.id,fecha:x.fecha||"",rol:x.rol==="alumno"?"alumno":"profe",usuario:x.usuario||"",clave:x.clave||"",alta:typeof x.alta==="string"?x.alta:"",tel4:digitos(x.tel4).slice(0,4),revisada:!!x.revisada,error:x.error||""}});revisarSolicitudes();if(enAccesos())render()},()=>{});
 }
 
@@ -5243,7 +5303,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=25nov-v162"></script>
+<script src="gestion.js?v=26nov-v178"></script>
 
 
 </body></html>

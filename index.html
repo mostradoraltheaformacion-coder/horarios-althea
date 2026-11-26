@@ -384,7 +384,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=25nov-v177"></script>
+<script type="module" src="fb.js?v=26nov-v179"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -612,7 +612,7 @@ const hTxt=x=>x.ini?`${x.ini}–${hm(minDe(x.ini)+(+x.dur||60))}`:(HLABEL[x.hora
 const hTxtCorto=x=>x.ini?esc(x.ini):(HSHORT[x.hora]||esc(x.hora));
 /* Sesiones de la semana agrupadas como huecos de la profesora: [{ini,fin,cap,n,key}] */
 function baseDe(p,dia){const m=new Map();for(const x of sesionesDia(p,dia)){const k=x.tipo==="grupo"?"g"+x.ini:"i"+x.ini+"|"+x.id+"|"+x.c.hora;const y=m.get(k);if(y)y.n++;else m.set(k,{ini:x.ini,fin:x.fin,cap:x.tipo==="grupo"?CAP:1,n:1,key:x.c.hora})}return [...m.values()]}
-const basePub=(p,dia)=>(((S.pub&&S.pub.ses)||{})[p+"|"+dia]||[]).map(([ini,fin,cap,n,key])=>({ini,fin,cap,n,key}));
+const basePub=(p,dia)=>(((S.pub&&S.pub.ses)||{})[p+"|"+dia]||[]).map(v=>{const [ini,fin,cap,n,key]=Array.isArray(v)?v:String(v).split("|");return {ini:+ini,fin:+fin,cap:+cap,n:+n,key:key==null||key==="undefined"?"":key}});
 /* Ocupación de la profesora una fecha concreta: sus sesiones de la semana más los cambios aceptados */
 function lineaFecha(p,f,base,res){
   const L=base.map(x=>({...x}));
@@ -1177,7 +1177,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="25nov-v177";
+const APP_VER="26nov-v179";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -3936,7 +3936,9 @@ async function guardarFestivos(l){
 function datosPublicos(){
   const oc={};for(const a of S.alumnos.values())for(const c of a.clases){const k=c.profe+"|"+c.dia+"|"+c.hora;oc[k]=(oc[k]||0)+1}
   const pu={};for(const [u,p] of Object.entries(S.cuentas))(pu[p]??=[]).push(u);for(const k in pu)pu[k].sort();
-  const ses={};for(const p of FLEX)for(const d of DIAS){const b=baseDe(p,d);if(b.length)ses[p+"|"+d]=b.map(x=>[x.ini,x.fin,x.cap,x.n,x.key])}
+  const ses={};for(const p of FLEX)for(const d of DIAS){const b=baseDe(p,d);if(b.length)ses[p+"|"+d]=b.map(x=>[x.ini,x.fin,x.cap,x.n,x.key].join("|"))}
+  /* 26/11/2026: Firestore no admite listas dentro de listas: con [[ini,fin…]] la publicación fallaba siempre y los datos públicos
+     (ocupación, fotos de las profesoras…) no se actualizaban (lo vio el mostrador sin fotos). Ahora cada sesión va como texto. */
   return {ocupacion:oc,profesUid:pu,festivos:festivos(),ses,recAct:(S.recCfg&&S.recCfg.ultima)||"",fotos:S.fotos||{},perfiles:S.perfiles||{}};
 }
 let pubT=null;
@@ -3945,7 +3947,7 @@ function quizasPublicar(){
   if(S.role!=="dir"||!S.alOk||!S.cfgOk||!S.pubOk)return;
   clearTimeout(pubT);pubT=setTimeout(async()=>{const d=datosPublicos();
     if(S.pub&&stable({ocupacion:S.pub.ocupacion,profesUid:S.pub.profesUid,festivos:S.pub.festivos,ses:S.pub.ses||{},recAct:S.pub.recAct||"",fotos:S.pub.fotos||{},perfiles:S.pub.perfiles||{}})===stable(d))return;
-    try{await S.db.doc("publico/datos").set({...d,actualizado:todayISO()})}catch(e){console.warn("publicar",e)}},1200);
+    try{await S.db.doc("publico/datos").set({...d,actualizado:todayISO()});S.pubErr=""}catch(e){console.warn("publicar",e);if(!S.pubErr){S.pubErr=String((e&&e.message)||e);toast("No se han podido publicar los datos comunes (fotos, ocupación…). Avisa a quien lleve la app.")}}},1200);
 }
 /* ---------- alta automática de alumnos con usuario y clave (la hace la página de dirección) ---------- */
 async function revisarSolicitudes(){return;
@@ -5303,7 +5305,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=25nov-v177"></script>
+<script src="gestion.js?v=26nov-v179"></script>
 
 
 </body></html>

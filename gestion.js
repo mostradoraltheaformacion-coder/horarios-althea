@@ -2891,7 +2891,7 @@ async function evGuardar(){evLeerForm();const F=EV.form;
   try{
     if(F.id){const e=evDe(F.id),cambia=e.fecha!==F.fecha||e.ini!==F.ini||e.profe!==F.profe,d={fecha:F.fecha,ini:F.ini,dur:F.dur,profe:F.profe,asunto:F.asunto,act:nowISO(),...(cambia?{tok:evTok(),confMano:""}:{})};
       await S.db.doc("eventos/"+e.id).update(d);const n={...e,...d};if(cambia){await evCita(n);try{await S.db.doc("citas/"+e.tok).delete()}catch(_){}}Object.assign(e,d);EV.form=null;EV.ver=e.id;EV.busy=false;evPintar();toast(cambia?"Cita cambiada: vuelve a enviar el WhatsApp de confirmación":"Cambios guardados");return}
-    let alumno=F.alumno||idPorNombre(F.nombre)||"";
+    let alumno=F.alumno||fichaDeCita({nombre:F.nombre,tel:F.tel})||"";
     if(!alumno&&F.tipo==="psico"&&evAlta()&&F.alta!==false){alumno=await crearAlumno(F.nombre)||"";if(alumno){const a=S.alumnos.get(alumno);await save(alumno,{psico:true,telefonos:[...new Set([...(a.telefonos||[]),F.tel].filter(Boolean))]})}}
     const id="ev"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
     const e={tipo:F.tipo,fecha:F.fecha,ini:F.ini,dur:F.dur,profe:F.profe,nombre:alumno&&S.alumnos.get(alumno)?S.alumnos.get(alumno).nombre:F.nombre.toUpperCase(),alumno,tel:F.tel||"",asunto:F.asunto||"",estado:"activo",tok:evTok(),
@@ -2915,7 +2915,7 @@ function vCitasFicha(id){if(S.role!=="dir")return "";evEscuchar();const l=EV.doc
   return `<div><b style="font-size:14px">Citas</b> <span class="note">entrevistas, evaluaciones y sesiones</span>${l.slice(0,12).map(e=>`<div class="row" data-ev="ver" data-id="${esc(e.id)}" style="cursor:pointer"><span class="note" style="min-width:74px;font-variant-numeric:tabular-nums">${fmtFecha(e.fecha)}</span><span class="grow">${esc(EV_TIPOS[e.tipo].t)}${e.tipo==="evaluacion"?" · sesión "+(e.ses||1):""} · ${hm(e.ini)} · ${esc(e.profe)}</span>${e.estado==="hecha"?`<span class="badge b-si">Hecha</span>`:`<span class="badge b-off">Prevista</span>`}${e.cobro&&e.cobro.recibo?` <span class="note">${esc(e.cobro.recibo)}</span>`:""}</div>${(n=>n?`<div class="note" style="margin:0 0 6px 82px;white-space:pre-wrap">${esc(String(n).slice(0,300))}${String(n).length>300?"…":""}</div>`:"")(evAnot(e).anot)}`).join("")}</div>`}
 /* Desde el 1/1/2027: recibo en la ficha (alta si hace falta), con el contador de albaranes; antes, de la serie HX */
 async function evRecibo(id){const e=evDe(id);if(!e||!e.cobro||e.cobro.estado!=="pendiente"||!evCentro()||EV.busy)return;EV.busy=true;try{
-  let aid=e.alumno&&S.alumnos.has(e.alumno)?e.alumno:idPorNombre(e.nombre);
+  let aid=e.alumno&&S.alumnos.has(e.alumno)?e.alumno:fichaDeCita(e);
   if(!aid){aid=await crearAlumno(e.nombre);if(!aid)return;if(await save(aid,{deCita:true}))S.alumnos.get(aid).deCita=true}
   const a=S.alumnos.get(aid),tels=[...new Set([...(a.telefonos||[]),e.tel].filter(Boolean))];
   const grupo=EV.docs.filter(x=>x.id===e.id||(x.grupo||"")===e.id);
@@ -2934,14 +2934,25 @@ async function evRecibo(id){const e=evDe(id);if(!e||!e.cobro||e.cobro.estado!=="
 /* 19/11/2026 (titular, Enzo Gómez Aragón: 125 € = 2 sesiones de psicopedagogía de 40 € + 45 € de clase en grupo):
    si su tarifa guardada lleva un curso de psicopedagogía, las primeras sesiones de cada mes van en la mensualidad y no llevan recibo.
    Nº de sesiones incluidas = precio de esa línea ÷ precio de la sesión (40 €). */
-function psicoIncluidas(a){try{if(!a||!a.matriz)return 0;const TM=tfMapa(),M=calcMatriz(a,TM);if(!M.guardada)return 0;
+/* 26/11/2026 (caso Enzo Gómez Aragón): si la tarifa no está guardada en la app, mira sus cursos de Argos: una matrícula
+   «CONSULTAS PSICOPEDAGÓGICAS» de 80 € = 2 sesiones de 40 € al mes ya cobradas en su recibo mensual de Argos. */
+/* 26/11/2026: la cita «ENZO GÓMEZ» no encontraba la ficha «ENZO GOMEZ ARAGON» (se buscaba el nombre exacto) y creaba otra.
+   Ahora: nombre exacto; si no, sin acentos y con todas las palabras de la cita dentro del nombre de la ficha (o el mismo teléfono),
+   y solo si sale una única ficha. */
+function fichaDeCita(e){const ex=idPorNombre(e.nombre||"");if(ex)return ex;const N=x=>String(x||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase().replace(/[^A-Z ]/g," ").split(/\s+/).filter(w=>w.length>1);
+  const ws=N(e.nombre);if(!ws.length)return null;const tel=digitos(e.tel||"").slice(-9);
+  const c=[];for(const [id,a] of S.alumnos){if(a.baja&&!a.clases.length)continue;const an=new Set(N(a.nombre));
+    const porNom=ws.length>=2&&ws.every(w=>an.has(w)),porTel=tel.length===9&&(a.telefonos||[]).some(t=>digitos(t).slice(-9)===tel)&&ws.some(w=>an.has(w));if(porNom||porTel)c.push(id)}
+  return c.length===1?c[0]:null}
+function psicoArgos(a){const t=(a&&a.matriculas||[]).filter(m=>m&&/PSICOPEDAG|PSICOLOG/i.test(String(m.curso||""))&&+m.cuota>0&&!m.baja).reduce((s,m)=>s+(+m.cuota),0);return Math.floor(t/EV_TIPOS.psico.precio+0.01)}
+function psicoIncluidas(a){try{if(!a)return 0;if(!a.matriz)return psicoArgos(a);const TM=tfMapa(),M=calcMatriz(a,TM);if(!M.guardada)return psicoArgos(a);
   const t=M.l.filter(y=>/PSICOPEDAG/i.test(String(y.curso||""))).reduce((s,y)=>s+(+precioLinea(y,TM)||0),0);return Math.floor(t/EV_TIPOS.psico.precio+0.01)}catch(_){return 0}}
 function psicoEnMensualidad(e,aid){const a=S.alumnos.get(aid),n=psicoIncluidas(a);if(!n||e.tipo!=="psico")return null;
   const mes=String(e.fecha).slice(0,7),l=EV.docs.filter(x=>x.tipo==="psico"&&x.alumno===aid&&x.estado==="hecha"&&String(x.fecha).slice(0,7)===mes).sort((x,y)=>(x.fecha+hm(x.ini)).localeCompare(y.fecha+hm(y.ini)));
   const i=l.findIndex(x=>x.id===e.id);return i>=0&&i<n?{n,i:i+1}:null}
 /* ficha del alumno para una cita hecha sin cobro (entrevista): la crea si no existe y la enlaza */
 async function evFicha(id){const e=evDe(id);if(!e||!evCentro()||EV.busy)return;if(e.alumno&&S.alumnos.has(e.alumno))return;EV.busy=true;try{
-  let aid=idPorNombre(e.nombre);if(!aid){aid=await crearAlumno(e.nombre);if(!aid)return;if(await save(aid,{deCita:true}))S.alumnos.get(aid).deCita=true}
+  let aid=fichaDeCita(e);if(!aid){aid=await crearAlumno(e.nombre);if(!aid)return;if(await save(aid,{deCita:true}))S.alumnos.get(aid).deCita=true}
   const a=S.alumnos.get(aid),tels=[...new Set([...(a.telefonos||[]),e.tel].filter(Boolean))];if(tels.length!==(a.telefonos||[]).length&&await save(aid,{telefonos:tels}))a.telefonos=tels;
   await evActualizar(id,{alumno:aid},`Ficha de ${titulo(e.nombre)} ${a.clases&&a.clases.length?"enlazada":"creada"}`)}finally{EV.busy=false}}
 /* Si la cita la marca como hecha la profesora (Fani), la ficha y el recibo los crea la app de dirección en cuanto la abre */

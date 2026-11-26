@@ -866,7 +866,7 @@ function vGastos(){
     <label class="btn" style="cursor:pointer" title="Argos → Caja → exportar a Excel (un día o varios). Sirve para cuadrar lo cobrado con tarjeta con las liquidaciones del TPV.">Subir caja de Argos (.xls)<input type="file" id="gb-acaja" accept=".xls,.xlsx" multiple hidden></label>
     <label class="btn" style="cursor:pointer" title="Justificantes del banco, facturas de proveedores, nóminas, listado de costes (PDF o Excel) y TC1 de A3: todos juntos. Cada uno va a su movimiento.">Subir documentos (PDF)<input type="file" id="gb-justf" accept=".pdf,application/pdf,.xls,.xlsx" multiple hidden></label>
     <span class="note">Banca online → la cuenta → Movimientos → elige las fechas → Exportar a Excel. Puedes subir las dos cuentas a la vez; si un periodo ya estaba, solo se añaden los movimientos nuevos. En «Subir documentos» puedes arrastrar de una vez los justificantes del banco, las facturas y lo que manda A3 (nóminas, listado de costes y TC1): cada uno va a su movimiento.</span></div>
-  ${imp}${vJustRes()}${vVentasRes()}${vCuadreTarjeta()}${(()=>{const sj=movsTodos().filter(necesitaJust),ms2=[...new Set(sj.map(m=>m.mes))].sort();return sj.length&&!GB.just?`<div class="aviso pend" style="display:block;margin-bottom:10px"><b>${sj.length} movimiento${sj.length===1?"":"s"} sin todos sus documentos</b> (justificante del banco y factura, nómina o TC1): ${ms2.map(k=>{const n=sj.filter(m=>m.mes===k).length;return `<a href="#" data-gb="versj" data-v="${k}">${mesTxt(k)} (${n})</a>`}).join(" · ")}. Súbelos todos juntos con «Subir documentos» o adjúntalos en cada movimiento.</div>`:""})()}
+  ${imp}${vJustRes()}${vDocsPend()}${vVentasRes()}${vCuadreTarjeta()}${(()=>{const sj=movsTodos().filter(necesitaJust),ms2=[...new Set(sj.map(m=>m.mes))].sort();return sj.length&&!GB.just?`<div class="aviso pend" style="display:block;margin-bottom:10px"><b>${sj.length} movimiento${sj.length===1?"":"s"} sin todos sus documentos</b> (justificante del banco y factura, nómina o TC1): ${ms2.map(k=>{const n=sj.filter(m=>m.mes===k).length;return `<a href="#" data-gb="versj" data-v="${k}">${mesTxt(k)} (${n})</a>`}).join(" · ")}. Súbelos todos juntos con «Subir documentos» o adjúntalos en cada movimiento.</div>`:""})()}
   ${!ms.length?`<div class="empty">${GB.ok?"Todavía no hay movimientos. Sube el primer extracto.":"Cargando…"}</div>`:`
   <div class="bar" style="gap:8px;flex-wrap:wrap;margin-top:6px">
     <label class="f" style="flex:0 1 170px">Mes<select id="gb-mes">${ms.map(m=>`<option value="${m}" ${m===mes?"selected":""}>${mesTxt(m)}</option>`).join("")}</select></label>
@@ -1408,6 +1408,11 @@ async function gbSubirJustificantes(files){
           const r=await as.upload(f,{clase:"gasto"}),rec={mes,tipo:"tc1",profe:"",imp:r2(c.importe),arch:{id:r.id,n:f.name.slice(0,80)},firma,t:nowISO()};
           await S.db.doc("nominas/"+key).set(rec);const ix=NM.docs.findIndex(d=>d.id===key);if(ix>=0)NM.docs[ix]={id:key,...rec};else NM.docs.push({id:key,...rec});
           GB.just.ok.push(`TC1 de ${mesTxt(mes)} · ${eur(c.importe)} · el cargo de la Seguridad Social aún no está en el banco: se enganchará solo al subir el extracto`);GB.just.hecho++;continue}}
+      /* 26/11/2026 (titular): factura que llega antes que su cargo: se guarda y se engancha sola al subir el extracto (docsPendEnlazar) */
+      if(!m&&c.slot==="doc"&&c.tipo==="Factura"&&c.importe>0){const P=await dpLeer();
+        if(P.some(x=>x.firma===firma)){GB.just.ya.push(`Factura · ${quien} · ya estaba guardada esperando su cargo`);GB.just.hecho++;continue}
+        const r=await as.upload(f,{clase:"gasto"}),cc=JSON.parse(JSON.stringify({...c,texto:String(c.texto||"").slice(0,6000)})),e={arch:{id:r.id,n:f.name.slice(0,80)},firma,c:cc,quien:String(quien).slice(0,80),imp:r2(c.importe),fv:c.fv||"",t:nowISO()};
+        await dpGuardar([...P,e]);GB.just.ok.push(`Factura · ${f.name.replace(/\.pdf$/i,"")} · ${eur(c.importe)} · el cargo aún no está en el banco: queda guardada y se engancha sola al subir el extracto`);GB.just.hecho++;continue}
       if(!m)GB.just.sin.push(`${c.tipo} · ${quien} · ${c.importe!=null?eur(c.importe):"?"} · ${c.fv?fmtFecha(c.fv):"?"}`);
       else if(c.slot==="doc"){usados.add(m.id);const tipo=c.tipo==="TC1"?"tc":"factura";
         const dPrev=docsMov(m).d,sust=!!(dPrev&&dPrev.sinNif&&!c.sinNif);
@@ -1495,12 +1500,28 @@ async function nmEnganchar(key,rec,m){const o={id:rec.arch.id,n:rec.arch.n,t:now
   await S.db.doc("banco/"+m.mes).update(up);const dd=GB.docs.find(y=>y.id===m.mes);if(dd&&dd.movs[m.id])Object.assign(dd.movs[m.id],{doc:o,df:"nom:"+key,cat:"nominas"});
   await S.db.doc("nominas/"+key).update({mov:{mes:m.mes,id:m.id}})}
 /* Nóminas ya subidas cuya transferencia no estaba: se buscan otra vez (al subir un extracto y al abrir Gastos) */
+/* Facturas esperando su cargo: config/docsPend = {l:[{arch:{id,n},firma,c,quien,imp,fv,t}]} (solo dirección) */
+const DP={l:null};
+async function dpLeer(){if(DP.l)return DP.l;try{const d=await S.db.doc("config/docsPend").get();DP.l=(d.exists&&d.data().l)||[]}catch(_){DP.l=[]}return DP.l}
+async function dpGuardar(l){await S.db.doc("config/docsPend").set({l});DP.l=l}
+async function docsPendEnlazar(){if(S.role!=="dir"||esMos())return;const P=await dpLeer();if(!P.length)return;const quedan=[],usados=new Set();let n=0;
+  for(const e of P){let m=null;try{const c={...e.c,ibans:e.c.ibans||[],fechas:e.c.fechas||[],cifs:e.c.cifs||[]};m=buscarMov(c,usados)}catch(_){m=null}
+    if(!m){quedan.push(e);continue}const dPrev=docsMov(m).d;if(dPrev&&!(dPrev.sinNif&&!e.c.sinNif)){quedan.push(e);continue}
+    usados.add(m.id);const o={id:e.arch.id,n:e.arch.n,t:nowISO(),tipo:"factura",...(e.c.sinNif?{sinNif:true}:{})};
+    try{await S.db.doc("banco/"+m.mes).update({["movs."+m.id+".doc"]:o,["movs."+m.id+".df"]:e.firma});const dd=GB.docs.find(y=>y.id===m.mes);if(dd&&dd.movs[m.id])Object.assign(dd.movs[m.id],{doc:o,df:e.firma});n++}catch(_){quedan.push(e)}}
+  if(n){await dpGuardar(quedan);toast(`${n} factura${n===1?"":"s"} guardada${n===1?"":"s"} enganchada${n===1?"":"s"} a su cargo del banco`);render()}}
+function vDocsPend(){const l=DP.l||[];if(DP.l===null&&S.role==="dir"&&!esMos())dpLeer().then(x=>{if(x.length)render()});if(!l.length)return "";
+  return `<details class="panel" style="padding:10px 14px;margin-bottom:12px"><summary><b>Facturas esperando su cargo en el banco (${l.length})</b> <span class="note">· se enganchan solas al subir el extracto</span></summary>
+    ${l.map((e,i)=>`<div class="row" style="flex-wrap:wrap"><a href="#" data-blob="${esc(e.arch.id)}">${esc(e.arch.n)}</a><span class="grow note">${esc(e.quien||"")}${e.fv?" · "+fmtFecha(e.fv):""}</span><b>${eur(e.imp)}</b><button class="btn small" data-dp="quitar" data-i="${i}" title="Quitar de la espera (borra la factura guardada)">×</button></div>`).join("")}</details>`}
+document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.closest('[data-dp="quitar"]');if(!t||S.role!=="dir"||esMos())return;e.preventDefault();
+  const P=[...(await dpLeer())],x=P[+t.dataset.i];if(!x||!confirm(`¿Quitar «${x.arch.n}» de la espera?`))return;P.splice(+t.dataset.i,1);
+  try{await dpGuardar(P);try{(await window.claude.use("assets")).delete(x.arch.id)}catch(_){}render()}catch(_){toast("No se ha podido quitar")}});
 async function tcEnlazarPendientes(){const l=NM.docs.filter(d=>d.tipo==="tc1"&&!d.mov&&d.arch);if(!l.length)return;
   for(const d of l){const ms=mesSig(d.mes),m=movsTodos().find(x=>x.importe<0&&Math.abs(-x.importe-(+d.imp||0))<0.005&&(x.cat==="ssemp"||/TGSS/i.test(x.concepto||"")&&!/AUTONOMO/i.test(x.concepto||""))&&String(x.fv||"").slice(0,7)>=ms&&!docsMov(x).d);
     if(!m)continue;const o={id:d.arch.id,n:d.arch.n,t:nowISO(),tipo:"tc"};
     try{await S.db.doc("banco/"+m.mes).update({["movs."+m.id+".doc"]:o,["movs."+m.id+".df"]:d.firma||("tc1:"+d.mes)});const dd=GB.docs.find(y=>y.id===m.mes);if(dd&&dd.movs[m.id])Object.assign(dd.movs[m.id],{doc:o,df:d.firma||("tc1:"+d.mes)});
       await S.db.doc("nominas/"+d.mes+"_tc1").update({mov:{mes:m.mes,id:m.id}});d.mov={mes:m.mes,id:m.id}}catch(_){}}}
-async function nmEnlazarPendientes(){try{await tcEnlazarPendientes()}catch(_){}if(!NM.ok||NM.busy)return;const l=NM.docs.filter(d=>d.tipo==="nomina"&&!d.mov&&d.arch);if(!l.length)return;NM.busy=true;
+async function nmEnlazarPendientes(){try{await tcEnlazarPendientes()}catch(_){}try{await docsPendEnlazar()}catch(_){}if(!NM.ok||NM.busy)return;const l=NM.docs.filter(d=>d.tipo==="nomina"&&!d.mov&&d.arch);if(!l.length)return;NM.busy=true;
   try{const us=new Set(NM.docs.filter(d=>d.mov).map(d=>d.mov.id));for(const d of l){const m=movNomina(d,us);if(m){us.add(m.id);try{await nmEnganchar(d.id,d,m)}catch(_){}}}}finally{NM.busy=false}}
 async function paqueteA3(f,items){const T=NORM(items.map(i=>i.s).join(" "));
   if(/LIQUIDO\s*A\s*PERCIBIR/.test(T)&&/TRABAJADOR/.test(T)){await subirNominas(f);return true}

@@ -2386,7 +2386,7 @@ function vPrevision(){gbEscuchar();imEscuchar();
         if(D.length){const r=D.reduce((t,x)=>t+(x.ingBanco-x.gas),0)/D.length*3,e=r2(Math.max(0,0.2*r));
           imp.push({k:"impest|130",cat:"impuestos",txt:`Modelo 130 (pago fraccionado de tu IRPF) · aprox.: 20 % del resultado de ${Q.map(m=>mesTxt(m).split(" ")[0]).join(", ")} según el banco (${eur(r2(r))}${D.length<3?`; ${3-D.length} mes${D.length===2?"":"es"} sin cerrar, con la media`:""})${e?"":" → sale a 0"}. El importe real lo da la asesoría`,f:`${M}-30`,imp:e,est:true})}}catch(_){}}
       {const k=imp.findIndex(x=>x.k==="impest|nada");if(k>=0&&imp.some(x=>x.k==="impest|130"))imp.splice(k,1)}
-    const filas=[...lin.map(ajNom),...imp].sort((a,b)=>a.f.localeCompare(b.f)).map(x=>({...x,hecho:x.f<=hoy&&!x.imp0&&pagado(x,x.f),fuera:no.has(x.k)}));
+    const filas=[...lin.map(ajNom),...imp].sort((a,b)=>a.f.localeCompare(b.f)).map(x=>({...x,hecho:!x.imp0&&pagado(x,x.f),fuera:no.has(x.k)}));/* 27/11/2026: también si se cargó antes del día previsto (la cuota del 28/11 se cargó el 26/11 y se contaba dos veces: en el saldo y como pendiente) */
     const pend=r2(filas.filter(x=>!x.fuera&&!x.hecho).reduce((s,x)=>s+x.imp,0)),total=r2(filas.filter(x=>!x.fuera).reduce((s,x)=>s+x.imp,0));
     return {M,ini,fin,filas,pend,total}});
   const actual=bloques[0];

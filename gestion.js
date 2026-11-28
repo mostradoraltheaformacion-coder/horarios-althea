@@ -1698,9 +1698,13 @@ function paraAsesoria(D){return {...paraAsesoria0(D),alq:pdTry(()=>alqRetMes(D.m
 function paraAsesoria0(D){const nA=catTxt("noact"),cu=Object.fromEntries((D.cuadre||[]).map(([l,b])=>[l,b]));
   const ingBanco=[["Cobros con tarjeta (TPV)",cu["Tarjeta (TPV)"]||0],["Cobros por Bizum",cu["Bizum"]||0],["Cobros por transferencia",cu["Transferencia"]||0],["Efectivo ingresado en el cajero",D.E?D.E.ing:0]].filter(x=>x[1]);
   const ingOtros=D.IA&&D.IA.otrosBanco?[["Otros ingresos del banco",D.IA.otrosBanco]]:[];
-  const totIng=r2([...ingBanco,...ingOtros].reduce((s,x)=>s+x[1],0)),res=r2(totIng-D.totGas);
-  const movs=(D.movs||[]).filter(m=>m.cat!==nA);
-  return {...D,ase:true,ingBanco,ingOtros,totIng,res,retTit:0,queda:res,IA:null,E:null,caja:[],porForma:{},fuera:(D.fuera||[]).filter(x=>x[0]!==nA),
+  /* 28/11/2026 (titular): los gastos pagados en efectivo de la caja sin factura (limpiadora, limpieza de cristales…) no van a la asesoría:
+     ni en la lista de movimientos ni en el total de gastos */
+  const sinAse=m=>m.cuenta==="caja"&&m.sf,quita={};for(const m of (D.movs||[]))if(m.cat!==nA&&sinAse(m))quita[m.cat]=r2((quita[m.cat]||0)-(+m.importe||0));
+  const gastos=(D.gastos||[]).map(([l,v])=>[l,r2(v-(quita[l]||0))]).filter(x=>x[1]),totGas=r2(gastos.reduce((s,x)=>s+x[1],0));
+  const totIng=r2([...ingBanco,...ingOtros].reduce((s,x)=>s+x[1],0)),res=r2(totIng-totGas);
+  const movs=(D.movs||[]).filter(m=>m.cat!==nA&&!sinAse(m));
+  return {...D,ase:true,ingBanco,ingOtros,gastos,totGas,totIng,res,retTit:0,queda:res,IA:null,E:null,caja:[],porForma:{},fuera:(D.fuera||[]).filter(x=>x[0]!==nA),
     cobros:(D.cobros||[]).filter(c=>/tarj|tpv|dat[aá]fono|bizum|transf/i.test(c.forma)),movs,sinJust:movs.filter(m=>m.falta).length}}
 /* ============================================================================================
    Facturas de venta (01/11/2026). Noviembre y diciembre de 2026 las emite Argos: se suben aquí el PDF con todas las facturas

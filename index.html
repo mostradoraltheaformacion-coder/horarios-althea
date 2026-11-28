@@ -385,6 +385,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
     <button role="tab" id="t-argos" class="dironly" data-v="argos" aria-selected="false">Cuadre Argos</button>
     <button role="tab" id="t-calendario" class="dironly" data-v="calendario" aria-selected="false">Calendario</button>
     <button role="tab" id="t-accesos" class="dironly" data-v="accesos" aria-selected="false">Accesos</button>
+    <button role="tab" id="t-registro" class="dironly" data-v="registro" aria-selected="false">Registro</button>
   </nav></div>
   <div class="status" id="status">Conectando…</div>
   <button class="btn" id="b-inicio" data-act="inicio">Cambiar perfil</button>
@@ -396,7 +397,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=28nov-v195"></script>
+<script type="module" src="fb.js?v=28nov-v196"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -763,7 +764,7 @@ const tocaA=(a,p)=>!!a&&a.clases.some(c=>c.profe===p);
    recibos: solo en la copia del propio alumno. */
 const cuentasDe=id=>Object.entries(S.cuentasAl).filter(([,x])=>x===id).map(([u])=>u).sort();
 const copiaDe=(a,id,modo)=>{const c={nivel:nivelDe(a),nombre:a.nombre,clases:a.clases,faltas:a.faltas,token:a.token||"",asist:a.asist||{},trasHechos:a.trasHechos||[]};if(a.foto&&idOk(a.foto.id))c.foto={id:a.foto.id};
-  if(modo==="profe"){c.cuentas=cuentasDe(id);if((a.telefonos||[]).length)c.telefonos=a.telefonos;const n=recPend(a);if(n)c.pendRec=n;
+  if(modo==="profe"){c.cuentas=cuentasDe(id);if(sinFirmarDir(id,a))c.sinFirmar=true;if((a.telefonos||[]).length)c.telefonos=a.telefonos;const n=recPend(a);if(n)c.pendRec=n;
     try{if(entroAl(id,a))c.ent=true;else if(!a.bloqueado&&a.usuario&&normClave(a.clave))c.acc={u:a.usuario,c:normClave(a.clave)}}catch(_){}}
   if(modo==="alumno"){c.recibos=a.recibos||[];if((a.inscripciones||[]).length)c.inscripciones=a.inscripciones;c.petResp=a.petResp||{};c.msgResp=a.msgResp||{};c.avisosHorario=a.avisosHorario||[];if(a.baja)c.baja=a.baja;
     c.clases=a.clases.map(x=>{if(!FLEX.has(x.profe)||(x.ini&&TIPOS[x.tipo]))return x;const s=sesDe(a,x);return {...x,est:{ini:hm(s.ini),tipo:s.tipo}}})}
@@ -1145,14 +1146,67 @@ const normNumRec=v=>String(v||"").toUpperCase().replace(/\s+/g,"").slice(0,20);
 /* Una clase no puede estar dos veces igual (mismo día, hora, profesora e inicio): se queda la primera */
 const claveClase=c=>[c.dia,c.hora,c.profe,c.ini||""].join("|");
 function sinRepetidas(l){const v=new Set();return (l||[]).filter(c=>{if(!c)return false;const k=claveClase(c);if(v.has(k))return false;v.add(k);return true})}
+/* ============================================================================================
+   28/11/2026 (titular): registro de cambios y aviso de inscripción sin firmar.
+   registro/<id> = {t, por, acc, al, nom, det}: quién y cuándo da de alta, de baja, reactiva, cambia el nombre, pone o quita clases,
+   junta o borra fichas, firma la inscripción, y (solo si lo hace alguien a mano, no al cargar listados) añade, borra o cobra recibos.
+   Solo se crean, nunca se cambian ni se borran. Lo ve dirección (pestaña Equipo → Registro y en la ficha de cada alumno).
+   Inscripción sin firmar: alumnos dados de alta en la app (no los que venían de antes) sin inscripción firmada. Dirección lo ve en
+   la ficha; la profesora, en la ficha y en un aviso arriba en su semana (se calcula en dirección y va en su copia del alumno).
+   ============================================================================================ */
+const REG={docs:[],ok:false,err:"",sub:null,click:0,q:""};
+document.addEventListener("click",()=>{REG.click=Date.now()},true);
+document.addEventListener("change",e=>{if(e.target&&e.target.type==="file")REG.click=0},true);
+function registrar(acc,id,det,nom){try{if(!S.db||S.ro||S.role!=="dir"&&!esPlus())return;const a=S.alumnos.get(id)||{};
+  const r={t:nowISO(),por:String(quienSoy()||"").slice(0,40),acc:String(acc).slice(0,60),al:String(id||""),nom:String(nom||a.nombre||"").slice(0,80),det:String(det||"").slice(0,300)};
+  REG.docs.unshift({id:"tmp"+Date.now(),...r});Promise.resolve(S.db.collection("registro").doc(nuevoId("r")).set(r)).catch(e=>console.warn("registro",e))}catch(_){}}
+const regHm=m=>`${Math.floor(m/60)}:${String(m%60).padStart(2,"0")}`;
+const regCl=c=>`${c.dia||""} ${c.ini!=null&&c.ini!==""&&!isNaN(+c.ini)?regHm(+c.ini):(c.hora||"")}${c.profe?" con "+c.profe:""}`.trim();
+const regRc=r=>[r.numero||"",r.concepto||"",r.importe!=null&&r.importe!==""?eur(+r.importe):""].filter(Boolean).join(" · ");
+function regDiff(id,b,p){if(!b)return;
+  if("baja" in p){if(p.baja&&!b.baja)registrar("Baja",id,`Último día: ${fmtFecha(String(p.baja).slice(0,10))}`);else if(!p.baja&&b.baja)registrar("Reactivado",id,"Vuelve a estar de alta")}
+  if(p.nombre&&p.nombre!==b.nombre)registrar("Cambio de nombre",id,`«${titulo(b.nombre||"")}» → «${titulo(p.nombre)}»`);
+  if(Array.isArray(p.inscripciones)&&p.inscripciones.length>b.ins){const x=p.inscripciones[p.inscripciones.length-1]||{};registrar("Inscripción firmada",id,x.firmante?`Firma: ${x.firmante}${x.parentesco?" ("+x.parentesco+")":""}`:"")}
+  if(Array.isArray(p.clases)&&!p.baja){const k=c=>[c.dia,c.hora,c.profe,c.ini].join("|"),A=new Set(b.clases.map(k)),B=new Set(p.clases.map(k));
+    const mas=p.clases.filter(c=>!A.has(k(c))),menos=b.clases.filter(c=>!B.has(k(c)));
+    if(mas.length&&menos.length&&mas.length===menos.length)registrar("Cambio de horario",id,`${menos.map(regCl).join(", ")} → ${mas.map(regCl).join(", ")}`);
+    else{if(mas.length)registrar(mas.length===1?"Clase añadida":"Clases añadidas",id,mas.map(regCl).join(", "));if(menos.length)registrar(menos.length===1?"Clase quitada":"Clases quitadas",id,menos.map(regCl).join(", "))}}
+  if(Array.isArray(p.recibos)&&Date.now()-REG.click<4000){const k=r=>r.id||r.numero||(r.emitido+"|"+r.importe),A=new Map(b.recibos.map(r=>[k(r),r])),B=new Map(p.recibos.map(r=>[k(r),r]));
+    const ev=[];for(const [x,r] of B)if(!A.has(x))ev.push(["Recibo añadido",regRc(r)]);else{const o=A.get(x);if(o.estado!==r.estado)ev.push([r.estado==="pagado"?"Recibo cobrado":"Recibo pendiente de nuevo",regRc(r)+(r.forma&&r.estado==="pagado"?" · "+r.forma:"")])}
+    for(const [x,r] of A)if(!B.has(x))ev.push(["Recibo borrado",regRc(r)]);
+    if(ev.length>4)registrar("Recibos cambiados",id,`${ev.length} cambios: ${ev.slice(0,6).map(e=>e[0].toLowerCase()+" "+e[1]).join("; ")}…`);else for(const e of ev)registrar(e[0],id,e[1])}}
+function regEscuchar(){if(REG.sub||!S.db||S.role!=="dir"||esMos())return;
+  REG.sub=S.db.collection("registro").onSnapshot(s=>{REG.docs=s.docs.map(d=>({id:d.id,...d.data()})).sort((x,y)=>String(y.t).localeCompare(String(x.t)));REG.ok=true;REG.err="";
+      const ae=document.activeElement;if(S.view==="registro"&&!(ae&&ae.id==="reg-q"))render()},
+    e=>{REG.ok=true;REG.err="No se puede leer el registro: publica las reglas nuevas en Firebase (bloque «registro»).";if(S.view==="registro")render()})}
+const insFirmada=a=>!!(a&&(a.inscripciones||[]).length);
+function sinFirmarDir(id,a){try{return !!(a&&!a.baja&&a.altaApp&&!insFirmada(a)&&!(typeof soloCita==="function"&&soloCita(id,a)))}catch(_){return false}}
+function vSinFirmarProfe(){const l=[...S.alumnos].filter(([,a])=>a&&a.sinFirmar&&(a.clases||[]).some(c=>c.profe===S.myProfe));if(!l.length)return "";
+  return `<div class="aviso pend" style="display:block;margin-bottom:10px"><b>${l.length===1?"1 alumno tuyo no ha firmado":`${l.length} alumnos tuyos no han firmado`} la inscripción:</b> ${l.map(([id,a])=>`<a href="#" data-act="ir" data-id="${esc(id)}" style="color:inherit">${esc(titulo(a.nombre))}</a>`).join(", ")}. Recuérdales que la terminen y acepten las condiciones del servicio (recepción les manda el enlace).</div>`}
+function altaFicha(id,a){regEscuchar();const x=a.altaApp,h=REG.docs.filter(r=>r.al===id);
+  const alta=x&&x.t?`Alta en la app el ${fmtFecha(String(x.t).slice(0,10))} a las ${String(x.t).slice(11,16)}${x.por?` por ${esc(x.por)}`:""}`:(()=>{const r=h.filter(r=>r.acc==="Alta de alumno").pop();return r?`Alta en la app el ${fmtFecha(String(r.t).slice(0,10))} por ${esc(r.por)}`:"Venía de antes de la app (sin fecha de alta registrada)"})();
+  const ins=(a.inscripciones||[]).slice(-1)[0];
+  const firma=ins?` · inscripción firmada el ${fmtFecha(String(ins.fecha||"").slice(0,10))}`:sinFirmarDir(id,a)?"":"";
+  const aviso=sinFirmarDir(id,a)?`<div class="aviso pend" style="display:block;margin:6px 0"><b>Inscripción sin firmar.</b> Se dio de alta directamente en la app y no ha firmado la normativa ni las condiciones del servicio. Mándale la <b>preinscripción por enlace</b> (Alumnos → «Preinscripción por enlace») para que la complete y la firme. Su profesora también lo ve en su ficha.</div>`:"";
+  const hist=h.length?`<details style="margin:4px 0 6px"><summary class="note">Historial de cambios (${h.length})</summary><div class="fhl" style="max-height:260px;overflow:auto">${h.map(r=>`<div class="row" style="display:block;padding:4px 0"><span class="note">${fmtFecha(String(r.t).slice(0,10))} ${String(r.t).slice(11,16)} · ${esc(r.por)}</span> — <b>${esc(r.acc)}</b>${r.det?`: ${esc(r.det)}`:""}</div>`).join("")}</div></details>`:"";
+  return `<p class="note" style="margin:6px 0 0">${alta}${firma}.</p>${aviso}${hist}`}
+function vRegistro(){regEscuchar();
+  const head=`<div class="bar"><h2>Registro de cambios</h2><span class="legend">Quién y cuándo da de alta, de baja o cambia algo</span></div>`;
+  if(REG.err)return head+`<div class="aviso pend"><span>${esc(REG.err)}</span></div>`;if(!REG.ok)return head+`<p class="note">Cargando…</p>`;
+  const q=sinEsp(REG.q||""),l=REG.docs.filter(r=>!q||sinEsp([r.nom,r.acc,r.por,r.det].join(" ")).includes(q)),v=l.slice(0,400);
+  return head+`<p class="note">Se apunta solo al hacer cada cambio, desde el 28/11/2026. No se puede modificar ni borrar. Los recibos solo cuando alguien los añade, borra o cobra a mano (no al cargar los listados de Argos).</p>
+    <div class="bar" style="gap:8px"><input type="search" id="reg-q" placeholder="Buscar alumno, persona o tipo de cambio…" value="${esc(REG.q||"")}" style="flex:1 1 280px;max-width:420px"><span class="note">${l.length} cambio${l.length===1?"":"s"}${l.length>v.length?` (se ven los ${v.length} últimos)`:""}</span></div>
+    ${v.length?`<div class="tbl"><table class="ft"><thead><tr><th>Fecha</th><th>Quién</th><th>Alumno</th><th>Cambio</th><th>Detalle</th></tr></thead><tbody>${v.map(r=>`<tr><td style="white-space:nowrap">${fmtFecha(String(r.t).slice(0,10))} ${String(r.t).slice(11,16)}</td><td>${esc(r.por)}</td><td>${r.al&&S.alumnos.has(r.al)?`<a href="#" data-act="ir" data-id="${esc(r.al)}">${esc(titulo(r.nom))}</a>`:esc(titulo(r.nom||""))}</td><td><b>${esc(r.acc)}</b></td><td class="note">${esc(r.det||"")}</td></tr>`).join("")}</tbody></table></div>`:`<p class="note">${REG.q?"Nada con esa búsqueda.":"Todavía no hay cambios apuntados."}</p>`}`}
+document.addEventListener("input",e=>{if(e.target&&e.target.id==="reg-q"){REG.q=e.target.value;const p=e.target.selectionStart;render();const i=document.getElementById("reg-q");if(i){i.focus();try{i.setSelectionRange(p,p)}catch(_){}}}});
 async function save(id,patch){
   if(!S.db||S.ro){toast("No tienes permiso para editar");return false}
+  const b0=(()=>{const a=S.alumnos.get(id);return a?{nombre:a.nombre,baja:a.baja||"",clases:(a.clases||[]).slice(),recibos:(a.recibos||[]).slice(),ins:(a.inscripciones||[]).length}:null})();
   if(Array.isArray(patch.clases))patch={...patch,clases:sinRepetidas(patch.clases)};
   if(Array.isArray(patch.clases))patch=conHistorial(S.alumnos.get(id),patch);
   setStatus("Guardando…");
   try{await S.db.collection("alumnos").doc(id).update({...patch,actualizado:todayISO()});setStatus("Guardado");SESC.al=null;
     {const al=S.alumnos.get(id);if(al&&Array.isArray(patch.clases)){al.clases=patch.clases;if(patch.clasesHist)al.clasesHist=patch.clasesHist}}
-    syncAlumno(id,{...S.alumnos.get(id),...patch});return true}
+    syncAlumno(id,{...S.alumnos.get(id),...patch});try{regDiff(id,b0,patch)}catch(_){}return true}
   catch(e){setStatus("Sin guardar");if(e&&e.code==="invalid_argument"){S.canWrite=false;toast("No tienes permiso para editar")}else toast("No se ha podido guardar. Inténtalo de nuevo.");return false}
 }
 const quienSoy=()=>{try{const F=window.__fb;return (F&&F.CU&&F.CU.usuario)||(esMos()?"mostrador":S.role)}catch(_){return S.role||""}};
@@ -1161,7 +1215,7 @@ async function crearAlumno(nombre){
   for(const [id,a] of S.alumnos) if(a.nombre===nombre) return id;
   let id=slug(nombre); while(S.alumnos.has(id)) id+="-2";
   const doc={nombre,altaApp:{t:nowISO(),por:quienSoy()},clases:[],faltas:[],matriculas:[],argos:"",usuario:usuarioLibre(nombre),clave:nuevaClave(),token:nuevoToken(),recibos:[],actualizado:todayISO()};
-  try{await S.db.collection("alumnos").doc(id).set(doc);S.alumnos.set(id,doc);return id}
+  try{await S.db.collection("alumnos").doc(id).set(doc);S.alumnos.set(id,doc);registrar("Alta de alumno",id,"Ficha creada en la app",nombre);return id}
   catch(e){toast(e&&e.code==="quota_exceeded"?"La base de datos está llena":"No se ha podido crear el alumno");return null}
 }
 function usuarioLibre(nombre,salvo){
@@ -1189,18 +1243,18 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="28nov-v195";
+const APP_VER="28nov-v196";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
 document.addEventListener("toggle",e=>{const d=e.target;if(!d||d.tagName!=="DETAILS"||DET.__aplicando)return;const k=detKey(d);if(k)DET[k]=d.open},true);
 function aplicarDet(){DET.__aplicando=true;try{for(const d of document.querySelectorAll("#app details")){const k=detKey(d);if(k&&Object.prototype.hasOwnProperty.call(DET,k)&&d.open!==DET[k])d.open=DET[k]}}finally{setTimeout(()=>{DET.__aplicando=false},0)}}
-function render(){document.body.classList.toggle("wm",S.screen!=="app"||S.role==="alumno"||necesitaPriv()||!!S.verPriv);render0();if(S.screen==="app"&&S.ready&&S.role==="profe"&&!S.pv&&typeof vFichBar==="function"){const app=$("#app");if(app&&!document.getElementById("fich-bar"))app.insertAdjacentHTML("afterbegin",`<div id="fich-bar">${vFichBar()}</div>`)}if(S.screen==="app"&&S.ready&&!S.verPriv&&!necesitaPriv()){const app=$("#app");if(app)app.insertAdjacentHTML("beforeend",`<p class="note privfoot"><button class="linkbtn" data-act="verpriv">Aviso de privacidad</button> · <span title="Versión de la app que está funcionando">versión ${APP_VER}</span></p>`)};aplicarDet()}
+function render(){document.body.classList.toggle("wm",S.screen!=="app"||S.role==="alumno"||necesitaPriv()||!!S.verPriv);render0();if(S.screen==="app"&&S.ready&&S.role==="profe"&&!S.pv&&typeof vFichBar==="function"){const app=$("#app");if(app&&!document.getElementById("fich-bar"))app.insertAdjacentHTML("afterbegin",`<div id="fich-bar">${vFichBar()}</div>`)}if(S.screen==="app"&&S.ready&&S.role==="profe"&&!S.pv&&S.view==="semana"){try{const app=$("#app"),h=vSinFirmarProfe();if(app&&h&&!document.getElementById("sf-bar"))app.insertAdjacentHTML("afterbegin",`<div id="sf-bar">${h}</div>`)}catch(_){}}if(S.screen==="app"&&S.ready&&!S.verPriv&&!necesitaPriv()){const app=$("#app");if(app)app.insertAdjacentHTML("beforeend",`<p class="note privfoot"><button class="linkbtn" data-act="verpriv">Aviso de privacidad</button> · <span title="Versión de la app que está funcionando">versión ${APP_VER}</span></p>`)};aplicarDet()}
 /* 28/11/2026 (titular): el menú de dirección tenía más de 20 pestañas sueltas. Se agrupan en secciones; debajo salen solo las de la
    sección de la pestaña abierta. Al volver a una sección se abre la última pestaña que se usó en ella. Solo si hay más de 10 pestañas
    visibles (dirección); profesoras y mostrador lo ven como siempre. El número de la sección suma los de sus pestañas («Pendientes · 13»). */
 const NAV_GR=[["Clases",["semana","calendario","sesiones","asistencia","faltas","cambios","conflictos"]],["Alumnos",["alumnos","pendientes","avisos","mensajes","accal"]],
-  ["Cobros",["recibos","cobros","caja","descuadres","argos","tarifas"]],["Contabilidad",["gastos","facturacion"]],["Equipo",["fichajes","accesos","nominas","misfich"]]];
+  ["Cobros",["recibos","cobros","caja","descuadres","argos","tarifas"]],["Contabilidad",["gastos","facturacion"]],["Equipo",["fichajes","accesos","registro","nominas","misfich"]]];
 const navGrDe=v=>{const x=NAV_GR.find(([,l])=>l.includes(v));return x?x[0]:"Otros"};
 const NAVG={ult:{},obs:null,t:0};
 function menuGrupos(){const nav=document.querySelector("header nav"),g=document.getElementById("ngrp");if(!nav||!g)return;
@@ -1248,6 +1302,7 @@ function render0(){
   if(esMos()&&["argos","accesos","calendario","recibos","mensajes","tarifas","gastos","descuadres","facturacion","pendientes"].includes(S.view))S.view="semana";
   if(S.view==="recibos"){app.innerHTML=vRecibosDir();return}
   if(S.view==="tarifas"){app.innerHTML=vTarifas();return}
+  if(S.view==="registro"){if(S.role==="dir"&&!esMos()){app.innerHTML=vRegistro();return}S.view="semana"}
   if(S.view==="avisos"){if(typeof vAvisos==="function"&&((S.role==="dir"&&!esMos())||esPlus())){app.innerHTML=vAvisos();return}S.view="semana"}
   try{if(typeof avEscuchar==="function"){avEscuchar();avTab()}}catch(_){}
   if(S.view==="caja"){app.innerHTML=vCaja();return}
@@ -2973,7 +3028,7 @@ const diasDesde=f=>f?Math.floor((Date.parse(todayISO())-Date.parse(String(f).sli
 /* 22/11/2026 (titular): copia completa para guardar en un pen. Un .zip con todo lo necesario para reconstruir la app igual:
    datos (JSON de todas las colecciones), código (app/), reglas, plan de continuidad y manual técnico (config/continuidad, que
    dirección actualiza subiendo «documentacion-althea.zip»), programa de restauración y, si se marca, los PDF y fotos. */
-const COPIA_COLS=["alumnos","privado","config","publico","claves","cuentas","altas","buzon","buzonProf","buzonAl","mensajes","preins","eventos","eventosNotas","citas","plazas","caja","banco","ventas","facturas","facturasPrueba","facturasTaller","nominas","fichajes","fichPin","impuestos","asesoria","avisosProf","archivos"];
+const COPIA_COLS=["registro","alumnos","privado","config","publico","claves","cuentas","altas","buzon","buzonProf","buzonAl","mensajes","preins","eventos","eventosNotas","citas","plazas","caja","banco","ventas","facturas","facturasPrueba","facturasTaller","nominas","fichajes","fichPin","impuestos","asesoria","avisosProf","archivos"];
 const COPIA_APP=["index.html","gestion.js","fb.js","manifest.webmanifest","icono.png","icono-192.png","fachada.jpg","ayuda-alumnos.mp4","ayuda-asesoria.mp4","_headers"];
 const RESTAURAR_MJS="// Restaurar una copia completa de la app de Althea en Firebase (22/11/2026).\n// Uso:  node restaurar.mjs <clave-cuenta-servicio.json> <carpeta-de-la-copia-descomprimida> [--si]\n// Sin --si solo cuenta lo que haría (prueba). Con --si escribe de verdad.\n// Requiere: Node.js 18 o superior y, en esta carpeta, «npm install firebase-admin».\nimport fs from \"node:fs\";\nimport path from \"node:path\";\nimport admin from \"firebase-admin\";\n\nconst [, , claveArch, carpeta, si] = process.argv;\nif (!claveArch || !carpeta) { console.log(\"Uso: node restaurar.mjs clave.json carpeta-copia [--si]\"); process.exit(1); }\nconst escribir = si === \"--si\";\nadmin.initializeApp({ credential: admin.credential.cert(JSON.parse(fs.readFileSync(claveArch, \"utf8\"))) });\nconst db = admin.firestore();\n\nconst dirDatos = path.join(carpeta, \"datos\");\nconst json = fs.readdirSync(dirDatos).find(f => f.endsWith(\".json\"));\nif (!json) { console.log(\"No encuentro el .json en la carpeta datos/\"); process.exit(1); }\nconst copia = JSON.parse(fs.readFileSync(path.join(dirDatos, json), \"utf8\"));\nconsole.log(`Copia del ${copia.fecha} · ${Object.keys(copia.colecciones).length} colecciones · ${escribir ? \"ESCRIBIENDO\" : \"PRUEBA (añade --si para escribir)\"}`);\n\n// Campos de alumnos/<id> (los ven sus profesoras); el resto va a privado/<id>. Igual que CORE en fb.js.\nconst CORE = new Set([\"nombre\",\"clases\",\"clasesHist\",\"telRel\",\"pagador\",\"faltas\",\"asist\",\"token\",\"trasHechos\",\"foto\",\"telefonos\",\"bloqueado\",\"actualizado\",\"puntuales\",\"confOk\",\"extras\",\"waRec\"]);\nconst NO = new Set([\"cuentas\"]); // dependen de la cuenta de Auth: se crean solas al entrar\n\n// Fechas de Firestore guardadas en el JSON como {seconds, nanoseconds} → Timestamp\nfunction fechas(v) {\n  if (Array.isArray(v)) return v.map(fechas);\n  if (v && typeof v === \"object\") {\n    const k = Object.keys(v);\n    if (typeof v.seconds === \"number\" && typeof v.nanoseconds === \"number\" && k.every(x => [\"seconds\", \"nanoseconds\", \"type\"].includes(x)))\n      return new admin.firestore.Timestamp(v.seconds, v.nanoseconds);\n    const o = {}; for (const [a, b] of Object.entries(v)) o[a] = fechas(b); return o;\n  }\n  return v;\n}\n\nlet lote = db.batch(), enLote = 0, total = 0;\nasync function poner(ruta, datos) {\n  total++; if (!escribir) return;\n  lote.set(db.doc(ruta), fechas(datos)); enLote++;\n  if (enLote >= 400) { await lote.commit(); lote = db.batch(); enLote = 0; }\n}\n\nfor (const [col, docs] of Object.entries(copia.colecciones)) {\n  if (NO.has(col) || col === \"archivos\") continue;\n  let n = 0;\n  for (const [id, d] of Object.entries(docs)) {\n    if (col === \"alumnos\") { // la copia trae el alumno completo: solo los campos CORE van a alumnos/\n      const c = {}; for (const [k, v] of Object.entries(d)) if (CORE.has(k)) c[k] = v;\n      await poner(`alumnos/${id}`, { ...c, profes: [], _d: {} }); // profes y _d los recalcula dirección al abrir la app\n    } else await poner(`${col}/${id}`, d);\n    n++;\n  }\n  console.log(`  ${col}: ${n}`);\n}\n\n// Archivos (PDF y fotos): datos en archivos/<id>.* si la copia los lleva; si no, solo se restaura su ficha.\nconst TROZO = 700000, dirArch = path.join(carpeta, \"archivos\");\nconst sueltos = fs.existsSync(dirArch) ? fs.readdirSync(dirArch) : [];\nlet na = 0, sinDatos = 0;\nfor (const [id, meta] of Object.entries((copia.colecciones.archivos) || {})) {\n  const f = sueltos.find(x => x.startsWith(id + \".\"));\n  if (!f) { sinDatos++; continue; } // sin el archivo no se puede restaurar (la ficha sola rompería la app)\n  const url = `data:${meta.tipo || \"application/octet-stream\"};base64,` + fs.readFileSync(path.join(dirArch, f)).toString(\"base64\");\n  const n = Math.ceil(url.length / TROZO), { d: _d, ...base } = meta;\n  if (n === 1) await poner(`archivos/${id}`, { ...base, n: 1, d: url });\n  else { await poner(`archivos/${id}`, { ...base, n }); for (let i = 0; i < n; i++) await poner(`archivos/${id}/p/${i}`, { d: url.slice(i * TROZO, (i + 1) * TROZO) }); }\n  na++;\n}\nconsole.log(`  archivos: ${na} restaurados${sinDatos ? ` · ${sinDatos} sin datos en la copia (haz la copia con «Incluir PDFs y fotos»)` : \"\"}`);\n\nif (escribir && enLote) await lote.commit();\nconsole.log(`${escribir ? \"Escritos\" : \"Se escribirían\"} ${total} documentos.`);\nconsole.log(\"Después: entra en la app como dirección (recalcula qué alumnos ve cada profesora) y haz una copia nueva.\");\n";
 const RESTAURAR_LEEME="CÓMO RESTAURAR LOS DATOS DE ESTA COPIA EN FIREBASE\n==================================================\n\nEsto lo hace mejor alguien que sepa algo de ordenadores. Tiempo: unos 20 minutos.\n\n1. Instala Node.js (versión 18 o superior) desde https://nodejs.org\n\n2. Descomprime la copia (botón derecho sobre el .zip → Extraer todo).\n   Dentro verás: datos/, app/, reglas/, restaurar/, archivos/ (si la copia lleva PDFs y fotos)...\n\n3. Consigue la clave de la cuenta de servicio de Firebase:\n   Firebase (https://console.firebase.google.com) → el proyecto → engranaje\n   «Configuración del proyecto» → «Cuentas de servicio» → «Generar nueva clave privada».\n   Se descarga un .json. ¡Es como una llave maestra! No lo compartas y bórralo al acabar.\n\n4. Abre una ventana de comandos (Windows: tecla Windows, escribe «cmd») y ve a la carpeta\n   restaurar/ de la copia descomprimida. Por ejemplo:\n       cd \"C:\\Users\\...\\althea-copia-2026-11-22\\restaurar\"\n\n5. Instala lo que necesita el programa (solo la primera vez):\n       npm install firebase-admin\n\n6. Prueba primero (no escribe nada, solo cuenta):\n       node restaurar.mjs \"C:\\ruta\\clave.json\" ..\n\n7. Si los números cuadran, restaura de verdad:\n       node restaurar.mjs \"C:\\ruta\\clave.json\" .. --si\n\n8. Publica las reglas (reglas/firestore.rules) en Firebase → Firestore → Reglas, si no lo estaban.\n\n9. Entra en la app como dirección. Al abrirla, la app recalcula qué alumnos ve cada\n   profesora. Cada persona entra con su usuario y clave de siempre (la app le crea el acceso).\n\n10. Haz una copia nueva desde la app y borra el .json de la clave del paso 3.\n\nImportante: restaurar SUSTITUYE los documentos por los de la copia. Lo hecho después de la\nfecha de la copia hay que volver a meterlo a mano.\n";
@@ -3076,7 +3131,7 @@ async function bloquearAlumnos(){
   setStatus("Al día");render();toast(`${n} alumno${n===1?"":"s"} bloqueado${n===1?"":"s"}`);
 }
 async function suprimirVencidos(){
-  let n=0;for(const [id] of vencidos()){try{await S.db.collection("alumnos").doc(id).delete();S.alumnos.delete(id);syncAlumno(id,null);n++}catch(_){}}
+  let n=0;for(const [id] of vencidos()){try{const nom=(S.alumnos.get(id)||{}).nombre||"";await S.db.collection("alumnos").doc(id).delete();registrar("Ficha borrada",id,"Plazo de conservación de datos vencido",nom);S.alumnos.delete(id);syncAlumno(id,null);n++}catch(_){}}
   render();toast(`${n} ficha${n===1?"":"s"} borrada${n===1?"":"s"}`);
 }
 async function renovarClaves(){
@@ -4141,11 +4196,12 @@ function vFicha(id){
   const ft=faltas.length?`<div class="tbl"><table class="ft"><thead><tr><th>Fecha</th><th>Hora</th><th>Profesora</th><th>¿Recuperada?</th><th>Fecha recup.</th><th></th></tr></thead><tbody>${faltas.map(f=>filaFalta(id,a,f,false)+vRecProg(id,a,f)).join("")}</tbody></table></div>`:`<p class="note">No tiene faltas registradas.</p>`;
   const otras=S.role==="profe"?[...new Set(a.clases.map(c=>c.profe).filter(p=>p!==S.myProfe))]:[];
   return `<div class="detail">
-    <div class="bar" style="margin:0">${avatarAl(a,"lg")}<h3>${esc(a.nombre)}</h3>${S.role==="dir"&&!S.ro?`<button class="btn small" data-act="renombrar" data-id="${id}">Cambiar nombre</button>`:""}${S.role==="dir"&&!S.ro&&!esMos()?`<button class="btn small" data-act="juntar" data-id="${id}" title="Si este alumno está dos veces en la app, junta aquí la otra ficha">Juntar con otra ficha</button>`:""}${S.role==="dir"?`<label class="btn small" style="cursor:pointer">${fotoAl(a)?"Cambiar foto":"Subir foto"}<input type="file" accept="image/*" data-fotoficha="${id}" hidden></label>${fotoAl(a)?`<button class="btn small" data-act="quitarfoto" data-id="${id}">Quitar foto</button>`:""}`:""}<span id="delbox" class="ed">${a.baja?`<span class="badge b-no">De baja desde ${fmtFecha(a.baja)}</span>${!esMos()?` <button class="btn small" data-act="reactbaja" data-id="${id}" title="Vuelve a ser alumno: se le quita la baja">Reactivar</button>`:""}`:`<button class="btn danger small" data-act="borrar" data-id="${id}">Dar de baja</button>`}</span></div>${S.role==="dir"&&S.juntar===id?vJuntar(id,a):""}${S.role==="dir"?privFicha(id):""}${a.bloqueado?`<div class="aviso pend"><span>Datos bloqueados el ${fmtFecha(a.bloqueado.t)}. Se conservan solo el nombre y los recibos hasta el ${fmtFecha(a.bloqueado.hasta)}.</span></div>`:""}
+    <div class="bar" style="margin:0">${avatarAl(a,"lg")}<h3>${esc(a.nombre)}</h3>${S.role==="dir"&&!S.ro?`<button class="btn small" data-act="renombrar" data-id="${id}">Cambiar nombre</button>`:""}${S.role==="dir"&&!S.ro&&!esMos()?`<button class="btn small" data-act="juntar" data-id="${id}" title="Si este alumno está dos veces en la app, junta aquí la otra ficha">Juntar con otra ficha</button>`:""}${S.role==="dir"?`<label class="btn small" style="cursor:pointer">${fotoAl(a)?"Cambiar foto":"Subir foto"}<input type="file" accept="image/*" data-fotoficha="${id}" hidden></label>${fotoAl(a)?`<button class="btn small" data-act="quitarfoto" data-id="${id}">Quitar foto</button>`:""}`:""}<span id="delbox" class="ed">${a.baja?`<span class="badge b-no">De baja desde ${fmtFecha(a.baja)}</span>${!esMos()?` <button class="btn small" data-act="reactbaja" data-id="${id}" title="Vuelve a ser alumno: se le quita la baja">Reactivar</button>`:""}`:`<button class="btn danger small" data-act="borrar" data-id="${id}">Dar de baja</button>`}</span></div>${S.role==="dir"&&S.juntar===id?vJuntar(id,a):""}${S.role==="dir"?altaFicha(id,a)+privFicha(id):""}${a.bloqueado?`<div class="aviso pend"><span>Datos bloqueados el ${fmtFecha(a.bloqueado.t)}. Se conservan solo el nombre y los recibos hasta el ${fmtFecha(a.bloqueado.hasta)}.</span></div>`:""}
     ${S.role==="dir"&&esAntiguo(a)?`<div class="aviso info"><span>No tiene horario ni recibos pendientes, así que no sale en la lista de alumnos actuales. Si le pones una clase, vuelve a salir.</span></div>`:""}
     ${S.role==="dir"?(esMos()?"":vMatricula(a)+vTarifaAl(id,a)+vSueltas(id,a))+vAccesoFicha(id,a)+(esMos()?vRecibosLectura(a,id):vRecibosFicha(id,a))+vCambiosFicha(a)+(typeof vCitasFicha==="function"?vCitasFicha(id):""):esPlus()?(PLUS.m?vRecibosLectura(PLUS.m.get(id)):`<p class="note">${PLUS.err?esc(PLUS.err):"Cargando recibos…"}</p>`):""}
     ${S.role==="profe"&&recPend(a)?`<p style="margin:0">${marcaRec(a)} <span class="note">${recPend(a)===1?"Tiene 1 recibo pendiente de pago.":`Tiene ${recPend(a)} recibos pendientes de pago.`}</span></p>`:""}
     ${otras.length?`<p class="note" style="margin:0">También da clase con ${esc(otras.join(" y "))}.</p>`:""}
+    ${S.role==="profe"&&a.sinFirmar?`<div class="aviso pend" style="display:block"><b>No ha firmado la inscripción.</b> Pídele (o a su familia) que la termine y acepte las condiciones del servicio: recepción le manda el enlace.</div>`:""}
     ${S.role==="profe"&&typeof vAvisoProfFicha==="function"?vAvisoProfFicha(id,a):""}
     <div><div class="mini">${mini}</div>${a.clases.some(c=>fdrag(id,c))?`<p class="note" style="margin:6px 0 0">Para mover una clase, arrástrala a otro día o púlsala.</p>`:""}</div>${vFichaMes(id,a)}${S.role==="profe"&&cuadFlag(a)?`<p class="note" style="margin:0;color:var(--warn)">● Dirección está revisando su recibo por un cambio de horario o una hora extra. Cuando esté ajustado, volverá a su color normal.</p>`:""}${vExtrasFicha(id,a)}${S.role==="profe"||(S.role==="dir"&&!S.ro&&!S.pv)?vAP(id,a):""}
     <div class="addbox ed"><b style="font-size:13px">Añadir una clase</b>
@@ -4632,7 +4688,7 @@ document.addEventListener("click",async e=>{
   else if(act==="juntarok"&&a&&S.role==="dir"&&!esMos()){const bid=(($("#jt-sel")||{}).value)||"",b=S.alumnos.get(bid);if(!b||bid===id){toast("Elige la ficha repetida");return}
     if(!confirm(`Se pasará todo lo de «${titulo(b.nombre)}» a «${titulo(a.nombre)}» y se borrará la ficha de «${titulo(b.nombre)}». ¿Seguro?`))return;
     const r=juntarFichas(a,b);t.disabled=true;if(!await save(id,r)){t.disabled=false;return}Object.assign(a,r);
-    try{await S.db.collection("alumnos").doc(bid).delete();S.alumnos.delete(bid);syncAlumno(bid,null)}catch(_){toast("Juntado, pero no se ha podido borrar la otra ficha: bórrala a mano");}
+    try{await S.db.collection("alumnos").doc(bid).delete();S.alumnos.delete(bid);syncAlumno(bid,null);registrar("Fichas juntadas",id,`Se pasó aquí todo lo de «${titulo(b.nombre)}» y se borró esa ficha`)}catch(_){toast("Juntado, pero no se ha podido borrar la otra ficha: bórrala a mano");}
     const cfg=S.recCfg||{},alias={};for(const [k,v] of Object.entries(cfg.alias||{}))alias[k]=v===bid?id:v;alias[nzN(b.nombre)]=id;
     const nums=new Set((a.recibos||[]).map(x=>x.numero));
     await guardarRecCfg({...cfg,alias,sinAlumno:(cfg.sinAlumno||[]).filter(x=>!nums.has(x.numero))});
@@ -5343,7 +5399,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=28nov-v195"></script>
+<script src="gestion.js?v=28nov-v196"></script>
 
 
 </body></html>

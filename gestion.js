@@ -2310,7 +2310,7 @@ function rtDesglose(k,L){const ms=new Set(L.map(x=>x.mes)),l=movsTodos().filter(
     <b style="min-width:80px;text-align:right;font-variant-numeric:tabular-nums">${eur(r2(-m.importe))}</b><span style="min-width:120px;text-align:right">${(()=>{const {j,d}=docsMov(m),f=faltas(m);return [j?`<a href="#" data-blob="${esc(j.id)}">🏦</a>`:f.j?`<span class="badge b-pend">Falta just.</span>`:"",d?`<a href="#" data-blob="${esc(d.id)}">📄</a>`:f.d?`<span class="badge b-pend">Falta ${esc((DOC_TXT[docReq(m)]||"").toLowerCase().replace(/ \(.*/,""))}</span>`:""].filter(Boolean).join(" ")||`<span class="note">—</span>`})()}</span>
     <select data-gbcat="${esc(m.mes)}|${esc(m.id)}" aria-label="Categoría" style="max-width:180px;font-size:12px">${CATS.filter(([c])=>c!=="pend").map(([c,lb])=>`<option value="${c}" ${c===m.cat?"selected":""}>${esc(lb)}</option>`).join("")}</select></div>`).join("")||`<p class="note">Sin movimientos.</p>`}
     <p class="note" style="margin:4px 0 0">${l.length} movimiento${l.length===1?"":"s"}. Puedes cambiar la categoría aquí mismo.</p></div>`}
-/* ---------- Previsión de fin de mes (21/11/2026, titular; solo dirección) ----------
+/* ---------- Previsión de pagos del mes (21/11/2026, titular; solo dirección) ----------
    «Cuánto dinero debo tener al final de cada mes para afrontar los pagos»: con el historial del banco busca los gastos que se repiten
    (mismo tipo de gasto y concepto en al menos 2 de los últimos 4 meses cerrados), su día habitual y su importe (media de los últimos;
    nóminas y SS, el último). Suma los que caen entre el día PV_INI de un mes y el PV_FIN del siguiente (nóminas, Seguridad Social,
@@ -2334,9 +2334,10 @@ function prevRecurrentes(){
     out.push({k,cat:ultMov.cat,txt:ultMov.concepto,dia,imp:r2(["nominas","ssemp","ssaut","alquiler"].includes(ultMov.cat)?ult:med),n:ms.length,ult:r2(ult),per,ultMes:ms[ms.length-1],nm})}
   return out}
 /* fecha prevista de una línea en la ventana que empieza el día PV_INI del mes M */
-function prevFecha(x,M){const d=x.dia;if(d>=PV_INI){const mm=Math.min(d,diasMesPv(M));return `${M}-${String(mm).padStart(2,"0")}`}if(d<=PV_FIN){const N=mesSigPv(M);return `${N}-${String(d).padStart(2,"0")}`}return null}
+/* 28/11/2026 (titular): la previsión va por meses naturales («mes vencido»: del 1 al 30/31), no del 20 al 10 */
+function prevFecha(x,M){const d=x.dia;if(!d)return null;return `${M}-${String(Math.min(d,diasMesPv(M))).padStart(2,"0")}`}
 function vPrevision(){gbEscuchar();imEscuchar();
-  const back=`<div class="bar"><h2>Previsión de fin de mes</h2><span class="legend"><button class="btn small" data-gb="prevno">← Volver a Gastos</button></span></div>`;
+  const back=`<div class="bar"><h2>Previsión de pagos del mes</h2><span class="legend"><button class="btn small" data-gb="prevno">← Volver a Gastos</button></span></div>`;
   if(!GB.ok)return back+`<p class="note">Cargando el banco…</p>`;
   const R=prevRecurrentes(),no=new Set((GB.cfg&&GB.cfg.prevNo)||[]),hoy=todayISO(),todos=movsTodos();
   /* saldo: el último movimiento con saldo de cada cuenta */
@@ -2349,7 +2350,7 @@ function vPrevision(){gbEscuchar();imEscuchar();
   const pagado=(x,f)=>todos.some(m=>m.importe<0&&prevKey(m)===x.k&&Math.abs(difDias(m.fv,f))<=6);
   const meses=[];let M=hoy.slice(0,7);if(+hoy.slice(8,10)>PV_FIN&&+hoy.slice(8,10)<PV_INI){}for(let i=0;i<3;i++){meses.push(M);M=mesSigPv(M)}
   /* si hoy es del 1 al PV_FIN, la ventana del mes anterior aún está abierta */
-  if(+hoy.slice(8,10)<=PV_FIN)meses.unshift(mesAntPv(hoy.slice(0,7))),meses.pop();
+
   /* 21/11/2026 (titular): con las nóminas subidas, la Seguridad Social de empleadas (se carga a fin del mes siguiente) sale del listado
      de costes (SS total) o, si solo están las nóminas, se estima con el bruto y la proporción SS/bruto del último listado; y cada
      transferencia de nómina, con el líquido de su nómina */
@@ -2367,7 +2368,7 @@ function vPrevision(){gbEscuchar();imEscuchar();
       if(n)return {...x,imp:r2(+n.liq),txt:`${x.txt} · nómina de ${mesTxt(P)}`,exacto:true}}
     return x};
   const bloques=meses.map(M=>{
-    const ini=`${M}-${PV_INI}`,fin=`${mesSigPv(M)}-${String(PV_FIN).padStart(2,"0")}`;
+    const ini=`${M}-01`,fin=`${M}-${String(diasMesPv(M)).padStart(2,"0")}`;
     const tocaPv=(x,f)=>{if(!x.per||x.per<=1)return true;const d=x.nm(f.slice(0,7))-x.nm(x.ultMes);return d>0&&d%x.per===0};
     const lin=R.map(x=>({...x,f:prevFecha(x,M)})).filter(x=>x.f&&x.f>=ini&&x.f<=fin&&tocaPv(x,x.f)).sort((a,b)=>a.f.localeCompare(b.f));
     /* 21/11/2026 (titular): impuestos trimestrales (303, 130, 111, 115…), que se cargan hasta el día 20 de enero, abril, julio y octubre:
@@ -2375,7 +2376,7 @@ function vPrevision(){gbEscuchar();imEscuchar();
     /* 22/11/2026 (titular): cada impuesto cuenta en el bloque en que se carga de verdad (el del 20/01 va en «fin de enero», no en diciembre).
        Los que ponga la asesoría entre el día 11 y el 19 (fuera de las ventanas) van al bloque de ese mes. */
     const N=M,esTri=["01","04","07","10"].includes(N.slice(5,7));
-    const imp=(IM.docs||[]).filter(x=>+x.importe>0&&x.fecha&&x.fecha>=`${M}-${String(PV_FIN+1).padStart(2,"0")}`&&x.fecha<=fin&&!/centro|presencial|nrc/i.test(String(x.quien||""))&&!(typeof imCargo==="function"&&imCargo(x))).map(x=>({k:"imp|"+x.id,cat:"impuestos",txt:`Modelo ${x.modelo} (importe de la asesoría)`,f:x.fecha,imp:+x.importe,imp0:true}));
+    const imp=(IM.docs||[]).filter(x=>+x.importe>0&&x.fecha&&x.fecha>=ini&&x.fecha<=fin&&!/centro|presencial|nrc/i.test(String(x.quien||""))&&!(typeof imCargo==="function"&&imCargo(x))).map(x=>({k:"imp|"+x.id,cat:"impuestos",txt:`Modelo ${x.modelo} (importe de la asesoría)`,f:x.fecha,imp:+x.importe,imp0:true}));
     if(esTri&&!imp.length){let q=N;for(let i=0;i<4;i++){q=mesAntPv(mesAntPv(mesAntPv(q)));const l=todos.filter(m=>m.importe<0&&String(m.fv).slice(0,7)===q&&+String(m.fv).slice(8,10)<=25&&(m.cat==="impuestos"||/AEAT|AGENCIA TRIB|HACIENDA|IMPUESTO/i.test(m.concepto||""))&&!/TGSS/i.test(m.concepto||""));
         if(l.length){for(const m of l)imp.push({k:"impest|"+prevKey(m),cat:"impuestos",txt:`${m.concepto} · estimado: lo cargado en ${mesTxt(q)}`,f:`${N}-20`,imp:r2(-m.importe),est:true});break}}
       if(!imp.length)imp.push({k:"impest|nada",cat:"impuestos",txt:`Impuestos del trimestre (303, 130, 111, 115…): sin datos todavía. Pide el importe a la asesoría.`,f:`${N}-20`,imp:0,est:true})}
@@ -2398,13 +2399,13 @@ function vPrevision(){gbEscuchar();imEscuchar();
   const est=(d,v,txt)=>`<div class="stat"><b style="color:${d<0?"var(--bad)":"var(--ok)"}">${d<0?"Faltan ":"Sobran "}${eur(Math.abs(r2(d)))}</b><span>${txt}</span></div>`;
   const caja=`<div class="stats" style="margin:8px 0 14px"><div class="stat"><b>${eur(saldoTot)}</b><span>Saldo hoy en el banco (${Object.values(ult).map(x=>"…"+esc(String(x.cuenta).slice(-4))+" a "+fmtFecha(x.fo||x.fv)).join(" · ")})</span></div>
     ${dTop&&dTop[0]<actual.fin?est(saldoTot-hastaTop,0,`<u>Para el ${fmtFecha(dTop[0])}</u>: hay que pagar ${eur(hastaTop)} hasta ese día`):""}
-    ${est(saldoTot-actual.pend,0,`<u>Hasta el ${fmtFecha(actual.fin)}</u>: hay que pagar ${eur(actual.pend)} en total (incluye lo del ${dTop?fmtFecha(dTop[0]):"día 30"} y lo de primeros de mes)`)}</div>
+    ${est(saldoTot-actual.pend,0,`<u>Hasta el ${fmtFecha(actual.fin)}</u>: queda por pagar ${eur(actual.pend)} este mes`)}</div>
     <p class="note" style="margin:-6px 0 12px">Sin contar lo que se cobre mientras. La columna «Acumulado» dice cuánto hace falta hasta cada pago.</p>`;
-  const tabla=b=>`<div class="panel" style="margin-bottom:12px"><div class="bar" style="margin-bottom:6px"><b style="font-size:16px">Fin de ${esc(mesTxt(b.M))}</b><span class="note">del ${fmtFecha(b.ini)} al ${fmtFecha(b.fin)}</span><span style="margin-left:auto;font-weight:700">Hay que tener: ${eur(b.total)}</span></div>
+  const tabla=b=>`<div class="panel" style="margin-bottom:12px"><div class="bar" style="margin-bottom:6px"><b style="font-size:16px">Pagos de ${esc(mesTxt(b.M))}</b><span class="note">del ${fmtFecha(b.ini)} al ${fmtFecha(b.fin)}</span><span style="margin-left:auto;font-weight:700">Hay que tener: ${eur(b.total)}</span></div>
     ${b.filas.length?`<table class="pvt"><thead><tr><th>Día previsto</th><th>Pago</th><th>Tipo</th><th class="r">Importe</th><th class="r" title="Suma de lo que falta por pagar hasta ese pago">Acumulado</th><th></th></tr></thead><tbody>${b.filas.map(x=>`<tr style="${x.fuera?"opacity:.45;text-decoration:line-through":""}"><td>${fmtFecha(x.f)}</td><td>${esc(x.txt)}${x.n?` <span class="note">· ${x.per>1?`cada ${x.per} meses`:`${x.n} de los últimos meses`}</span>`:""}${x.est?` <span class="badge b-pend">estimado</span>`:""}${x.exacto?` <span class="badge b-si">real</span>`:""}</td><td class="note">${esc(catTxt(x.cat))}</td><td class="r">${eur(x.imp)}${x.hecho?` <span class="badge b-si">pagado</span>`:""}</td><td class="r note">${x.fuera||x.hecho?"":eur(x.acum)}</td><td>${x.imp0||x.k==="impest|nada"?"":`<label class="chk" style="margin:0" title="Quitar de la previsión"><input type="checkbox" data-gbprev="${esc(x.k)}" ${x.fuera?"":"checked"}><span>contar</span></label>`}</td></tr>`).join("")}</tbody></table>`:`<p class="note">No hay pagos que se repitan en esas fechas.</p>`}
     ${b.pend!==b.total?`<p class="note" style="margin:6px 0 0">Ya pagado: ${eur(r2(b.total-b.pend))} · falta: <b>${eur(b.pend)}</b></p>`:""}</div>`;
   const css=`<style>.pvt{width:100%;border-collapse:collapse;font-size:14px}.pvt th{font:600 11px Inter,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}.pvt td{padding:7px 8px;border-bottom:1px solid var(--line)}.pvt .r{text-align:right;white-space:nowrap}</style>`;
-  return `${css}<div class="rt">${back}<p class="note">Pagos que se repiten en los últimos meses (nóminas, Seguridad Social, alquiler, seguros, recibos…) y que caen <b>entre el día ${PV_INI} y el ${PV_FIN} del mes siguiente</b>. Los impuestos del trimestre (cargo hasta el 20 de enero, abril, julio y octubre; el 130 y el 303, hasta el 30) salen en el bloque en que se cargan, el de fin de enero, abril, julio y octubre: el importe de la asesoría si ya lo ha puesto o, si no, una <b>estimación</b> con lo cargado el trimestre anterior; el <b>130</b> (tu pago fraccionado del IRPF), si la asesoría no lo ha puesto, se estima con el 20 % del resultado del trimestre según el banco. Importes: el último (nóminas, SS, alquiler) o la media de los 3 últimos meses. Desmarca «contar» en los que no tocan. Los cobros que entren esos días no se restan.</p>
+  return `${css}<div class="rt">${back}<p class="note">Pagos que se repiten en los últimos meses (nóminas, Seguridad Social, alquiler, seguros, recibos…) agrupados <b>por mes natural, del día 1 al último</b>. Los impuestos del trimestre (cargo hasta el 20 de enero, abril, julio y octubre; el 130 y el 303, hasta el 30) salen en el mes en que se cargan: el importe de la asesoría si ya lo ha puesto o, si no, una <b>estimación</b> con lo cargado el trimestre anterior; el <b>130</b> (tu pago fraccionado del IRPF), si la asesoría no lo ha puesto, se estima con el 20 % del resultado del trimestre según el banco. Importes: el último (nóminas, SS, alquiler) o la media de los 3 últimos meses. Desmarca «contar» en los que no tocan. Los cobros que entren esos días no se restan.</p>
     ${caja}${bloques.map(tabla).join("")}</div>`}
 document.addEventListener("change",async e=>{const t=e.target;if(!t||!t.dataset||t.dataset.gbprev==null||!gbVer())return;const k=t.dataset.gbprev,l=new Set((GB.cfg&&GB.cfg.prevNo)||[]);if(t.checked)l.delete(k);else l.add(k);
   const cfg={...(GB.cfg||{}),prevNo:[...l]};try{await S.db.doc("config/banco").set(cfg);GB.cfg=cfg;render()}catch(_){toast("No se ha podido guardar")}});

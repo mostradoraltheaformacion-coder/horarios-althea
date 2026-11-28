@@ -695,7 +695,7 @@ const CATS=[["tpv","Cobros con tarjeta (TPV)","i"],["bizum","Cobros por Bizum","
   ["nominas","Nóminas","g"],["ssaut","Seguridad Social autónomo","g"],["ssemp","Seguridad Social empleadas","g"],["comis","Comisiones bancarias","g"],
   ["sumin","Suministros (luz, gas, agua)","g"],["telef","Teléfono e internet","g"],["matofi","Material de oficina","g"],["matdid","Material didáctico","g"],
   ["asesoria","Asesoría","g"],["seguros","Seguros","g"],["cuotas","Cuotas profesionales","g"],["alquiler","Alquiler y renting","g"],["impuestos","Impuestos y tasas","g"],
-  ["software","Programas y suscripciones","g"],["manten","Mantenimiento y limpieza","g"],["formacion","Formación","g"],["otrosg","Otros gastos","g"],
+  ["software","Programas y suscripciones","g"],["manten","Mantenimiento y limpieza","g"],["formacion","Formación","g"],["activ","Actividades y salidas con alumnos","g"],["otrosg","Otros gastos","g"],
   ["deposito","Depósito de caja en banco","x"],["cambio","Cambio en monedas y movimientos internos de caja","x"],["nodeduc","No deducible (no entra en resultados)","x"],["traspaso","Traspaso entre cuentas","x"],["noact","No es de la actividad","x"],["pend","Pendiente de clasificar","p"]];
 const CAT=Object.fromEntries(CATS.map(([k,l,t])=>[k,{l,t}]));
 const catTxt=k=>(CAT[k]||CAT.pend).l,catTipo=k=>(CAT[k]||CAT.pend).t;
@@ -738,7 +738,7 @@ function leerExtracto(filas){
    del banco siempre, aunque la asesoría aceptara el extracto). Antes de esta versión había un solo hueco (just): si se adjuntó
    a mano (sin jf, es decir, no vino de la subida en bloque) en una categoría que pide factura, se toma como la factura. */
 const DOC_REQ={nominas:"nomina",ssemp:"tc",asesoria:"factura",sumin:"factura",telef:"factura",matofi:"factura",matdid:"factura",
-  cuotas:"factura",alquiler:"factura",software:"factura",manten:"factura",formacion:"factura",otrosg:"factura"};
+  cuotas:"factura",alquiler:"factura",software:"factura",manten:"factura",formacion:"factura",activ:"factura",otrosg:"factura"};
 const DOC_TXT={factura:"Factura",nomina:"Nómina",tc:"TC1 (Seg. Social)",poliza:"Recibo o póliza",modelo:"Modelo",otro:"Documento"};
 /* Los seguros no emiten factura (07/11/2026): basta el justificante; se puede adjuntar la póliza o el recibo del seguro.
    Lo que pide cada categoría se puede cambiar en Gastos («Qué documento pide cada categoría»): config/banco.docReq = {cat: tipo | ""}. */
@@ -1117,7 +1117,7 @@ document.addEventListener("input",e=>{const t=e.target;if(t&&t.id==="gb-enlq"&&g
   if(t&&t.id==="gb-q"&&gbVer()){GB.q=t.value;clearTimeout(GB.qt);GB.qt=setTimeout(()=>{render();const i=$("#gb-q");if(i){i.focus();i.setSelectionRange(i.value.length,i.value.length)}},250)}});
 document.addEventListener("click",async e=>{const t=e.target.closest&&e.target.closest("[data-gb]");if(!t||!gbVer())return;e.preventDefault();const act=t.dataset.gb;
   if(act==="impno"){GB.imp=null;render()}else if(act==="justno"){GB.just=null;render()}else if(act==="impok"){t.disabled=true;await gbGuardarImp()}
-  else if(act==="vercat"){GB.cat=t.dataset.v;render()}
+  else if(act==="vercat"){GB.cat=t.dataset.v;render();setTimeout(()=>{const x=document.getElementById("gb-cat");if(x)x.scrollIntoView({behavior:"smooth",block:"start"})},50)}
   else if(act==="quitarjust"){const [mes,id,slot]=t.dataset.k.split("|"),d=GB.docs.find(x=>x.id===mes),m=d&&d.movs[id];if(!m)return;const D=docsMov(m);
     if(slot==="d"){if(!D.d)return;if(!confirm(`¿Quitar la ${(DOC_TXT[D.d.tipo]||"factura").toLowerCase()} de este movimiento? Luego puedes volver a subirla.`))return;
       try{if(D.dEn==="just"){await S.db.doc("banco/"+mes).update({["movs."+id+".just"]:null});m.just=null}
@@ -1872,7 +1872,7 @@ function informeCuerpo(D,mes){
   const T=(cab,rows)=>`<table class="ft inf" style="min-width:0;width:100%"><thead><tr>${cab.map((c,i)=>`<th${i?' style="text-align:right"':""}>${c}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>`;
   return `<div id="informe" class="panel" style="padding:18px 20px">
     <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap"><h2 style="margin:0">Althea Formación · ${esc(periodoTxt(mes))}</h2><span class="note">Informe de gestión · generado el ${fmtFecha(D.gen||todayISO())}${D.prueba?" · <b>datos de prueba</b>":""}</span></div>
-    ${D.pendClas||D.sinJust?`<p class="note" style="color:var(--warn)">${D.pendClas?`${D.pendClas} movimientos del banco sin clasificar. `:""}${D.sinJust?`A ${D.sinJust} movimientos les falta el justificante del banco o la factura.`:""}</p>`:""}
+    ${D.pendClas||D.sinJust?`<p class="note" style="color:var(--warn)">${D.pendClas?`<a href="#" data-gb="vercat" data-v="pend" style="color:inherit" title="Ver cuáles">${D.pendClas} movimiento${D.pendClas===1?"":"s"} del banco sin clasificar</a>. `:""}${D.sinJust?`<a href="#" data-gb="vercat" data-v="sinjust" style="color:inherit" title="Ver cuáles">A ${D.sinJust} movimientos les falta el justificante del banco o la factura.</a>`:""}</p>`:""}
     <div class="stats" style="margin-top:10px"><div class="stat"><b>${eur(D.ase?D.totIng:D.IA.cobrado)}</b><span>${D.ase?"Ingresos (banco)":"Cobrado a alumnos (todas las formas)"}</span></div><div class="stat"><b>${eur(D.totGas)}</b><span>Gastos</span></div>
       <div class="stat"><b style="color:var(${D.res>=0?"--ok":"--bad"})">${eurS(D.res)}</b><span>Resultado de la actividad</span></div>${D.ase?"":`<div class="stat"><b>${eur(D.pendT)}</b><span>Pendiente de cobro (${D.pendL.length} alumnos)</span></div>`}</div>
     <div class="split" style="grid-template-columns:repeat(auto-fit,minmax(280px,1fr));align-items:start;gap:14px">

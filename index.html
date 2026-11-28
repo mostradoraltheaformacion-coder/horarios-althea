@@ -55,6 +55,7 @@ nav button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-
 .ngrp .nb{background:var(--accent-soft);color:var(--accent);border-radius:999px;font-size:11px;padding:1px 7px;font-weight:700}
 .ngrp button[aria-selected="true"] .nb{background:var(--accent-ink);color:var(--accent)}
 nav button.gx{display:none!important}
+nav.gxn{display:none!important}
 @media (max-width:760px){.ngrp{flex-wrap:nowrap;overflow-x:auto;max-width:100%;scrollbar-width:none}.ngrp button{flex:none;padding:7px 12px}}
 body:not(.dir) .dironly{display:none!important}
 body.plus #t-desc,body.plus #t-avisos{display:inline-block!important}
@@ -397,7 +398,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=28nov-v204"></script>
+<script type="module" src="fb.js?v=28nov-v205"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -1243,7 +1244,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="28nov-v204";
+const APP_VER="28nov-v205";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -1253,13 +1254,13 @@ function render(){document.body.classList.toggle("wm",S.screen!=="app"||S.role==
 /* 28/11/2026 (titular): el menú de dirección tenía más de 20 pestañas sueltas. Se agrupan en secciones; debajo salen solo las de la
    sección de la pestaña abierta. Al volver a una sección se abre la última pestaña que se usó en ella. Solo si hay más de 10 pestañas
    visibles (dirección); profesoras y mostrador lo ven como siempre. El número de la sección suma los de sus pestañas («Pendientes · 13»). */
-const NAV_GR=[["Clases",["semana","calendario","sesiones","asistencia","faltas","cambios","conflictos"]],["Alumnos",["alumnos","pendientes","avisos","mensajes","accal"]],
+const NAV_GR=[["Pendientes",["pendientes"]],["Clases",["semana","calendario","sesiones","asistencia","faltas","cambios","conflictos"]],["Alumnos",["alumnos","avisos","mensajes","accal"]],
   ["Cobros",["recibos","cobros","caja","descuadres","argos","tarifas"]],["Contabilidad",["gastos","facturacion"]],["Equipo",["fichajes","accesos","registro","nominas","misfich"]]];
 const navGrDe=v=>{const x=NAV_GR.find(([,l])=>l.includes(v));return x?x[0]:"Otros"};
 const NAVG={ult:{},obs:null,t:0};
 function menuGrupos(){const nav=document.querySelector("header nav"),g=document.getElementById("ngrp");if(!nav||!g)return;
   if(!NAVG.obs&&window.MutationObserver){NAVG.obs=new MutationObserver(()=>{clearTimeout(NAVG.t);NAVG.t=setTimeout(menuGrupos,60)});NAVG.obs.observe(nav,{childList:true,characterData:true,subtree:true})}
-  const bs=[...nav.querySelectorAll("button[data-v]")];bs.forEach(b=>b.classList.remove("gx"));
+  nav.classList.remove("gxn");const bs=[...nav.querySelectorAll("button[data-v]")];bs.forEach(b=>b.classList.remove("gx"));
   const vis=bs.filter(b=>getComputedStyle(b).display!=="none");
   if(S.screen!=="app"||vis.length<=10){if(!g.hidden){g.hidden=true;g.innerHTML=""}return}
   let act=navGrDe(S.view);const grupos=[...NAV_GR.map(x=>x[0]),"Otros"].filter(n=>vis.some(b=>navGrDe(b.dataset.v)===n));
@@ -1269,9 +1270,11 @@ function menuGrupos(){const nav=document.querySelector("header nav"),g=document.
   const h=grupos.map(n=>{const c=vis.filter(b=>navGrDe(b.dataset.v)===n).reduce((s,b)=>s+num(b),0);
     return `<button type="button" role="tab" data-ngrp="${n}" aria-selected="${n===act}">${n}${c?`<span class="nb">${c}</span>`:""}</button>`}).join("");
   if(g.innerHTML!==h)g.innerHTML=h;g.hidden=false;
-  for(const b of vis)b.classList.toggle("gx",navGrDe(b.dataset.v)!==act)}
+  /* 28/11/2026: «Pendientes» va como sección propia, la primera; si una sección tiene una sola pestaña, no se repite debajo */
+  const solo=vis.filter(b=>navGrDe(b.dataset.v)===act).length===1;
+  for(const b of vis)b.classList.toggle("gx",solo||navGrDe(b.dataset.v)!==act);nav.classList.toggle("gxn",solo)}
 document.addEventListener("click",e=>{const t=e.target.closest&&e.target.closest("[data-ngrp]");if(!t)return;
-  const n=t.dataset.ngrp,nav=document.querySelector("header nav");if(!nav)return;
+  const n=t.dataset.ngrp,nav=document.querySelector("header nav");if(!nav)return;nav.classList.remove("gxn");
   const vis=[...nav.querySelectorAll("button[data-v]")].filter(b=>{b.classList.remove("gx");return getComputedStyle(b).display!=="none"}).filter(b=>navGrDe(b.dataset.v)===n);
   if(!vis.length)return;const v=vis.some(b=>b.dataset.v===NAVG.ult[n])?NAVG.ult[n]:vis[0].dataset.v;
   if(v===S.view){menuGrupos();return}S.view=v;render();scrollTo(0,0)});
@@ -5399,7 +5402,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=28nov-v204"></script>
+<script src="gestion.js?v=28nov-v205"></script>
 
 
 </body></html>

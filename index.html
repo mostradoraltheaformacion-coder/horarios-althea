@@ -45,6 +45,17 @@ body.home .brand img+.bt b{display:block}
 nav{display:flex;gap:4px;background:var(--sunk);padding:4px;border-radius:999px;flex-wrap:wrap}
 nav button{border:0;background:transparent;color:var(--muted);font:600 14px var(--body);padding:7px 16px;border-radius:999px;cursor:pointer}
 nav button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+/* 28/11/2026: menú por secciones (dirección): fila de secciones y, debajo, solo las pestañas de la sección elegida */
+.navw{display:flex;flex-direction:column;gap:6px;align-items:flex-start;min-width:0;max-width:100%}
+.ngrp{display:flex;gap:6px;flex-wrap:wrap}
+.ngrp[hidden]{display:none}
+.ngrp button{border:1px solid var(--line);background:var(--surface);color:var(--ink);font:700 14px var(--body);padding:7px 16px;border-radius:999px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.ngrp button:hover{border-color:var(--accent)}
+.ngrp button[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.ngrp .nb{background:var(--accent-soft);color:var(--accent);border-radius:999px;font-size:11px;padding:1px 7px;font-weight:700}
+.ngrp button[aria-selected="true"] .nb{background:var(--accent-ink);color:var(--accent)}
+nav button.gx{display:none!important}
+@media (max-width:760px){.ngrp{flex-wrap:nowrap;overflow-x:auto;max-width:100%;scrollbar-width:none}.ngrp button{flex:none;padding:7px 12px}}
 body:not(.dir) .dironly{display:none!important}
 body.plus #t-desc,body.plus #t-avisos{display:inline-block!important}
 body.mos #t-avisos{display:none!important}
@@ -348,6 +359,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </style>
 <header><div class="wrap hrow">
   <div class="brand"><img id="hlogo" alt="Althea Formación" hidden><div class="bt"><b>Althea Formación</b><span id="sub">Horarios · Chiclana</span></div></div>
+  <div class="navw"><div class="ngrp" id="ngrp" role="tablist" aria-label="Secciones" hidden></div>
   <nav role="tablist">
     <button role="tab" id="t-semana" data-v="semana" aria-selected="true">Semana</button>
     <button role="tab" id="t-pend" class="dironly" data-v="pendientes" aria-selected="false">Pendientes</button>
@@ -373,7 +385,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
     <button role="tab" id="t-argos" class="dironly" data-v="argos" aria-selected="false">Cuadre Argos</button>
     <button role="tab" id="t-calendario" class="dironly" data-v="calendario" aria-selected="false">Calendario</button>
     <button role="tab" id="t-accesos" class="dironly" data-v="accesos" aria-selected="false">Accesos</button>
-  </nav>
+  </nav></div>
   <div class="status" id="status">Conectando…</div>
   <button class="btn" id="b-inicio" data-act="inicio">Cambiar perfil</button>
 </div></header>
@@ -384,7 +396,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=28nov-v187"></script>
+<script type="module" src="fb.js?v=28nov-v188"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -1177,13 +1189,38 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="28nov-v187";
+const APP_VER="28nov-v188";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
 document.addEventListener("toggle",e=>{const d=e.target;if(!d||d.tagName!=="DETAILS"||DET.__aplicando)return;const k=detKey(d);if(k)DET[k]=d.open},true);
 function aplicarDet(){DET.__aplicando=true;try{for(const d of document.querySelectorAll("#app details")){const k=detKey(d);if(k&&Object.prototype.hasOwnProperty.call(DET,k)&&d.open!==DET[k])d.open=DET[k]}}finally{setTimeout(()=>{DET.__aplicando=false},0)}}
 function render(){document.body.classList.toggle("wm",S.screen!=="app"||S.role==="alumno"||necesitaPriv()||!!S.verPriv);render0();if(S.screen==="app"&&S.ready&&S.role==="profe"&&!S.pv&&typeof vFichBar==="function"){const app=$("#app");if(app&&!document.getElementById("fich-bar"))app.insertAdjacentHTML("afterbegin",`<div id="fich-bar">${vFichBar()}</div>`)}if(S.screen==="app"&&S.ready&&!S.verPriv&&!necesitaPriv()){const app=$("#app");if(app)app.insertAdjacentHTML("beforeend",`<p class="note privfoot"><button class="linkbtn" data-act="verpriv">Aviso de privacidad</button> · <span title="Versión de la app que está funcionando">versión ${APP_VER}</span></p>`)};aplicarDet()}
+/* 28/11/2026 (titular): el menú de dirección tenía más de 20 pestañas sueltas. Se agrupan en secciones; debajo salen solo las de la
+   sección de la pestaña abierta. Al volver a una sección se abre la última pestaña que se usó en ella. Solo si hay más de 10 pestañas
+   visibles (dirección); profesoras y mostrador lo ven como siempre. El número de la sección suma los de sus pestañas («Pendientes · 13»). */
+const NAV_GR=[["Clases",["semana","calendario","sesiones","asistencia","faltas","cambios","conflictos"]],["Alumnos",["alumnos","pendientes","avisos","mensajes","accal"]],
+  ["Cobros",["recibos","cobros","caja","descuadres","argos","tarifas"]],["Contabilidad",["gastos","facturacion"]],["Equipo",["fichajes","accesos","nominas","misfich"]]];
+const navGrDe=v=>{const x=NAV_GR.find(([,l])=>l.includes(v));return x?x[0]:"Otros"};
+const NAVG={ult:{},obs:null,t:0};
+function menuGrupos(){const nav=document.querySelector("header nav"),g=document.getElementById("ngrp");if(!nav||!g)return;
+  if(!NAVG.obs&&window.MutationObserver){NAVG.obs=new MutationObserver(()=>{clearTimeout(NAVG.t);NAVG.t=setTimeout(menuGrupos,60)});NAVG.obs.observe(nav,{childList:true,characterData:true,subtree:true})}
+  const bs=[...nav.querySelectorAll("button[data-v]")];bs.forEach(b=>b.classList.remove("gx"));
+  const vis=bs.filter(b=>getComputedStyle(b).display!=="none");
+  if(S.screen!=="app"||vis.length<=10){if(!g.hidden){g.hidden=true;g.innerHTML=""}return}
+  let act=navGrDe(S.view);const grupos=[...NAV_GR.map(x=>x[0]),"Otros"].filter(n=>vis.some(b=>navGrDe(b.dataset.v)===n));
+  if(!grupos.includes(act))act=grupos[0];
+  if(vis.some(b=>b.dataset.v===S.view))NAVG.ult[act]=S.view;
+  const num=b=>{const m=String(b.textContent).match(/·\s*(\d+)/);return m?+m[1]:0};
+  const h=grupos.map(n=>{const c=vis.filter(b=>navGrDe(b.dataset.v)===n).reduce((s,b)=>s+num(b),0);
+    return `<button type="button" role="tab" data-ngrp="${n}" aria-selected="${n===act}">${n}${c?`<span class="nb">${c}</span>`:""}</button>`}).join("");
+  if(g.innerHTML!==h)g.innerHTML=h;g.hidden=false;
+  for(const b of vis)b.classList.toggle("gx",navGrDe(b.dataset.v)!==act)}
+document.addEventListener("click",e=>{const t=e.target.closest&&e.target.closest("[data-ngrp]");if(!t)return;
+  const n=t.dataset.ngrp,nav=document.querySelector("header nav");if(!nav)return;
+  const vis=[...nav.querySelectorAll("button[data-v]")].filter(b=>{b.classList.remove("gx");return getComputedStyle(b).display!=="none"}).filter(b=>navGrDe(b.dataset.v)===n);
+  if(!vis.length)return;const v=vis.some(b=>b.dataset.v===NAVG.ult[n])?NAVG.ult[n]:vis[0].dataset.v;
+  if(v===S.view){menuGrupos();return}S.view=v;render();scrollTo(0,0)});
 function render0(){
   document.body.classList.toggle("home",S.screen!=="app");
   const app=$("#app");
@@ -1195,6 +1232,7 @@ function render0(){
   if(S.screen==="login"){app.innerHTML=vLogin();const i=$("#lg-u");if(i&&!i.value)i.focus();return}
   document.querySelectorAll("nav button").forEach(b=>b.setAttribute("aria-selected",b.dataset.v===S.view));
   marcaMensajesNav();
+  try{menuGrupos()}catch(_){}
   if(!S.ready){app.innerHTML=`<div class="empty">Cargando…</div>`;return}
   if(necesitaPriv()){app.innerHTML=vPrivacidad(false);return}
   if(S.role==="dir"&&S.kiosko&&!S.pv){app.innerHTML=vInscripcion();if(S.ins&&S.ins.paso===3)prepararFirma();return}
@@ -5305,7 +5343,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=28nov-v187"></script>
+<script src="gestion.js?v=28nov-v188"></script>
 
 
 </body></html>

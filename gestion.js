@@ -2386,7 +2386,15 @@ function vPrevision(){gbEscuchar();imEscuchar();
       if(esTri&&!imp.some(x=>/\b130\b|ACTIVIDADES ECON/i.test(x.txt))){try{const Q=[mesAntPv(mesAntPv(mesAntPv(M))),mesAntPv(mesAntPv(M)),mesAntPv(M)],D=datosRent().filter(x=>Q.includes(x.mes));
         if(D.length){const r=D.reduce((t,x)=>t+(x.ingBanco-x.gas),0)/D.length*3,e=r2(Math.max(0,0.2*r));
           imp.push({k:"impest|130",cat:"impuestos",txt:`Modelo 130 (pago fraccionado de tu IRPF) · aprox.: 20 % del resultado de ${Q.map(m=>mesTxt(m).split(" ")[0]).join(", ")} según el banco (${eur(r2(r))}${D.length<3?`; ${3-D.length} mes${D.length===2?"":"es"} sin cerrar, con la media`:""})${e?"":" → sale a 0"}. El importe real lo da la asesoría`,f:`${M}-30`,imp:e,est:true})}}catch(_){}}
-      {const k=imp.findIndex(x=>x.k==="impest|nada");if(k>=0&&imp.some(x=>x.k==="impest|130"))imp.splice(k,1)}
+      /* 28/11/2026 (titular): IVA de las facturas de talleres. La enseñanza va exenta y no se compensa IVA soportado: el IVA repercutido
+         en las facturas de talleres del trimestre se ingresa entero en el 303 (4.º trimestre: hasta el 30 de enero; los demás, hasta el 20).
+         Cuentan las emitidas y también los borradores con IVA (marcados como previstos). Si la asesoría ya ha puesto el 303, manda el suyo. */
+      if(esTri&&!imp.some(x=>/\b303\b/.test(x.txt))){try{if(typeof faEscuchar==="function")faEscuchar();
+        const Q=[mesAntPv(mesAntPv(mesAntPv(M))),mesAntPv(mesAntPv(M)),mesAntPv(M)],fs=(typeof FA!=="undefined"?FA.docs:[]).filter(f=>f.estado!=="anulada"&&Q.includes(String(f.fecha||"").slice(0,7))&&+f.iva>0);
+        const cuota=f=>+f.cuotaIva||((typeof faTotales==="function")?faTotales(f).cuotaIva:0),em=fs.filter(f=>f.estado==="emitida"),bo=fs.filter(f=>f.estado==="borrador");
+        const tot=r2(fs.reduce((s,f)=>s+cuota(f),0));
+        if(tot>0)imp.push({k:"iva303",cat:"impuestos",txt:`Modelo 303 · IVA de las facturas de talleres de ${Q.map(m=>mesTxt(m).split(" ")[0]).join(", ")}: ${em.length} emitida${em.length===1?"":"s"}${bo.length?` y ${bo.length} borrador${bo.length===1?"":"es"}`:""}. Se ingresa entero (actividad exenta, sin compensar IVA)`,f:`${M}-${M.slice(5,7)==="01"?"30":"20"}`,imp:tot,est:bo.length>0,exacto:!bo.length})}catch(_){}}
+      {const k=imp.findIndex(x=>x.k==="impest|nada");if(k>=0&&imp.some(x=>x.k==="impest|130"||x.k==="iva303"))imp.splice(k,1)}
     const filas=[...lin.map(ajNom),...imp].sort((a,b)=>a.f.localeCompare(b.f)).map(x=>({...x,hecho:!x.imp0&&pagado(x,x.f),fuera:no.has(x.k)}));/* 27/11/2026: también si se cargó antes del día previsto (la cuota del 28/11 se cargó el 26/11 y se contaba dos veces: en el saldo y como pendiente) */
     const pend=r2(filas.filter(x=>!x.fuera&&!x.hecho).reduce((s,x)=>s+x.imp,0)),total=r2(filas.filter(x=>!x.fuera).reduce((s,x)=>s+x.imp,0));
     return {M,ini,fin,filas,pend,total}});

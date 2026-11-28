@@ -822,7 +822,7 @@ function cobradoMes(mes){const o={tarjeta:0,bizum:0,transferencia:0,efectivo:0,b
    cobros de alumnos. Lo que entra en el banco por TPV, Bizum, transferencia o cajero NO se suma: es el mismo dinero (sirve para cuadrar). */
 /* Sin listado de Argos en ese mes (meses antiguos del extracto): lo cobrado se toma de lo que entró en el banco (07/11/2026),
    para que el resultado no salga como si no hubiera ingresos. */
-function ingresosActividad(mes,movs){const co=cobradoMes(mes),bk=k=>r2((movs||[]).filter(m=>m.cat===k).reduce((s,m)=>s+m.importe,0)),banco=!co.n;
+function ingresosActividad(mes,movs){const co=cobradoMes(mes),bk=k=>r2((movs||[]).filter(m=>m.cat===k&&(k!=="deposito"||m.cuenta!=="caja")).reduce((s,m)=>s+m.importe,0)),banco=!co.n;
   const formas=banco?[["Tarjeta (TPV), según el banco",bk("tpv")],["Bizum, según el banco",bk("bizum")],["Transferencias, según el banco",bk("transf")],["Efectivo ingresado en el cajero",bk("deposito")]].filter(x=>x[1])
     :COBRO_FORMAS.map(([k,l])=>[l,r2(co[k])]).filter(x=>x[1]);
   const cobrado=r2(formas.reduce((s,x)=>s+x[1],0)),otrosBanco=r2((movs||[]).filter(m=>m.cat==="otrosing").reduce((s,m)=>s+m.importe,0));
@@ -830,7 +830,7 @@ function ingresosActividad(mes,movs){const co=cobradoMes(mes),bk=k=>r2((movs||[]
 /* Efectivo por semanas (lunes a domingo, dentro del mes): cobrado en contado según Argos frente a lo ingresado en el cajero
    (fecha operativa del banco). «Sin ingresar» es lo acumulado del mes que todavía no ha ido al banco. */
 const lunesSem=f=>{const k=new Date(f+"T12:00:00").getDay();return sumaDias(f,-((k+6)%7))};
-function semanasEfectivo(mes){const co=cobradoMes(mes),deps=movsTodos().filter(m=>m.cat==="deposito"&&String(m.fo||m.fv).startsWith(mes));
+function semanasEfectivo(mes){const co=cobradoMes(mes),deps=movsTodos().filter(m=>m.cat==="deposito"&&m.cuenta!=="caja"&&String(m.fo||m.fv).startsWith(mes));
   const fin=isoDe(new Date(+mes.slice(0,4),+mes.slice(5,7),0)),sem=[];
   for(let d=mes+"-01";d<=fin;d=sumaDias(d,7-((new Date(d+"T12:00:00").getDay()+6)%7))){const h=sumaDias(lunesSem(d),6),hasta=h>fin?fin:h;
     const cob=r2(Object.entries(co.dias).filter(([k])=>k>=d&&k<=hasta).reduce((s,[,v])=>s+v,0));
@@ -2107,7 +2107,7 @@ function ensayoFacturas(lun){const dom=sumaDias(lun,6),C=contadores(),pag=[];
   const orden=(x,y)=>x.fp.localeCompare(y.fp)||String(x.r.numero||"").localeCompare(String(y.r.numero||""));
   const banco=pag.filter(x=>x.t!=="ef"&&x.fp>=lun&&x.fp<=dom).sort(orden);
   const msB=mesesBanco(),ini=(msB.length?msB[msB.length-1]:lun.slice(0,7))+"-01";
-  const dep=(d1,d2)=>d2<d1?0:r2(movsTodos().filter(m=>m.cat==="deposito"&&(m.fo||m.fv)>=d1&&(m.fo||m.fv)<=d2).reduce((s2,m)=>s2+m.importe,0));
+  const dep=(d1,d2)=>d2<d1?0:r2(movsTodos().filter(m=>m.cat==="deposito"&&m.cuenta!=="caja"&&(m.fo||m.fv)>=d1&&(m.fo||m.fv)<=d2).reduce((s2,m)=>s2+m.importe,0));
   const D0=dep(ini,sumaDias(lun,-1)),D1=r2(D0+dep(lun,dom)),caja=pag.filter(x=>x.t==="ef"&&x.fp>=ini&&x.fp<=dom).sort(orden);
   let acc=0,i=0;while(i<caja.length&&acc+caja[i].imp<=D0+0.005){acc=r2(acc+caja[i].imp);i++}
   const efSem=[];while(i<caja.length&&acc+caja[i].imp<=D1+0.005){acc=r2(acc+caja[i].imp);efSem.push(caja[i]);i++}
@@ -2119,7 +2119,7 @@ function ensayoFacturas(lun){const dom=sumaDias(lun,6),C=contadores(),pag=[];
   const trimFin=d=>{const q=trimIni(d),m=+q.slice(5,7)+2;return isoDe(new Date(+q.slice(0,4),m,0))};
   const acums=[];for(let d=lun;d<=dom;){const q1=trimIni(d),qf=trimFin(d),hasta=qf<dom?qf:dom;
     const fac2=r2(pag.filter(x=>x.t!=="ef"&&x.fp>=q1&&x.fp<=hasta).reduce((s2,x)=>s2+x.imp,0)+efHasta(hasta)-efHasta(sumaDias(q1,-1)));
-    const ban2=r2(movsTodos().filter(m=>["tpv","bizum","transf","deposito"].includes(m.cat)&&(m.fo||m.fv)>=q1&&(m.fo||m.fv)<=hasta).reduce((s2,m)=>s2+m.importe,0));
+    const ban2=r2(movsTodos().filter(m=>m.cuenta!=="caja"&&["tpv","bizum","transf","deposito"].includes(m.cat)&&(m.fo||m.fv)>=q1&&(m.fo||m.fv)<=hasta).reduce((s2,m)=>s2+m.importe,0));
     acums.push({desde:q1,hasta,fin:qf,cierra:hasta===qf,trim:trimDe(q1.slice(0,7)),banco:ban2,fac:fac2});d=sumaDias(hasta,1)}
   const efPend=caja.slice(i),alb=[...banco,...efSem].sort(orden),y=+lun.slice(0,4);alb.forEach((x,k)=>x.fac=fmtContador(C.fac,C.fac.ini+k,y));
   /* facturas reales de Argos para comparar: mismo cliente e importe, fecha desde el pago hasta 14 días después del domingo */
@@ -2127,7 +2127,7 @@ function ensayoFacturas(lun){const dom=sumaDias(lun,6),C=contadores(),pag=[];
   for(const x of alb){const k=sinEsp(x.a.nombre),c=arg.filter(f=>!usadas.has(f.n)&&Math.abs((+f.tot||0)-x.imp)<0.005&&(sinEsp(f.c)===k||sinEsp(f.c).includes(k)||k.includes(sinEsp(f.c)))&&f.f>=x.fp).sort((p2,q)=>p2.f.localeCompare(q.f));
     if(c.length){x.arg=c[0];usadas.add(c[0].n)}}
   const sum=(l,t)=>r2(l.filter(x=>!t||x.t===t).reduce((s2,x)=>s2+x.imp,0));
-  const bs={tpv:0,bizum:0,transf:0,deposito:0};for(const m of movsTodos()){const f=m.fo||m.fv;if(f<lun||f>dom)continue;if(bs[m.cat]!=null)bs[m.cat]=r2(bs[m.cat]+m.importe)}
+  const bs={tpv:0,bizum:0,transf:0,deposito:0};for(const m of movsTodos()){const f=m.fo||m.fv;if(m.cuenta==="caja"||f<lun||f>dom)continue;if(bs[m.cat]!=null)bs[m.cat]=r2(bs[m.cat]+m.importe)}
   const fac={tpv:sum(banco,"tpv"),bizum:sum(banco,"bizum"),transf:sum(banco,"transf"),otras:sum(banco,"otras"),ef:sum(efSem)};
   return {lun,dom,ini,alb,efSem,efPend,efPendTot:sum(efPend),efCobSem:sum(caja.filter(x=>x.fp>=lun)),fac,bancoSem:bs,bancoTot:r2(bs.tpv+bs.bizum+bs.transf+bs.deposito),
     tot:sum(alb),acums,hayArgos:meses.some(m=>ventasMes(m)),conArg:alb.filter(x=>x.arg).length,sobraDep:r2(D1-acc)}}
@@ -2148,7 +2148,7 @@ function cuadreArgos(){const desde=docDesde(),hasta=CQ_FIN<todayISO()?CQ_FIN:tod
   const meses=[];for(let m=desde.slice(0,7);m<=hasta.slice(0,7);m=sumaDias(m+"-28",5).slice(0,7))meses.push(m);
   const fv=t=>/tarj|tpv|dat[aá]fono/i.test(t)?"tarjeta":/bizum/i.test(t)?"bizum":/transf/i.test(t)?"transf":/efect|contado|met[aá]lico/i.test(t)?"efectivo":/beca/i.test(t)?"beca":"otras";
   const filas=meses.map(mes=>{const b={tarjeta:0,bizum:0,transf:0,efectivo:0},cat={tpv:"tarjeta",bizum:"bizum",transf:"transf",deposito:"efectivo"};
-    for(const m of movsTodos()){const f=m.fo||m.fv;if(!cat[m.cat]||!String(f).startsWith(mes)||f<desde||f>hasta)continue;b[cat[m.cat]]=r2(b[cat[m.cat]]+m.importe)}
+    for(const m of movsTodos()){const f=m.fo||m.fv;if(m.cuenta==="caja"||!cat[m.cat]||!String(f).startsWith(mes)||f<desde||f>hasta)continue;b[cat[m.cat]]=r2(b[cat[m.cat]]+m.importe)}
     const v=ventasMes(mes),l=v?v.l.filter(f=>f.f>=desde&&f.f<=hasta):[],a={tarjeta:0,bizum:0,transf:0,efectivo:0,beca:0,otras:0};
     for(const f of l)a[fv(f.fp)]=r2(a[fv(f.fp)]+(+f.tot||0));
     const bt=r2(b.tarjeta+b.bizum+b.transf+b.efectivo),at=r2(a.tarjeta+a.bizum+a.transf+a.efectivo),ao=r2(a.beca+a.otras);
@@ -2709,7 +2709,7 @@ function feSemana(lun){
   const otros=pag.filter(x=>x.tf!=="ef"&&FF[x.tf]).sort(orden);
   /* efectivo: ingresos en el cajero del año de la semana (sin pasar del domingo) menos lo ya facturado en efectivo ese año */
   const A=feAnioSem(lun),ini=A.ini>desde?A.ini:desde;
-  const dep=r2(movsTodos().filter(m=>m.cat==="deposito"&&(m.fo||m.fv)>=ini&&(m.fo||m.fv)<=dom).reduce((s,m)=>s+m.importe,0));
+  const dep=r2(movsTodos().filter(m=>m.cat==="deposito"&&m.cuenta!=="caja"&&(m.fo||m.fv)>=ini&&(m.fo||m.fv)<=dom).reduce((s,m)=>s+m.importe,0));
   const efFac=r2(docs.filter(f=>f.tf==="ef"&&String(f.sem||"").slice(0,4)===String(A.y)).reduce((s,f)=>s+(+f.tot||0),0));
   let disp=r2(dep-efFac);const ef=[],efPend=[];
   if(FF.ef)for(const x of pag.filter(x=>x.tf==="ef").sort(orden)){if(!efPend.length&&x.imp<=disp+0.005){ef.push(x);disp=r2(disp-x.imp)}else efPend.push(x)}

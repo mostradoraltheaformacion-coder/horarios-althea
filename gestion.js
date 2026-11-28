@@ -2187,8 +2187,10 @@ function vCuadreArgos(){if(todayISO()>"2027-01-31")return "";const C=cuadreArgos
 function vFacturacion(){gbEscuchar();ventasEscuchar();
   if(!GT.facSem){const h=todayISO();GT.facSem=sumaDias(lunesSem(h),-7)}const E=ensayoFacturas(GT.facSem),vis=GT.facSolo?E.alb.filter(x=>!x.arg):E.alb,b=E.bancoSem,F=E.fac;
   const fila=(l,f,bb,nota)=>`<tr><td>${l}${nota?` <span class="note">${nota}</span>`:""}</td><td style="text-align:right">${eur(bb)}</td><td style="text-align:right">${eur(f)}</td><td style="text-align:right;${Math.abs(f-bb)>0.5?"color:var(--warn);font-weight:600":""}">${eurS(r2(f-bb))}</td></tr>`;
-  return `<div class="bar"><h2>Facturación semanal</h2><span class="legend"><button class="btn small" data-tf="facno">← Volver a Tarifas</button></span></div>
+  /* 28/11/2026 (titular): subir aquí mismo las facturas de venta de Argos (PDF y listado), que es donde se cuadra con el banco */
+  return `<div class="bar"><h2>Facturación semanal</h2><span class="legend"><label class="btn small primary" style="cursor:pointer" title="Desde Argos: el PDF con todas las facturas del mes y el listado de facturas. Se pueden subir los dos a la vez.">Subir facturas de venta de Argos (PDF)<input type="file" id="gb-ventas" accept=".pdf,application/pdf" multiple hidden></label><button class="btn small" data-tf="facno">← Volver a Tarifas</button></span></div>
   ${feAviso()}
+  ${vVentasRes()}
   ${vCuadreArgos()}
   ${vContadores()}
   <div class="bar" style="margin-top:16px;gap:8px;flex-wrap:wrap"><h2 style="font-size:19px;margin-right:auto">Semana del ${fmtFecha(E.lun)} al ${fmtFecha(E.dom)}</h2>

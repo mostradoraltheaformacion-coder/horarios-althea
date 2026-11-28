@@ -2163,11 +2163,18 @@ function cuadreArgos(){const desde=docDesde(),hasta=CQ_FIN<todayISO()?CQ_FIN:tod
      Julia Marín: 2 albaranes (A26/001467 y A26/001625), 2 facturas, y salía uno «sin factura» */
   {const vis=new Set();for(let i=cobros.length-1;i>=0;i--){const x=cobros[i];if(!x.num)continue;const k=x.num+"|"+x.imp;if(vis.has(k))cobros.splice(i,1);else vis.add(k)}}
   const conArg=new Set(filas.filter(x=>x.hay).map(x=>x.mes));
-  /* 28/11/2026: dos pasadas. Primero los cobros con factura del mismo titular exacto; después, los parecidos (padre o madre, nombre en
-     las líneas). Así un cobro de otro alumno con nombre parecido no se queda con la factura que era de este */
+  /* 28/11/2026: se emparejan cobros y facturas de Argos por parejas, de mejor a peor: primero el mismo titular (mismas palabras en
+     cualquier orden) y, a igualdad, la factura de fecha más cercana al pago; después los parecidos (padre o madre, nombre en las líneas).
+     Antes se iba cobro a cobro y uno de octubre se podía quedar con la factura de noviembre de otro recibo de la misma alumna
+     (Julia Adi Matthes: dos fichas en Argos, una con titular «JULIA ADI»), o un alumno de nombre parecido con la de otro. */
   const candidatos=cobros.filter(x=>["tarjeta","bizum","transf"].includes(fv(x.forma))&&conArg.has(x.fp.slice(0,7))),hechos=new Set();
-  const buscar=(x,exacto)=>{const k=sinEsp(x.n);return arg.filter(f=>!usadas.has(f.n)&&Math.abs((+f.tot||0)-x.imp)<0.005&&(exacto?sinEsp(f.c)===k:(sinEsp(f.c).includes(k)||k.includes(sinEsp(f.c))||nombreEn(f.al,x.n)||nombreEn(f.c,x.n)))&&f.f>=sumaDias(x.fp,-3)&&f.f<=sumaDias(x.fp,45)).sort((p,q)=>p.f.localeCompare(q.f))};
-  for(const exacto of [true,false])for(const x of candidatos){if(hechos.has(x))continue;const c=buscar(x,exacto);if(c.length){usadas.add(c[0].n);hechos.add(x)}}
+  const pals=v=>String(v||"").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").split(/[^A-Z]+/).filter(Boolean).sort().join(" ");
+  const pares=[];for(const x of candidatos){const k=sinEsp(x.n),kp=pals(x.n),d0=sumaDias(x.fp,-3),d1=sumaDias(x.fp,45);
+    for(const f of arg){if(Math.abs((+f.tot||0)-x.imp)>=0.005||!(f.f>=d0&&f.f<=d1))continue;const fc=sinEsp(f.c);
+      const ex=fc===k||pals(f.c)===kp,pa=ex||fc.includes(k)||k.includes(fc)||nombreEn(f.al,x.n)||nombreEn(f.c,x.n);
+      if(pa)pares.push({x,f,e:ex?0:1,d:Math.abs(difDias(f.f,x.fp))})}}
+  pares.sort((a,b)=>a.e-b.e||a.d-b.d||a.f.f.localeCompare(b.f.f));
+  for(const p of pares){if(hechos.has(p.x)||usadas.has(p.f.n))continue;usadas.add(p.f.n);hechos.add(p.x)}
   for(const x of candidatos)if(!hechos.has(x))sinFac.push({...x,t:fv(x.forma)});
   /* efectivo cobrado (recibos pagados en contado) desde el inicio, menos lo ingresado en el cajero: lo que está en caja sin ingresar */
   const efCob=r2(cobros.filter(x=>fv(x.forma)==="efectivo").reduce((s,x)=>s+x.imp,0)),efIng=r2(filas.reduce((s,x)=>s+x.b.efectivo,0));
@@ -3088,12 +3095,20 @@ function mapaNombres(){const m=new Map(),al=(S.argos&&S.argos.alias)||{};for(con
 async function actualizarDesdeCursos(file){setStatus("Leyendo el listado…");
   try{const C=leerCursosArgos(await pdfLineas(file));if(!C.length||!C.some(c=>c.altas.length)){toast("No parece el listado de cursos de Argos");setStatus("");return}
     const M=mapaNombres(),por=new Map(),sinFicha=new Map();
-    for(const c of C)for(const x of c.altas){const ids=M.get(sinEsp(x.nom))||[];
+    /* 28/11/2026: si el nombre no coincide entero, vale el alumno de la app cuyas palabras (2 o más) están todas en el nombre de Argos,
+       si solo hay uno (Enzo: «Enzo Gómez» en la app, con los dos apellidos en Argos). Antes pasaba a «baja en Argos» */
+    const palsN=v=>String(v||"").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").split(/[^A-Z]+/).filter(w=>w.length>1);
+    const alW=[...S.alumnos].map(([id,a])=>[id,palsN(a.nombre)]).filter(([,w])=>w.length>=2);
+    const parecido=nom=>{const w=new Set(palsN(nom)),l=alW.filter(([,aw])=>aw.every(x=>w.has(x))).map(([id])=>id);return l.length===1?l:[]};
+    for(const c of C)for(const x of c.altas){let ids=M.get(sinEsp(x.nom))||[];if(!ids.length)ids=parecido(x.nom);
       if(ids.length!==1){if(x.activa&&!((S.argos&&S.argos.ign)||[]).includes(sinEsp(x.nom)))sinFicha.set(sinEsp(x.nom),{nom:x.nom,curso:c.nombre});continue}
       const o=por.get(ids[0])||{act:[],todas:0};o.todas++;if(x.activa)o.act.push({codigo:c.codigo,curso:c.nombre,cuota:c.cuota,cobro:c.cobro||"",alta:x.alta});por.set(ids[0],o)}
     const cambios=[];let aBaja=0,aActivo=0;
     for(const [id,a] of S.alumnos){const o=por.get(id);let argos,mat;
-      if(o){argos=o.act.length?"activo":"baja";mat=o.act}else if(a.argos==="activo"){argos="baja";mat=[]}else continue;
+      if(o){argos=o.act.length?"activo":"baja";mat=o.act}else if(a.argos==="activo"){argos="baja";mat=[]}else if(!a.sueltas)continue;else{argos="baja";mat=[]}
+      /* 28/11/2026 (titular): los de clases sueltas (Antonio Verdugo) no tienen curso en Argos a propósito: el recibo de cada hora se hace
+         a mano en Argos. Sin curso activo no son una baja: quedan como «sueltas» */
+      if(a.sueltas&&argos==="baja")argos="sueltas";
       const igual=a.argos===argos&&JSON.stringify((a.matriculas||[]).map(m=>[m.curso,m.cuota]).sort())===JSON.stringify(mat.map(m=>[m.curso,m.cuota]).sort());
       if(igual)continue;if(a.argos==="activo"&&argos==="baja")aBaja++;if(a.argos!=="activo"&&argos==="activo")aActivo++;cambios.push([id,{argos,matriculas:mat}])}
     const cursos=C.map(c=>({codigo:c.codigo,nombre:c.nombre,cuota:c.cuota,cobro:c.cobro,activos:c.altas.filter(x=>x.activa).length,total:c.altas.length}));

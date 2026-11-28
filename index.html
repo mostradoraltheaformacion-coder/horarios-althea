@@ -396,7 +396,7 @@ details.fh{display:block}details.fh summary{cursor:pointer}
 </main>
 <div id="layer"></div>
 <script>window.__fbListo=new Promise(r=>{window.__fbResolver=r});window.__preListo=new Promise(r=>{window.__preResolver=r})</script>
-<script type="module" src="fb.js?v=28nov-v191"></script>
+<script type="module" src="fb.js?v=28nov-v195"></script>
 <script>
 const DIAS=["Lunes","Martes","Miércoles","Jueves","Viernes"];
 const HORAS=["10-11","11-12","3-4","4-5","5-6","6-7","7-8","8-9","9-10"];
@@ -1189,7 +1189,7 @@ function idPorNombre(n){n=n.replace(/\s+/g," ").trim().toUpperCase();for(const [
 
 
 /* ---------- vistas ---------- */
-const APP_VER="28nov-v191";
+const APP_VER="28nov-v195";
 /* Desplegables (<details>): la app vuelve a dibujar la pantalla cada vez que llegan datos, y se cerraban solos. Se recuerda lo que
    la usuaria abre o cierra (por el texto del título, sin números) y se respeta al volver a dibujar (08/11/2026). */
 const DET={};const detKey=d=>{const sm=d.querySelector("summary");return sm?sm.textContent.replace(/[\d.,€]+/g,"").replace(/\s+/g," ").trim().slice(0,60):""};
@@ -4106,7 +4106,7 @@ function vAlumnos(){
   const chipsAnt=nAnt?`<div class="bar" style="padding:0 10px 8px;margin:0"><button class="chip" data-act="verant" data-v="" aria-pressed="${!verAnt}">Actuales</button><button class="chip" data-act="verant" data-v="1" aria-pressed="${!!verAnt}">Sin horario ni pendientes (${nAnt})</button></div>`:"";
   const items=list.map(([id,a])=>{
     const sin=a.faltas.filter(f=>f.recuperada!=="si").length;
-    return `<button class="li" data-act="sel" data-id="${id}" aria-current="${S.sel===id}">${avatarAl(a)}<span class="grow">${esc(a.nombre)}</span>${marcaRec(a)}${marcaCuad(a)}${S.role==="dir"&&necesitaRecibo(a)?`<span class="badge b-pend" title="Tiene horario y no tiene recibo de este mes">sin recibo</span>`:""}${S.role==="dir"&&a.baja?`<span class="badge b-off" title="Dado de baja el ${fmtFecha(a.baja)}">baja</span>`:""}${S.role==="dir"&&a.argos&&a.argos!=="activo"?`<span class="badge b-off" title="No está activo en Argos">${a.argos==="baja"?"baja":"no en Argos"}</span>`:""}${sin?`<span class="badge b-no" title="Faltas sin recuperar">${sin}</span>`:""}<small>${a.clases.length? a.clases.length+" h/sem":"sin horario"}</small></button>`}).join("")||`<div class="empty">${S.alumnos.size?`Ningún alumno coincide con «${esc(S.q)}».`:"Todavía no tienes alumnos asignados."}</div>`;
+    return `<button class="li" data-act="sel" data-id="${id}" aria-current="${S.sel===id}">${avatarAl(a)}<span class="grow">${esc(a.nombre)}</span>${marcaRec(a)}${marcaCuad(a)}${S.role==="dir"&&necesitaRecibo(a)?`<span class="badge b-pend" title="Tiene horario y no tiene recibo de este mes">sin recibo</span>`:""}${S.role==="dir"&&a.baja?`<span class="badge b-off" title="Dado de baja el ${fmtFecha(a.baja)}">baja</span>`:""}${S.role==="dir"&&a.argos&&a.argos!=="activo"&&a.argos!=="sueltas"?`<span class="badge b-off" title="No está activo en Argos">${a.argos==="baja"?"baja":"no en Argos"}</span>`:""}${sin?`<span class="badge b-no" title="Faltas sin recuperar">${sin}</span>`:""}<small>${a.clases.length? a.clases.length+" h/sem":"sin horario"}</small></button>`}).join("")||`<div class="empty">${S.alumnos.size?`Ningún alumno coincide con «${esc(S.q)}».`:"Todavía no tienes alumnos asignados."}</div>`;
   return `<div class="bar"><h2>${S.role==="profe"?"Tus alumnos":"Alumnos"}</h2><span style="display:flex;gap:8px;flex-wrap:wrap">${S.role==="dir"&&!S.pv?`<button class="btn" data-act="kiosko">Nueva inscripción (tablet)</button>`:""}${preDir()?`<button class="btn" data-act="prenueva">Preinscripción por enlace</button>`:""}<button class="btn primary ed" data-act="nuevo">Nuevo alumno</button></span></div>${vPreLista()}
   <div class="split">
     ${S.role==="profe"?`<div style="grid-column:1/-1">${vAP("nuevo",null)}</div>`:""}
@@ -4248,7 +4248,7 @@ function horasRecibos(a){const ms=[...new Set((a.recibos||[]).filter(r=>r.curso&
   let t=0;for(const r of a.recibos.filter(r=>String(r.emitido).startsWith(mes)&&!esReciboExtra(a,r))){const h=horasDeCurso(r.curso);if(h==null)return null;t+=h}return {h:t,mes}}
 function horasContratadas(a){const hr=horasRecibos(a);if(hr)return hr.h;if(!a.matriculas.length)return null;let t=0;for(const m of a.matriculas){if(m.horasSemana==null)return null;t+=m.horasSemana}return t}
 function vMatricula(a){
-  const est=a.argos==="activo"?`<span class="badge b-si">Activo en Argos</span>`:a.argos==="baja"?`<span class="badge b-no">De baja en Argos</span>`:a.argos==="no_encontrado"?`<span class="badge b-pend">No aparece en Argos</span>`:`<span class="badge b-off">Sin cruzar con Argos</span>`;
+  const est=a.argos==="activo"?`<span class="badge b-si">Activo en Argos</span>`:a.argos==="sueltas"?`<span class="badge b-si" title="Sin curso en Argos a propósito: el recibo de cada hora se hace a mano en Argos">Clases sueltas (recibo a mano en Argos)</span>`:a.argos==="baja"?`<span class="badge b-no">De baja en Argos</span>`:a.argos==="no_encontrado"?`<span class="badge b-pend">No aparece en Argos</span>`:`<span class="badge b-off">Sin cruzar con Argos</span>`;
   const hc=horasContratadas(a), hh=a.clases.length;
   const prueba=S.role==="dir"&&typeof vPruebasAl==="function"?(()=>{try{return vPruebasAl(a)}catch(_){return ""}})():"";
   const aviso=prueba+(hc!=null&&hc!==hh&&!a.sueltas?`<p class="note" style="color:var(--warn)">Tiene contratadas ${hc} h/semana y en el horario hay ${hh} h.</p>`:"");
@@ -4260,7 +4260,7 @@ const recArgosReciente=a=>(a.recibos||[]).some(r=>(r.origen==="argos"||r.numero)
 function vArgos(){
   const al=sortedAlumnos();
   const sinHorario=al.filter(([,a])=>a.argos==="activo"&&!a.clases.length&&!a.sueltas);
-  const sinAlta=al.filter(([,a])=>a.clases.length&&a.argos!=="activo"&&!recArgosReciente(a)&&!a.exento&&!a.argosOk);
+  const sinAlta=al.filter(([,a])=>a.clases.length&&a.argos!=="activo"&&!a.sueltas&&!recArgosReciente(a)&&!a.exento&&!a.argosOk);
   const horas=al.filter(([,a])=>{if(a.exento)return false;const h=horasContratadas(a);if(!(a.clases.length&&h!=null&&h!==a.clases.length))return false;const hr=horasRecibos(a);return !hr||noCuadra(a,hr.mes).some(x=>x.t==="horas")});
   const lista=(arr,extra)=>arr.length?arr.map(([id,a])=>`<button class="li" data-act="ir" data-id="${id}"><span class="grow">${esc(a.nombre)}</span><small>${extra(a)}</small></button>`).join(""):`<div class="empty">Todo cuadra.</div>`;
   const cursos=(S.argos?.cursos||[]).filter(c=>c.activos>0);
@@ -5343,7 +5343,7 @@ function onLink(){
   if(S.esDir)arrancarDireccion(db);else arrancarCuenta(db,user);
 })();
 </script>
-<script src="gestion.js?v=28nov-v191"></script>
+<script src="gestion.js?v=28nov-v195"></script>
 
 
 </body></html>
